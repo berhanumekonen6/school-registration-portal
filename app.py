@@ -1,6 +1,7 @@
 # ===================================================================
-# SCHOOL REGISTRATION PORTAL
+# SCHOOL REGISTRATION PORTAL - ENHANCED
 # Admin-Controlled Student & Teacher Management System
+# WITH TEACHER LOGIN & EVALUATION APPROVAL WORKFLOW
 # Berhanu Mekonen, PhD, Arba Minch University, August 14, 2026
 # ===================================================================
 
@@ -10,6 +11,8 @@ import hashlib
 from datetime import datetime, timedelta
 import json
 import os
+import random
+import string
 
 st.set_page_config(
     page_title="School Registration Portal",
@@ -27,6 +30,19 @@ def hash_password(password):
 
 def verify_password(password, hashed):
     return hash_password(password) == hashed
+
+def generate_username(full_name):
+    """Generate username from full name (e.g., Berhanu Mekonen → berhanu.mekonen)"""
+    parts = full_name.strip().lower().split()
+    if len(parts) >= 2:
+        return f"{parts[0]}.{parts[1]}"
+    else:
+        return parts[0]
+
+def generate_random_password(length=8):
+    """Generate a random password"""
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
 
 # Default admin account
 DEFAULT_USERS = {
@@ -68,17 +84,18 @@ def init_user_db():
     if 'penalty_log' not in st.session_state:
         st.session_state.penalty_log = []
 
-def add_notification(message, notification_type="info"):
+def add_notification(message, notification_type="info", user=None):
+    """Add notification for specific user or all users"""
     st.session_state.notifications.append({
         "id": len(st.session_state.notifications),
         "message": message,
         "type": notification_type,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "read": False
+        "read": False,
+        "target_user": user  # None means all users
     })
 
 def log_penalty(user, action, reason):
-    """Log a penalty violation"""
     st.session_state.penalty_log.append({
         "user": user,
         "action": action,
@@ -108,11 +125,10 @@ def logout_user():
     st.session_state.current_role = None
 
 # ===================================================================
-# GRADE LOCALIZATION (Amharic for Grades 1-8, English for 9-12)
+# GRADE LOCALIZATION
 # ===================================================================
 
 def get_grade_display(grade):
-    """Return grade in Amharic for 1-8, English for 9-12"""
     grade_num = grade.replace("Grade ", "")
     try:
         num = int(grade_num)
@@ -128,7 +144,6 @@ def get_grade_display(grade):
         return grade
 
 def get_grade_class(grade):
-    """Return CSS class for grade display"""
     grade_num = grade.replace("Grade ", "")
     try:
         num = int(grade_num)
@@ -137,13 +152,11 @@ def get_grade_class(grade):
         return "english-grade"
 
 def is_registration_open():
-    """Check if registration is currently open based on admin settings"""
     period = st.session_state.registration_period
     now = datetime.now()
     return period["start"] <= now <= period["end"]
 
 def check_action_allowed(action_name, user_name="Unknown"):
-    """Check if action is allowed, log penalty if not"""
     if is_registration_open():
         return True, None
     else:
@@ -153,7 +166,7 @@ def check_action_allowed(action_name, user_name="Unknown"):
         return False, reason
 
 # ===================================================================
-# CSS STYLES - SAME AS RESEARCH PORTAL STYLE
+# CSS STYLES
 # ===================================================================
 
 st.markdown("""
@@ -169,7 +182,6 @@ st.markdown("""
         --dark-card: #0f2a0f;
     }
 
-    /* Global Styles - White Background */
     html, body, .stApp {
         font-size: 18px !important;
         line-height: 1.8 !important;
@@ -181,7 +193,6 @@ st.markdown("""
         color: #202124 !important;
     }
 
-    /* All text - dark for readability */
     h1, h2, h3, h4, h5, h6, p, li, span, div, .stMarkdown, .stTextInput, .stSelectbox, .stButton {
         color: #202124 !important;
         font-weight: 500 !important;
@@ -220,7 +231,6 @@ st.markdown("""
         color: #202124 !important;
     }
 
-    /* HEADER */
     .main-header {
         background: linear-gradient(rgba(27, 94, 32, 0.65), rgba(13, 59, 13, 0.75)),
                     url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=400&fit=crop') !important;
@@ -374,7 +384,6 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* User info in header */
     .user-info {
         display: flex;
         align-items: center;
@@ -405,7 +414,6 @@ st.markdown("""
         font-size: 1rem !important;
     }
 
-    /* STATUS BAR */
     .status-bar {
         background: #F8F9FA !important;
         border: 1px solid #E8EAED;
@@ -468,24 +476,36 @@ st.markdown("""
         border: none;
     }
 
-    /* Penalty Badge */
-    .penalty-badge {
+    .badge-pending {
         background: #FCE8E6 !important;
         color: #EA4335 !important;
-        border: 2px solid #EA4335;
+        border: 1px solid #EA4335;
         padding: 4px 16px;
         border-radius: 25px;
         font-size: 0.9rem !important;
-        font-weight: 700 !important;
-        animation: pulse-warning 1.5s ease-in-out infinite;
+        font-weight: 600 !important;
     }
 
-    @keyframes pulse-warning {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.7; transform: scale(1.05); }
+    .badge-approved {
+        background: #E6F4EA !important;
+        color: #34A853 !important;
+        border: 1px solid #34A853;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
     }
 
-    /* BUTTONS */
+    .badge-rejected {
+        background: #FCE8E6 !important;
+        color: #EA4335 !important;
+        border: 1px solid #EA4335;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+    }
+
     .stButton > button {
         font-size: 1.2rem !important;
         font-weight: 600 !important;
@@ -505,7 +525,6 @@ st.markdown("""
         box-shadow: 0 4px 16px rgba(26,115,232,0.35) !important;
     }
 
-    /* TABS */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
         background: #F8F9FA !important;
@@ -529,12 +548,9 @@ st.markdown("""
         border: 1px solid #E8EAED;
     }
 
-    /* INPUT FIELDS */
     .stTextInput > div > div > input,
     .stTextArea > div > div > textarea,
-    .stSelectbox > div > div > input,
-    .stDateInput > div > div > input,
-    .stNumberInput > div > div > input {
+    .stSelectbox > div > div > input {
         background: #FFFFFF !important;
         border: 1px solid #DADCE0 !important;
         border-radius: 12px !important;
@@ -552,13 +568,11 @@ st.markdown("""
         box-shadow: 0 0 0 3px rgba(26,115,232,0.15) !important;
     }
 
-    /* SIDEBAR */
     .css-1d391kg, .css-12w0qpk, [data-testid="stSidebar"] {
         background: #F8F9FA !important;
         border-right: 1px solid #E8EAED !important;
     }
 
-    /* CARDS */
     .student-card, .teacher-card, .eval-card {
         background: #FFFFFF !important;
         border: 1px solid #E8EAED !important;
@@ -573,36 +587,6 @@ st.markdown("""
         transform: translateY(-4px);
         border-color: #1A73E8 !important;
         box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-    }
-
-    .badge-registered {
-        background: #E6F4EA !important;
-        color: #34A853 !important;
-        border: 1px solid #34A853;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-    }
-
-    .badge-evaluated {
-        background: #E8F0FE !important;
-        color: #1A73E8 !important;
-        border: 1px solid #1A73E8;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-    }
-
-    .badge-pending {
-        background: #FCE8E6 !important;
-        color: #EA4335 !important;
-        border: 1px solid #EA4335;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
     }
 
     .notification-item {
@@ -628,7 +612,11 @@ st.markdown("""
         background: #FCE8E6;
     }
 
-    /* LOGIN CONTAINER */
+    .notification-item.success {
+        border-left-color: #34A853;
+        background: #E6F4EA;
+    }
+
     .login-container {
         max-width: 500px;
         margin: 3rem auto;
@@ -648,13 +636,6 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.04);
     }
 
-    .admin-card h2 {
-        color: #1A73E8 !important;
-        border-bottom: 3px solid #E8F0FE;
-        padding-bottom: 0.5rem;
-    }
-
-    /* AMHARIC GRADE DISPLAY */
     .amharic-grade {
         font-family: 'Noto Sans Ethiopic', 'Segoe UI', sans-serif;
         font-size: 1.3rem !important;
@@ -668,7 +649,28 @@ st.markdown("""
         color: #1A73E8 !important;
     }
 
-    /* RESPONSIVE */
+    .approval-card {
+        background: #FFFFFF !important;
+        border: 2px solid #E8EAED;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .approval-card.pending {
+        border-left: 6px solid #FBBC04;
+    }
+
+    .approval-card.approved {
+        border-left: 6px solid #34A853;
+    }
+
+    .approval-card.rejected {
+        border-left: 6px solid #EA4335;
+    }
+
     @media (max-width: 768px) {
         .block-container { padding: 0.5rem 0.75rem !important; }
         .main-header .logo-text h1 { font-size: 1.8rem !important; }
@@ -707,6 +709,18 @@ def get_teacher_name(teacher_id):
             return t.get("name", "Unknown")
     return "Unknown"
 
+def get_teacher_by_username(username):
+    for t in st.session_state.teachers:
+        if t.get("username") == username:
+            return t
+    return None
+
+def get_pending_evaluations():
+    return [e for e in st.session_state.evaluations if e.get("status") == "pending"]
+
+def get_evaluations_by_teacher(teacher_id):
+    return [e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id]
+
 def show_notification_center():
     unread = len([n for n in st.session_state.notifications if not n.get('read', False)])
 
@@ -725,8 +739,9 @@ def show_notification_center():
         for note in reversed(st.session_state.notifications[-10:]):
             unread_class = "unread" if not note.get('read', False) else ""
             warning_class = "warning" if note.get('type') == 'warning' else ""
+            success_class = "success" if note.get('type') == 'success' else ""
             st.markdown(f"""
-            <div class="notification-item {unread_class} {warning_class}">
+            <div class="notification-item {unread_class} {warning_class} {success_class}">
                 <strong>{note['message']}</strong>
                 <div class="notification-time">⏱ {note['time']}</div>
             </div>
@@ -760,19 +775,23 @@ def show_penalty_log():
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📊 Overview",
         "⏰ Registration Period",
         "👨‍🏫 Teachers",
         "📚 Subjects",
         "📋 All Data",
+        "✅ Approvals",
         "⚠️ Penalty Log"
     ])
 
     with tab1:
         st.markdown("#### Dashboard Overview")
 
-        col1, col2, col3, col4, col5 = st.columns(5)
+        pending_count = len(get_pending_evaluations())
+        total_evals = len(st.session_state.evaluations)
+
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
             st.metric("👨‍🎓 Students", len(st.session_state.students))
         with col2:
@@ -788,7 +807,9 @@ def show_admin_panel():
             else:
                 st.metric("Registration", "🔴 Closed", delta="Inactive")
         with col5:
-            st.metric("⚠️ Penalties", len(st.session_state.penalty_log))
+            st.metric("📝 Evaluations", total_evals)
+        with col6:
+            st.metric("⏳ Pending", pending_count, delta="Needs Approval" if pending_count > 0 else "All Approved")
 
         st.markdown("#### 📅 Registration Period")
         period = st.session_state.registration_period
@@ -805,8 +826,9 @@ def show_admin_panel():
         if st.session_state.notifications:
             for note in reversed(st.session_state.notifications[-5:]):
                 warning_class = "warning" if note.get('type') == 'warning' else ""
+                success_class = "success" if note.get('type') == 'success' else ""
                 st.markdown(f"""
-                <div class="notification-item {warning_class}">
+                <div class="notification-item {warning_class} {success_class}">
                     <strong>{note['message']}</strong>
                     <div class="notification-time">⏱ {note['time']}</div>
                 </div>
@@ -850,8 +872,8 @@ def show_admin_panel():
         st.markdown("#### 👨‍🏫 Manage Teachers")
 
         with st.form("add_teacher"):
-            teacher_name = st.text_input("Teacher Full Name")
-            teacher_subject = st.selectbox("Subject Taught", [s if isinstance(s, str) else s.get("name", "") for s in st.session_state.subjects] if st.session_state.subjects else ["Mathematics", "English", "Science"])
+            teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
+            teacher_subject = st.selectbox("Subject Taught *", [s if isinstance(s, str) else s.get("name", "") for s in st.session_state.subjects] if st.session_state.subjects else ["Mathematics", "English", "Science"])
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
 
             col1, col2 = st.columns([1, 3])
@@ -859,16 +881,48 @@ def show_admin_panel():
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
 
             if submitted and teacher_name:
+                # Generate username and password
+                username = generate_username(teacher_name)
+                # Check if username already exists
+                if username in st.session_state.user_db:
+                    # Append number if username exists
+                    counter = 1
+                    while f"{username}{counter}" in st.session_state.user_db:
+                        counter += 1
+                    username = f"{username}{counter}"
+
+                password = generate_random_password()
+                hashed_pw = hash_password(password)
+
+                # Add to user database
+                st.session_state.user_db[username] = {
+                    "password": hashed_pw,
+                    "role": "teacher",
+                    "name": teacher_name
+                }
+
+                # Add to teachers list
                 teacher = {
                     "id": f"T{len(st.session_state.teachers)+1:04d}",
                     "name": teacher_name,
                     "subject": teacher_subject,
                     "email": teacher_email,
+                    "username": username,
+                    "password": password,  # Store temporarily for display
                     "added": datetime.now().strftime("%Y-%m-%d %H:%M")
                 }
                 st.session_state.teachers.append(teacher)
-                add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
-                st.success(f"✅ Teacher {teacher_name} added!")
+
+                add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
+                st.success(f"""
+                ✅ Teacher {teacher_name} added successfully!
+
+                **Login Credentials:**
+                - **Username:** `{username}`
+                - **Password:** `{password}`
+
+                ⚠️ Please provide these credentials to the teacher. They will need to change their password on first login.
+                """)
                 st.rerun()
             elif submitted:
                 st.error("❌ Please enter teacher name.")
@@ -876,13 +930,17 @@ def show_admin_panel():
         st.markdown("---")
 
         if st.session_state.teachers:
+            st.markdown("#### 📋 All Teachers")
+
             for teacher in st.session_state.teachers:
                 st.markdown(f"""
                 <div class="teacher-card">
                     <h4>👨‍🏫 {teacher['name']}</h4>
                     <p><b>📚 Subject:</b> {teacher['subject']}</p>
                     <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
+                    <p><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></p>
                     <p><b>📅 Added:</b> {teacher.get('added', 'N/A')}</p>
+                    <p><b>🔑 Password:</b> <code>{teacher.get('password', 'N/A')}</code> <span style="color:#5F6368;font-size:0.8rem;">(save this)</span></p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
@@ -911,7 +969,7 @@ def show_admin_panel():
             if submitted and new_subject:
                 if new_subject not in current_subjects:
                     st.session_state.subjects.append(new_subject)
-                    add_notification(f"📚 New subject added: {new_subject}", "success")
+                    add_notification(f"📚 New subject added: {new_subject}", "info")
                     st.success(f"✅ Subject {new_subject} added!")
                     st.rerun()
                 else:
@@ -938,6 +996,16 @@ def show_admin_panel():
         st.markdown("##### 📝 Evaluations")
         if st.session_state.evaluations:
             df_evals = pd.DataFrame(st.session_state.evaluations)
+            # Add status badge
+            def status_badge(status):
+                if status == "pending":
+                    return "⏳ Pending"
+                elif status == "approved":
+                    return "✅ Approved"
+                elif status == "rejected":
+                    return "❌ Rejected"
+                return status
+            df_evals["Status"] = df_evals["status"].apply(status_badge)
             st.dataframe(df_evals, use_container_width=True)
         else:
             st.info("No evaluations yet.")
@@ -976,32 +1044,62 @@ def show_admin_panel():
                 st.rerun()
 
     with tab6:
-        st.markdown("#### ⚠️ Penalty Log")
+        st.markdown("#### ✅ Pending Approvals")
 
-        if st.session_state.penalty_log:
-            st.markdown("""
-            <div style="background:#FCE8E6;padding:1rem;border-radius:12px;border:2px solid #EA4335;margin-bottom:1rem;">
-                <p style="color:#EA4335;font-weight:700;">⚠️ Penalties are recorded when users attempt registration or evaluation outside the allowed time period.</p>
-            </div>
-            """, unsafe_allow_html=True)
+        pending = get_pending_evaluations()
 
-            df_penalties = pd.DataFrame(st.session_state.penalty_log)
-            st.dataframe(df_penalties, use_container_width=True)
+        if not pending:
+            st.success("🎉 No pending evaluations. All evaluations have been reviewed.")
+            return
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total Penalties", len(st.session_state.penalty_log))
-            with col2:
-                unique_users = len(set([p.get("user", "Unknown") for p in st.session_state.penalty_log]))
-                st.metric("Users with Penalties", unique_users)
+        st.markdown(f"**{len(pending)} evaluation(s) awaiting approval**")
 
-            if st.button("🗑️ Clear Penalty Log", use_container_width=True):
-                st.session_state.penalty_log = []
-                add_notification("🗑️ Penalty log cleared by admin", "warning")
-                st.success("Penalty log cleared!")
-                st.rerun()
-        else:
-            st.success("✅ No penalties recorded. All users are following the registration period rules.")
+        for eval_item in pending:
+            student = get_student_by_id(eval_item.get("student_id", ""))
+            student_name = student.get("name", "Unknown") if student else "Unknown"
+            grade_display = get_grade_display(student.get("grade", "")) if student else "N/A"
+            teacher_name = get_teacher_name(eval_item.get("teacher_id", ""))
+
+            with st.container():
+                st.markdown(f"""
+                <div class="approval-card pending">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                        <div>
+                            <h4>👤 {student_name}</h4>
+                            <p><b>📚 Grade:</b> {grade_display}</p>
+                            <p><b>📋 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
+                            <p><b>👨‍🏫 Teacher:</b> {teacher_name}</p>
+                            <p><b>📝 Evaluation:</b> {eval_item.get('evaluation', 'N/A')}</p>
+                            <p><b>⭐ Score:</b> {eval_item.get('score', 'N/A')}/100</p>
+                            <p><b>📅 Submitted:</b> {eval_item.get('date', 'N/A')}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="badge-pending">⏳ Pending</span>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button(f"✅ Approve", key=f"approve_{eval_item['id']}", use_container_width=True):
+                        eval_item["status"] = "approved"
+                        # Notify teacher
+                        teacher = get_teacher_by_username(st.session_state.current_user)
+                        add_notification(f"✅ Evaluation for {student_name} approved by admin", "success")
+                        st.success(f"✅ Evaluation approved!")
+                        st.rerun()
+                with col2:
+                    if st.button(f"❌ Reject", key=f"reject_{eval_item['id']}", use_container_width=True):
+                        eval_item["status"] = "rejected"
+                        add_notification(f"❌ Evaluation for {student_name} rejected by admin", "warning")
+                        st.warning(f"❌ Evaluation rejected!")
+                        st.rerun()
+
+                st.markdown("---")
+
+    with tab7:
+        show_penalty_log()
 
 # ===================================================================
 # STUDENT FUNCTIONS
@@ -1125,6 +1223,10 @@ def show_student_panel():
                     st.markdown("##### 📝 My Evaluations")
                     for eval_item in student_evals:
                         teacher_name = get_teacher_name(eval_item.get("teacher_id", ""))
+                        status = eval_item.get("status", "pending")
+                        status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
+                        status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
+
                         st.markdown(f"""
                         <div class="eval-card">
                             <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
@@ -1132,6 +1234,7 @@ def show_student_panel():
                             <p><b>📝 Evaluation:</b> {eval_item.get('evaluation', 'N/A')}</p>
                             <p><b>⭐ Score:</b> {eval_item.get('score', 'N/A')}/100</p>
                             <p><b>📅 Date:</b> {eval_item.get('date', 'N/A')}</p>
+                            <p><b>Status:</b> <span class="{status_class}">{status_label}</span></p>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -1140,35 +1243,33 @@ def show_student_panel():
                 st.warning("No student found with that name. Please check your spelling.")
 
 # ===================================================================
-# TEACHER FUNCTIONS
+# TEACHER FUNCTIONS (ENHANCED)
 # ===================================================================
 
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
-    teacher_name_input = st.text_input("Enter your teacher name to access:", placeholder="Your full name...")
-
-    matching_teachers = []
-    if teacher_name_input:
-        matching_teachers = [t for t in st.session_state.teachers if t["name"].lower() == teacher_name_input.lower()]
-
-    if not teacher_name_input:
-        st.info("👆 Please enter your name to access teacher tools.")
+    # Get teacher info
+    teacher = get_teacher_by_username(st.session_state.current_user)
+    if not teacher:
+        st.error("❌ Teacher profile not found. Please contact administrator.")
         return
 
-    if not matching_teachers:
-        st.warning("❌ Teacher not found. Please contact the administrator to add you as a teacher.")
-        return
-
-    teacher = matching_teachers[0]
     teacher_id = teacher["id"]
+    teacher_name = teacher["name"]
 
-    tab1, tab2, tab3 = st.tabs(["📝 Enter Evaluation", "📊 My Students", "📈 Evaluations"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📝 Submit Evaluation",
+        "📊 My Submissions",
+        "📊 My Students",
+        "✅ Approval Status"
+    ])
 
     with tab1:
-        st.markdown("#### 📝 Enter Student Evaluation")
+        st.markdown("#### 📝 Submit Student Evaluation")
 
-        allowed, reason = check_action_allowed("Student Evaluation", teacher_name_input)
+        # Check if registration is open for evaluations
+        allowed, reason = check_action_allowed("Student Evaluation", teacher_name)
         if not allowed:
             st.error(f"""
             ⚠️ **PENALTY WARNING!**
@@ -1184,7 +1285,20 @@ def show_teacher_panel():
             st.info("No students registered yet. Please wait for students to register.")
             return
 
-        student_options = {f"{s['name']} ({get_grade_display(s['grade'])})": s["id"] for s in st.session_state.students}
+        # Get students taking this teacher's subject
+        teacher_subject = teacher.get("subject", "")
+        if not teacher_subject:
+            st.warning("No subject assigned to you. Please contact administrator.")
+            return
+
+        # Filter students by teacher's subject
+        eligible_students = [s for s in st.session_state.students if teacher_subject in s.get("subjects", [])]
+
+        if not eligible_students:
+            st.info(f"No students taking {teacher_subject}. Please wait for students to register for your subject.")
+            return
+
+        student_options = {f"{s['name']} ({get_grade_display(s['grade'])})": s["id"] for s in eligible_students}
         selected_student_display = st.selectbox("Select Student", list(student_options.keys()))
 
         if selected_student_display:
@@ -1197,46 +1311,93 @@ def show_teacher_panel():
                 <div style="background:#F8F9FA;padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid #1A73E8;">
                     <p><b>👤 Student:</b> {student['name']}</p>
                     <p><b>📚 Grade:</b> <span class="{get_grade_class(student['grade'])}">{grade_display}</span></p>
-                    <p><b>📋 Subjects:</b> {', '.join(student['subjects'])}</p>
+                    <p><b>📋 Subject:</b> {teacher_subject}</p>
                 </div>
                 """, unsafe_allow_html=True)
 
                 with st.form("evaluation_form"):
-                    subject = st.selectbox("Subject", student.get("subjects", []))
-                    evaluation = st.text_area("Evaluation / Remarks", placeholder="Enter your evaluation for the student...")
+                    evaluation = st.text_area("Evaluation / Remarks *", placeholder="Enter your evaluation for the student...")
                     score = st.slider("Score (0-100)", 0, 100, 75)
 
                     col1, col2 = st.columns([1, 3])
                     with col1:
-                        submitted = st.form_submit_button("💾 Save Evaluation", use_container_width=True)
+                        submitted = st.form_submit_button("💾 Submit for Approval", use_container_width=True)
 
                     if submitted:
                         if not evaluation:
                             st.error("❌ Please enter an evaluation.")
                         else:
-                            eval_item = {
-                                "id": f"E{len(st.session_state.evaluations)+1:04d}",
-                                "student_id": student_id,
-                                "student_name": student["name"],
-                                "teacher_id": teacher_id,
-                                "teacher_name": teacher["name"],
-                                "subject": subject,
-                                "evaluation": evaluation,
-                                "score": score,
-                                "date": datetime.now().strftime("%Y-%m-%d %H:%M")
-                            }
-                            st.session_state.evaluations.append(eval_item)
+                            # Check if this teacher already submitted for this student/subject
+                            existing = [e for e in st.session_state.evaluations 
+                                       if e.get("student_id") == student_id 
+                                       and e.get("teacher_id") == teacher_id 
+                                       and e.get("subject") == teacher_subject
+                                       and e.get("status") in ["pending", "approved"]]
+                            if existing:
+                                st.warning("⚠️ You have already submitted an evaluation for this student. Please wait for approval or contact admin.")
+                            else:
+                                eval_item = {
+                                    "id": f"E{len(st.session_state.evaluations)+1:04d}",
+                                    "student_id": student_id,
+                                    "student_name": student["name"],
+                                    "teacher_id": teacher_id,
+                                    "teacher_name": teacher_name,
+                                    "subject": teacher_subject,
+                                    "evaluation": evaluation,
+                                    "score": score,
+                                    "status": "pending",
+                                    "date": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                }
+                                st.session_state.evaluations.append(eval_item)
 
-                            for s in st.session_state.students:
-                                if s["id"] == student_id:
-                                    s["evaluations_count"] = s.get("evaluations_count", 0) + 1
-                                    break
+                                for s in st.session_state.students:
+                                    if s["id"] == student_id:
+                                        s["evaluations_count"] = s.get("evaluations_count", 0) + 1
+                                        break
 
-                            add_notification(f"📝 Evaluation saved for {student['name']} by {teacher['name']}", "success")
-                            st.success(f"✅ Evaluation saved for {student['name']}!")
-                            st.rerun()
+                                add_notification(f"📝 New evaluation submitted for {student['name']} by {teacher_name} (Pending Approval)", "info")
+                                st.success(f"""
+                                ✅ Evaluation submitted for {student['name']}!
+
+                                📝 **Status:** Pending Approval
+                                ⏳ Please wait for the administrator to review and approve your evaluation.
+                                """)
+                                st.balloons()
+                                st.rerun()
 
     with tab2:
+        st.markdown("#### 📊 My Submitted Evaluations")
+
+        my_evals = get_evaluations_by_teacher(teacher_id)
+
+        if not my_evals:
+            st.info("You haven't submitted any evaluations yet.")
+        else:
+            for eval_item in reversed(my_evals):
+                student = get_student_by_id(eval_item.get("student_id", ""))
+                student_name = student.get("name", "Unknown") if student else "Unknown"
+                status = eval_item.get("status", "pending")
+                status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
+                status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
+
+                st.markdown(f"""
+                <div class="eval-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                        <div>
+                            <p><b>👤 Student:</b> {student_name}</p>
+                            <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
+                            <p><b>📝 Evaluation:</b> {eval_item.get('evaluation', 'N/A')}</p>
+                            <p><b>⭐ Score:</b> {eval_item.get('score', 'N/A')}/100</p>
+                            <p><b>📅 Date:</b> {eval_item.get('date', 'N/A')}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span class="{status_class}">{status_label}</span>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    with tab3:
         st.markdown("#### 📊 My Students")
 
         teacher_subject = teacher.get("subject", "")
@@ -1249,8 +1410,14 @@ def show_teacher_panel():
         if students_with_subject:
             st.markdown(f"**Students taking {teacher_subject}:**")
             for s in students_with_subject:
-                evals_count = len([e for e in st.session_state.evaluations if e.get("student_id") == s["id"] and e.get("subject") == teacher_subject])
-                status = "✅ Evaluated" if evals_count > 0 else "⏳ Pending"
+                evals_count = len([e for e in st.session_state.evaluations 
+                                  if e.get("student_id") == s["id"] 
+                                  and e.get("subject") == teacher_subject])
+                approved_count = len([e for e in st.session_state.evaluations 
+                                     if e.get("student_id") == s["id"] 
+                                     and e.get("subject") == teacher_subject
+                                     and e.get("status") == "approved"])
+                status = "✅ Approved" if approved_count > 0 else "⏳ Pending" if evals_count > 0 else "📝 Not Evaluated"
                 grade_display = get_grade_display(s["grade"])
                 grade_class = get_grade_class(s["grade"])
                 st.markdown(f"""
@@ -1259,26 +1426,36 @@ def show_teacher_panel():
                     <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
                     <p><b>Semester:</b> {s['semester']}</p>
                     <p><b>Status:</b> {status}</p>
-                    <p><b>Evaluations:</b> {evals_count}</p>
+                    <p><b>Evaluations:</b> {evals_count} (Approved: {approved_count})</p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.info("No students are taking your subject yet.")
 
-    with tab3:
-        st.markdown("#### 📈 All My Evaluations")
+    with tab4:
+        st.markdown("#### ✅ Approval Status")
 
-        my_evals = [e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id]
+        my_evals = get_evaluations_by_teacher(teacher_id)
+        pending = [e for e in my_evals if e.get("status") == "pending"]
+        approved = [e for e in my_evals if e.get("status") == "approved"]
+        rejected = [e for e in my_evals if e.get("status") == "rejected"]
 
-        if my_evals:
-            df_evals = pd.DataFrame(my_evals)
-            st.dataframe(df_evals[["student_name", "subject", "score", "evaluation", "date"]], use_container_width=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("⏳ Pending", len(pending))
+        with col2:
+            st.metric("✅ Approved", len(approved))
+        with col3:
+            st.metric("❌ Rejected", len(rejected))
 
-            if my_evals:
-                avg_score = sum([e.get("score", 0) for e in my_evals]) / len(my_evals)
-                st.metric("Average Score", f"{avg_score:.1f}/100")
-        else:
-            st.info("No evaluations submitted yet.")
+        if pending:
+            st.warning(f"⚠️ {len(pending)} evaluation(s) awaiting approval. Please check back later.")
+
+        if approved:
+            st.success(f"🎉 {len(approved)} evaluation(s) have been approved!")
+
+        if rejected:
+            st.error(f"❌ {len(rejected)} evaluation(s) were rejected. Please contact admin for details.")
 
 # ===================================================================
 # LOGIN PAGE
@@ -1300,7 +1477,7 @@ def show_login_page():
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
 
         with st.form("login_form"):
-            username = st.text_input("👤 Username", placeholder="Enter username (admin)")
+            username = st.text_input("👤 Username", placeholder="Enter username")
             password = st.text_input("🔒 Password", type="password", placeholder="Enter password")
 
             col1, col2, col3 = st.columns([1, 2, 1])
@@ -1323,7 +1500,7 @@ def show_login_page():
             <p style="color:#5F6368; font-size:0.9rem;">
                 🔑 <b>Demo Credentials:</b><br>
                 <b>Admin:</b> admin / admin123<br>
-                <i>Teachers and students must be added by the admin.</i>
+                <i>Teachers must be added by the admin.</i>
             </p>
             <p style="color:#5F6368; font-size:0.85rem; margin-top:0.5rem;">
                 ⚠️ <b>Penalty System:</b> Any registration or evaluation attempts outside the allowed period are logged as penalties.
@@ -1362,9 +1539,9 @@ def main():
         """, unsafe_allow_html=True)
 
         if role == "admin":
-            nav_options = ["🏠 Dashboard", "👨‍🏫 Teachers", "👨‍🎓 Students", "📋 Evaluations", "⚠️ Penalty Log", "🔔 Notifications"]
+            nav_options = ["🏠 Dashboard", "👨‍🏫 Teachers", "👨‍🎓 Students", "📋 Evaluations", "✅ Approvals", "⚠️ Penalty Log", "🔔 Notifications"]
         elif role == "teacher":
-            nav_options = ["👨‍🏫 My Dashboard", "📝 Evaluations", "📊 My Students", "⚠️ My Penalties", "🔔 Notifications"]
+            nav_options = ["👨‍🏫 My Dashboard", "📝 Submit Evaluation", "📊 My Students", "✅ Approval Status", "⚠️ My Penalties", "🔔 Notifications"]
         else:
             nav_options = ["👨‍🎓 My Profile", "📝 Register", "⚠️ My Penalties", "🔔 Notifications"]
 
@@ -1385,6 +1562,7 @@ def main():
     total_teachers = len(st.session_state.teachers)
     total_evaluations = len(st.session_state.evaluations)
     total_penalties = len(st.session_state.penalty_log)
+    pending_count = len(get_pending_evaluations())
 
     st.markdown(f"""
     <div class="main-header">
@@ -1412,6 +1590,7 @@ def main():
                     <div class="stat-item"><span class="number">{total_students}</span><span class="label">Students</span></div>
                     <div class="stat-item"><span class="number">{total_teachers}</span><span class="label">Teachers</span></div>
                     <div class="stat-item"><span class="number">{total_evaluations}</span><span class="label">Evaluations</span></div>
+                    <div class="stat-item"><span class="number" style="color:#FBBC04;">{pending_count}</span><span class="label">Pending</span></div>
                     <div class="stat-item"><span class="number" style="color:#EA4335;">{total_penalties}</span><span class="label">Penalties</span></div>
                 </div>
             </div>
@@ -1447,6 +1626,7 @@ def main():
         if current_page == "🏠 Dashboard":
             show_admin_panel()
         elif current_page == "👨‍🏫 Teachers":
+            # Quick teacher management
             st.markdown("### 👨‍🏫 Teacher Management")
             tab1, tab2 = st.tabs(["📋 All Teachers", "➕ Add Teacher"])
             with tab1:
@@ -1457,6 +1637,8 @@ def main():
                             <h4>👨‍🏫 {t['name']}</h4>
                             <p><b>📚 Subject:</b> {t['subject']}</p>
                             <p><b>✉️ Email:</b> {t.get('email', 'N/A')}</p>
+                            <p><b>👤 Username:</b> <code>{t.get('username', 'N/A')}</code></p>
+                            <p><b>🔑 Password:</b> <code>{t.get('password', 'N/A')}</code></p>
                         </div>
                         """, unsafe_allow_html=True)
                 else:
@@ -1468,15 +1650,29 @@ def main():
                     email = st.text_input("Email")
                     if st.form_submit_button("Add Teacher"):
                         if name:
+                            username = generate_username(name)
+                            if username in st.session_state.user_db:
+                                counter = 1
+                                while f"{username}{counter}" in st.session_state.user_db:
+                                    counter += 1
+                                username = f"{username}{counter}"
+                            password = generate_random_password()
+                            st.session_state.user_db[username] = {
+                                "password": hash_password(password),
+                                "role": "teacher",
+                                "name": name
+                            }
                             st.session_state.teachers.append({
                                 "id": f"T{len(st.session_state.teachers)+1:04d}",
                                 "name": name,
                                 "subject": subject,
                                 "email": email,
+                                "username": username,
+                                "password": password,
                                 "added": datetime.now().strftime("%Y-%m-%d %H:%M")
                             })
                             add_notification(f"👨‍🏫 New teacher: {name}", "success")
-                            st.success(f"✅ Teacher {name} added!")
+                            st.success(f"✅ Teacher {name} added! Username: {username}, Password: {password}")
                             st.rerun()
                         else:
                             st.error("Please enter teacher name.")
@@ -1495,29 +1691,60 @@ def main():
                 st.dataframe(df, use_container_width=True)
             else:
                 st.info("No evaluations yet.")
-        elif "⚠️ Penalty" in current_page:
+        elif current_page == "✅ Approvals":
+            # Show approvals (already in admin panel)
+            st.markdown("### ✅ Pending Approvals")
+            pending = get_pending_evaluations()
+            if not pending:
+                st.success("🎉 No pending evaluations.")
+            else:
+                for eval_item in pending:
+                    student = get_student_by_id(eval_item.get("student_id", ""))
+                    student_name = student.get("name", "Unknown") if student else "Unknown"
+                    teacher_name = get_teacher_name(eval_item.get("teacher_id", ""))
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="approval-card pending">
+                            <p><b>👤 Student:</b> {student_name}</p>
+                            <p><b>📋 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
+                            <p><b>👨‍🏫 Teacher:</b> {teacher_name}</p>
+                            <p><b>📝 Evaluation:</b> {eval_item.get('evaluation', 'N/A')}</p>
+                            <p><b>⭐ Score:</b> {eval_item.get('score', 'N/A')}/100</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button(f"✅ Approve", key=f"approve_simple_{eval_item['id']}", use_container_width=True):
+                                eval_item["status"] = "approved"
+                                add_notification(f"✅ Evaluation for {student_name} approved", "success")
+                                st.success("✅ Approved!")
+                                st.rerun()
+                        with col2:
+                            if st.button(f"❌ Reject", key=f"reject_simple_{eval_item['id']}", use_container_width=True):
+                                eval_item["status"] = "rejected"
+                                add_notification(f"❌ Evaluation for {student_name} rejected", "warning")
+                                st.warning("❌ Rejected!")
+                                st.rerun()
+                        st.markdown("---")
+        elif current_page == "⚠️ Penalty Log":
             show_penalty_log()
-        elif "🔔 Notifications" in current_page:
+        elif current_page == "🔔 Notifications":
             show_notification_center()
 
     elif role == "teacher":
-        if current_page == "👨‍🏫 My Dashboard":
+        if current_page == "👨‍🏫 My Dashboard" or current_page == "📝 Submit Evaluation" or current_page == "📊 My Students" or current_page == "✅ Approval Status":
             show_teacher_panel()
-        elif current_page == "📝 Evaluations":
-            show_teacher_panel()
-        elif current_page == "📊 My Students":
-            show_teacher_panel()
-        elif "⚠️ My Penalties" in current_page:
+        elif current_page == "⚠️ My Penalties":
             show_penalty_log()
-        elif "🔔 Notifications" in current_page:
+        elif current_page == "🔔 Notifications":
             show_notification_center()
 
     else:  # student
         if current_page == "👨‍🎓 My Profile" or current_page == "📝 Register":
             show_student_panel()
-        elif "⚠️ My Penalties" in current_page:
+        elif current_page == "⚠️ My Penalties":
             show_penalty_log()
-        elif "🔔 Notifications" in current_page:
+        elif current_page == "🔔 Notifications":
             show_notification_center()
 
 if __name__ == "__main__":
