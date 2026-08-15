@@ -15,7 +15,7 @@ import random
 import string
 import io
 import uuid
-import math  # <-- ADDED for NaN detection
+import math
 from supabase import create_client, Client
 
 # ---- Supabase Client ----
@@ -64,10 +64,6 @@ def load_all_data():
                 "name": u["name"]
             }
     st.session_state.user_db = user_db
-    
-    # 🔍 DEBUG: show what was loaded (commented out)
-    # st.write("🔍 User DB loaded:", user_db)
-    # st.write("🔍 Number of users:", len(user_db))
     
     # Notifications
     res = supabase.table("notifications").select("*").order("id", desc=True).execute()
@@ -207,10 +203,8 @@ def init_user_db():
         }
         sync_all()
     
-    # --- ADD THIS INITIALISATION ---
     if 'subjects' not in st.session_state:
         st.session_state.subjects = ["Mathematics", "English", "Science", "History", "Geography", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education"]
-    # ---------------------------------
     
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
@@ -297,7 +291,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS ----
+# ---- CSS (same as before - kept for brevity) ----
 st.markdown("""
 <style>
     :root {
@@ -1214,13 +1208,12 @@ def show_admin_panel():
                 st.session_state.evaluations = []
                 st.session_state.batches = []
                 st.session_state.penalty_log = []
-                # Keep user accounts and notifications
                 sync_all()
                 add_notification("🗑️ All data cleared by admin", "warning")
                 st.warning("All data has been cleared.")
                 st.rerun()
 
-    # --- Tab 6: Approvals (Batches) ---
+    # --- Tab 6: Approvals (Batches) - UPDATED with Teacher & Subject Title ---
     with tab6:
         st.markdown("#### ✅ Pending Batches")
         pending_batches = get_pending_batches()
@@ -1236,11 +1229,12 @@ def show_admin_panel():
                 student_count = len(batch.get("students", []))
                 submitted_date = batch.get("submitted_at", "N/A")
 
+                # ---- NEW: Large header with teacher and subject ----
                 st.markdown(f"""
                 <div class="approval-card pending">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
                         <div>
-                            <h4>📦 Batch from {teacher_name}</h4>
+                            <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">📦 Batch from {teacher_name} · {subject}</h4>
                             <p><b>📚 Subject:</b> {subject}</p>
                             <p><b>📋 Grade:</b> {grade}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
@@ -1408,7 +1402,6 @@ def show_admin_panel():
                 df_sheets = pd.read_excel(uploaded_file, sheet_name=None)
                 total_added = 0
 
-                # Helper to clean NaN values
                 def clean_nan_value(value):
                     if isinstance(value, float) and math.isnan(value):
                         return None
@@ -1637,7 +1630,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL ----
+# ---- TEACHER PANEL (UPDATED: Batch Submission & My Submissions with Teacher & Subject) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -1678,8 +1671,17 @@ def show_teacher_panel():
         "✅ Approval Status"
     ])
 
+    # ---------- TAB 1: Submit Batch Evaluation (UPDATED with Teacher & Subject Title) ----------
     with tab1:
         st.markdown("#### 📝 Submit Batch Evaluation")
+        # ---- NEW: Display teacher and subject ----
+        st.markdown(f"""
+        <div style="background:#E8F0FE;padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid #1A73E8;">
+            <h4 style="margin:0;color:#1A73E8;font-size:1.8rem;">👨‍🏫 Teacher: {teacher_name}</h4>
+            <p style="margin:0;color:#202124;font-size:1.2rem;"><b>📚 Subject:</b> {teacher_subject}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
         allowed, reason = check_action_allowed("Student Evaluation (Batch)", teacher_name)
         if not allowed:
             st.error(f"⚠️ **PENALTY WARNING!**\n{reason}")
@@ -1800,6 +1802,7 @@ def show_teacher_panel():
             sync_all()
             st.rerun()
 
+    # ---------- TAB 2: My Submissions (UPDATED with Teacher & Subject Title) ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -1811,16 +1814,19 @@ def show_teacher_panel():
                 status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
                 status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
                 student_count = len(batch.get("students", []))
+                # ---- NEW: Large header with teacher and subject ----
                 st.markdown(f"""
                 <div class="eval-card">
-                    <div style="display:flex;justify-content:space-between;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
                         <div>
-                            <p><b>📚 Subject:</b> {batch['subject']}</p>
+                            <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">👨‍🏫 {batch['teacher_name']} · 📚 {batch['subject']}</h4>
                             <p><b>📋 Grade:</b> {batch['grade']}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
                             <p><b>📅 Submitted:</b> {batch.get('submitted_at', 'N/A')}</p>
                         </div>
-                        <div><span class="{status_class}">{status_label}</span></div>
+                        <div style="text-align:right;">
+                            <span class="{status_class}">{status_label}</span>
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1829,6 +1835,7 @@ def show_teacher_panel():
                         st.session_state.edit_batch_id = batch["id"]
                         st.rerun()
 
+    # ---------- TAB 3: My Students ----------
     with tab3:
         st.markdown("#### 📊 My Students")
         students_in_grade = get_eligible_students(selected_grade)
@@ -1850,6 +1857,7 @@ def show_teacher_panel():
         else:
             st.info(f"No students in {selected_grade} taking your subject.")
 
+    # ---------- TAB 4: Approval Status ----------
     with tab4:
         st.markdown("#### ✅ Approval Status")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
