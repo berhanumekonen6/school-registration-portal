@@ -65,8 +65,8 @@ def load_all_data():
     st.session_state.user_db = user_db
     
     # 🔍 DEBUG: show what was loaded
-    st.write("🔍 User DB loaded:", user_db)
-    st.write("🔍 Number of users:", len(user_db))
+    #st.write("🔍 User DB loaded:", user_db)
+    #st.write("🔍 Number of users:", len(user_db))
     
     # Notifications
     res = supabase.table("notifications").select("*").order("id", desc=True).execute()
