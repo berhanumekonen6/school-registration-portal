@@ -1099,11 +1099,11 @@ def show_admin_panel():
                         st.rerun()
                 st.markdown("---")
 
-    with tab7:  # Rankings
+    with tab7:  # Rankings (FIXED: added key)
         st.markdown("#### 📊 Grade Rankings")
 
         grade_options = [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options, index=0)
+        selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="rank_grade")
 
         students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
         if not students_in_grade:
@@ -1140,7 +1140,7 @@ def show_admin_panel():
             else:
                 st.info("No approved evaluations yet for this grade.")
 
-    with tab8:  # Student Management (Add/Delete)
+    with tab8:  # Student Management
         st.markdown("### 👨‍🎓 Student Management")
 
         # ---- Add Student Form ----
@@ -1271,11 +1271,11 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    with tab10:  # Approval Report
+    with tab10:  # Approval Report (FIXED: added key)
         st.markdown("### 📄 Approval Report (Grade‑wise)")
 
         grade_options = [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options)
+        selected_grade = st.selectbox("Select Grade", grade_options, key="report_grade")
 
         students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
         if not students_in_grade:
