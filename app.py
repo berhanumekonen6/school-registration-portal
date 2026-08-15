@@ -15,6 +15,7 @@ import random
 import string
 import io
 import uuid
+import math  # <-- ADDED for NaN detection
 from supabase import create_client, Client
 
 # ---- Supabase Client ----
@@ -64,9 +65,9 @@ def load_all_data():
             }
     st.session_state.user_db = user_db
     
-    # 🔍 DEBUG: show what was loaded
-    #st.write("🔍 User DB loaded:", user_db)
-    #st.write("🔍 Number of users:", len(user_db))
+    # 🔍 DEBUG: show what was loaded (commented out)
+    # st.write("🔍 User DB loaded:", user_db)
+    # st.write("🔍 Number of users:", len(user_db))
     
     # Notifications
     res = supabase.table("notifications").select("*").order("id", desc=True).execute()
@@ -76,28 +77,79 @@ def load_all_data():
     res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
     st.session_state.penalty_log = res.data if res.data else []
 
+# ---- NEW sync_table handles NaN and no neq ----
 def sync_table(table_name, data, key_column="id"):
-    """Sync a table: replace all records with the provided data."""
+    """Sync a table: delete all rows and insert new data, handling foreign keys and NaNs."""
     supabase = get_supabase()
-    # Delete all
+
+    # Delete all rows – simple delete without condition.
     try:
-        supabase.table(table_name).delete().neq(key_column, "none").execute()
+        supabase.table(table_name).delete().execute()
     except Exception as e:
         st.warning(f"Could not clear table {table_name}: {e}")
+
+    # Clean NaN values – replace with None (which becomes NULL in PostgreSQL)
+    def clean_nan(item):
+        if isinstance(item, float) and math.isnan(item):
+            return None
+        if isinstance(item, list):
+            return [clean_nan(i) for i in item]
+        if isinstance(item, dict):
+            return {k: clean_nan(v) for k, v in item.items()}
+        return item
+
+    cleaned_data = []
+    for record in data:
+        cleaned_record = clean_nan(record)
+        cleaned_data.append(cleaned_record)
+
     # Insert new data
-    if data:
+    if cleaned_data:
         try:
-            supabase.table(table_name).insert(data).execute()
+            supabase.table(table_name).insert(cleaned_data).execute()
         except Exception as e:
             st.warning(f"Error inserting into {table_name}: {e}")
 
+# ---- NEW sync_all respects foreign keys ----
 def sync_all():
-    """Sync all session state data to Supabase."""
-    sync_table("students", st.session_state.students)
-    sync_table("teachers", st.session_state.teachers)
-    sync_table("evaluations", st.session_state.evaluations)
-    sync_table("batches", st.session_state.batches)
-    # Users: convert dict to list
+    """Sync all session state data to Supabase, respecting foreign key constraints."""
+    # Delete all in correct order (children first)
+    try:
+        get_supabase().table("evaluations").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear evaluations: {e}")
+    
+    try:
+        get_supabase().table("batches").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear batches: {e}")
+    
+    try:
+        get_supabase().table("notifications").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear notifications: {e}")
+    try:
+        get_supabase().table("penalty_log").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear penalty_log: {e}")
+    
+    try:
+        get_supabase().table("students").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear students: {e}")
+    
+    try:
+        get_supabase().table("teachers").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear teachers: {e}")
+    
+    try:
+        get_supabase().table("users").delete().execute()
+    except Exception as e:
+        st.warning(f"Could not clear users: {e}")
+    
+    # Insert in correct order (parents first)
+    # Users first
     user_list = []
     for username, info in st.session_state.user_db.items():
         user_list.append({
@@ -107,6 +159,20 @@ def sync_all():
             "name": info["name"]
         })
     sync_table("users", user_list, key_column="username")
+    
+    # Teachers
+    sync_table("teachers", st.session_state.teachers)
+    
+    # Students
+    sync_table("students", st.session_state.students)
+    
+    # Batches (depends on teachers)
+    sync_table("batches", st.session_state.batches)
+    
+    # Evaluations (depends on students and teachers)
+    sync_table("evaluations", st.session_state.evaluations)
+    
+    # Notifications and penalty_log
     sync_table("notifications", st.session_state.notifications, key_column="id")
     sync_table("penalty_log", st.session_state.penalty_log, key_column="id")
 
@@ -1332,7 +1398,7 @@ def show_admin_panel():
         else:
             st.info("No students registered yet.")
 
-    # --- Tab 9: Import/Export ---
+    # --- Tab 9: Import/Export (with NaN cleaning) ---
     with tab9:
         st.markdown("### 📥 Import / Export Data")
         st.markdown("#### 📤 Import Students from Excel")
@@ -1341,6 +1407,13 @@ def show_admin_panel():
             try:
                 df_sheets = pd.read_excel(uploaded_file, sheet_name=None)
                 total_added = 0
+
+                # Helper to clean NaN values
+                def clean_nan_value(value):
+                    if isinstance(value, float) and math.isnan(value):
+                        return None
+                    return value
+
                 for sheet_name, sheet_df in df_sheets.items():
                     grade = " ".join(sheet_name.split()[:2]) if len(sheet_name.split()) >= 2 else sheet_name
                     header_row = None
@@ -1360,12 +1433,12 @@ def show_admin_panel():
                         subjects = [col for col in subject_cols if col in sheet_df.columns]
                         student = {
                             "id": f"S{len(st.session_state.students)+1:04d}",
-                            "name": name,
-                            "grade": grade,
-                            "semester": row.get("ሴሚስተር", "I"),
-                            "subjects": subjects,
-                            "age": row.get("እድሜ", 0),
-                            "gender": row.get("ፆታ", ""),
+                            "name": clean_nan_value(name),
+                            "grade": clean_nan_value(grade),
+                            "semester": clean_nan_value(row.get("ሴሚስተር", "I")),
+                            "subjects": [clean_nan_value(s) for s in subjects],
+                            "age": clean_nan_value(row.get("እድሜ", 0)),
+                            "gender": clean_nan_value(row.get("ፆታ", "")),
                             "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "evaluations_count": 0
                         }
