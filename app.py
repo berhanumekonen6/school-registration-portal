@@ -64,6 +64,10 @@ def load_all_data():
             }
     st.session_state.user_db = user_db
     
+    # 🔍 DEBUG: show what was loaded
+    st.write("🔍 User DB loaded:", user_db)
+    st.write("🔍 Number of users:", len(user_db))
+    
     # Notifications
     res = supabase.table("notifications").select("*").order("id", desc=True).execute()
     st.session_state.notifications = res.data if res.data else []
@@ -128,7 +132,7 @@ def init_user_db():
     # Load data from Supabase if not already in session
     if 'students' not in st.session_state:
         load_all_data()
-    # Ensure default admin exists
+    # Ensure default admin exists (if not in Supabase, it will be added)
     if "admin" not in st.session_state.user_db:
         st.session_state.user_db["admin"] = {
             "password": hash_password("admin123"),
@@ -152,6 +156,15 @@ def init_user_db():
         st.session_state.registration_open = True
 
 def login_user(username, password):
+    # 🔒 TEMPORARY HARDCODE – allows admin login while we fix Supabase
+    if username == "admin" and password == "admin123":
+        st.session_state.logged_in = True
+        st.session_state.current_user = "admin"
+        st.session_state.current_role = "admin"
+        add_notification("Welcome, School Administrator!", "success")
+        return True, "✅ Login successful!"
+    
+    # Original authentication logic (for teachers and future admins)
     init_user_db()
     if username not in st.session_state.user_db:
         return False, "❌ User not found."
@@ -213,8 +226,530 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS (same as before - kept for brevity, include the full CSS) ----
-# (CSS block omitted here for space; copy from your previous version)
+# ---- CSS ----
+st.markdown("""
+<style>
+    :root {
+        --primary: #1B5E20;
+        --primary-light: #2E7D32;
+        --primary-dark: #0D3B0D;
+        --accent: #1A73E8;
+        --accent-hover: #1557B0;
+        --gold: #FFD700;
+        --dark: #0a1a0a;
+        --dark-card: #0f2a0f;
+    }
+
+    html, body, .stApp {
+        font-size: 18px !important;
+        line-height: 1.8 !important;
+        background: #FFFFFF !important;
+    }
+
+    .stApp, .main, .block-container {
+        background: #FFFFFF !important;
+        color: #202124 !important;
+    }
+
+    h1, h2, h3, h4, h5, h6, p, li, span, div, .stMarkdown, .stTextInput, .stSelectbox, .stButton {
+        color: #202124 !important;
+        font-weight: 500 !important;
+    }
+
+    h1 {
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, #1A73E8, #4285F4, #34A853);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    h2 {
+        font-size: 2.8rem !important;
+        font-weight: 700 !important;
+        color: #1A73E8 !important;
+        border-bottom: 3px solid #E8F0FE;
+        padding-bottom: 0.5rem;
+    }
+    h3 {
+        font-size: 2.2rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+    h4 {
+        font-size: 1.8rem !important;
+        font-weight: 600 !important;
+        color: #202124 !important;
+    }
+
+    p, li, .stMarkdown {
+        font-size: 1.2rem !important;
+        font-weight: 400 !important;
+        line-height: 2 !important;
+        color: #202124 !important;
+    }
+
+    .main-header {
+        background: linear-gradient(rgba(27, 94, 32, 0.65), rgba(13, 59, 13, 0.75)),
+                    url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=400&fit=crop') !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        padding: 2rem 3rem 1.8rem 3rem !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(255, 215, 0, 0.3) !important;
+        margin-bottom: 1.5rem !important;
+        box-shadow: 0 4px 30px rgba(0,0,0,0.1) !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .main-header::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        background: linear-gradient(135deg, rgba(27, 94, 32, 0.3), rgba(13, 59, 13, 0.4)) !important;
+        z-index: 0 !important;
+    }
+
+    .main-header .header-content {
+        position: relative !important;
+        z-index: 1 !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+    .main-header .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 25px;
+        flex: 1;
+    }
+
+    .main-header .logo-icon {
+        width: 75px;
+        height: 75px;
+        background: rgba(255, 215, 0, 0.2) !important;
+        border: 2px solid #FFD700 !important;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.8rem;
+        color: #FFFFFF;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        animation: pulse 3s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    .main-header .logo-text h1 {
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        background: none !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        margin: 0;
+        text-shadow: 0 2px 30px rgba(0,0,0,0.3);
+    }
+
+    .main-header .logo-text .subtitle {
+        color: rgba(255, 255, 255, 0.95) !important;
+        font-size: 1.4rem !important;
+        font-weight: 400 !important;
+        margin: 5px 0 0 0;
+        text-shadow: 0 1px 15px rgba(0,0,0,0.2);
+    }
+
+    .main-header .logo-text .subtitle .highlight {
+        color: #FFD700 !important;
+        font-weight: 600 !important;
+    }
+
+    .main-header .logo-text .developer-credit {
+        color: rgba(255, 255, 255, 0.7) !important;
+        font-size: 1rem !important;
+        font-weight: 400 !important;
+        margin: 8px 0 0 0;
+        font-style: italic;
+        letter-spacing: 0.5px;
+        text-shadow: 0 1px 10px rgba(0,0,0,0.2);
+    }
+
+    .main-header .logo-text .developer-credit .highlight-name {
+        color: #FFD700 !important;
+        font-weight: 600 !important;
+    }
+
+    .main-header .logo-text .developer-credit .highlight-institution {
+        color: #90EE90 !important;
+        font-weight: 600 !important;
+    }
+
+    .main-header .header-right {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        flex-wrap: wrap;
+    }
+
+    .main-header .header-stats {
+        display: flex;
+        gap: 25px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .main-header .stat-item {
+        background: rgba(255, 255, 255, 0.12) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 12px 22px;
+        border-radius: 14px;
+        text-align: center;
+        min-width: 100px;
+        transition: all 0.3s;
+    }
+
+    .main-header .stat-item:hover {
+        border-color: #FFD700;
+        transform: translateY(-2px);
+        background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .main-header .stat-item .number {
+        font-size: 2.5rem !important;
+        font-weight: 800 !important;
+        color: #FFD700 !important;
+        display: block;
+    }
+
+    .main-header .stat-item .label {
+        font-size: 0.95rem !important;
+        font-weight: 500 !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+        display: block;
+        margin-top: 4px;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: rgba(255, 255, 255, 0.9) !important;
+        padding: 8px 20px;
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(10px);
+    }
+
+    .user-info .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1A73E8, #4285F4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #FFFFFF;
+        font-weight: 700;
+        font-size: 1.2rem;
+    }
+
+    .user-info .user-name {
+        color: #202124 !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+    }
+
+    .status-bar {
+        background: #F8F9FA !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        padding: 1.2rem 2.5rem;
+        margin-bottom: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .status-bar .status-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: blink 2s infinite;
+    }
+
+    .status-bar .status-dot.online {
+        background: #34A853;
+        box-shadow: 0 0 20px rgba(52,168,83,0.3);
+    }
+
+    .status-bar .status-dot.offline {
+        background: #EA4335;
+        box-shadow: 0 0 20px rgba(234,67,53,0.3);
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .status-bar .status-text {
+        color: #202124 !important;
+        font-size: 1.2rem !important;
+        font-weight: 500 !important;
+    }
+
+    .status-bar .status-text .highlight-green {
+        color: #34A853 !important;
+        font-weight: 700 !important;
+    }
+
+    .status-bar .status-text .highlight-red {
+        color: #EA4335 !important;
+        font-weight: 700 !important;
+    }
+
+    .status-bar .live-badge {
+        background: linear-gradient(135deg, #1A73E8, #4285F4);
+        color: #FFFFFF !important;
+        padding: 6px 18px;
+        border-radius: 25px;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        border: none;
+    }
+
+    .badge-pending {
+        background: #FCE8E6 !important;
+        color: #EA4335 !important;
+        border: 1px solid #EA4335;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+    }
+
+    .badge-approved {
+        background: #E6F4EA !important;
+        color: #34A853 !important;
+        border: 1px solid #34A853;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+    }
+
+    .badge-rejected {
+        background: #FCE8E6 !important;
+        color: #EA4335 !important;
+        border: 1px solid #EA4335;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+    }
+
+    .stButton > button {
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+        padding: 0.9rem 2.2rem !important;
+        background: linear-gradient(135deg, #1A73E8, #4285F4) !important;
+        color: white !important;
+        border-radius: 30px !important;
+        border: none !important;
+        width: 100%;
+        transition: all 0.3s !important;
+        box-shadow: 0 2px 8px rgba(26,115,232,0.25) !important;
+        min-height: 55px !important;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 4px 16px rgba(26,115,232,0.35) !important;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: #F8F9FA !important;
+        border-radius: 16px;
+        padding: 8px;
+        border: 1px solid #E8EAED;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px;
+        padding: 14px 30px;
+        color: #5F6368 !important;
+        font-weight: 500 !important;
+        font-size: 1.1rem !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: #1A73E8 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+        border: 1px solid #E8EAED;
+    }
+
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > input {
+        background: #FFFFFF !important;
+        border: 1px solid #DADCE0 !important;
+        border-radius: 12px !important;
+        color: #202124 !important;
+        padding: 14px 20px !important;
+        font-size: 1.15rem !important;
+        font-weight: 400 !important;
+        min-height: 55px !important;
+        transition: all 0.3s !important;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #1A73E8 !important;
+        box-shadow: 0 0 0 3px rgba(26,115,232,0.15) !important;
+    }
+
+    .css-1d391kg, .css-12w0qpk, [data-testid="stSidebar"] {
+        background: #F8F9FA !important;
+        border-right: 1px solid #E8EAED !important;
+    }
+
+    .student-card, .teacher-card, .eval-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED !important;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .student-card:hover, .teacher-card:hover, .eval-card:hover {
+        transform: translateY(-4px);
+        border-color: #1A73E8 !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    }
+
+    .notification-item {
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid #1A73E8;
+        background: #F8F9FA;
+    }
+
+    .notification-item.unread {
+        background: #E8F0FE;
+        border-left-color: #EA4335;
+    }
+
+    .notification-item .notification-time {
+        color: #5F6368 !important;
+        font-size: 0.8rem !important;
+    }
+
+    .notification-item.warning {
+        border-left-color: #EA4335;
+        background: #FCE8E6;
+    }
+
+    .notification-item.success {
+        border-left-color: #34A853;
+        background: #E6F4EA;
+    }
+
+    .login-container {
+        max-width: 500px;
+        margin: 3rem auto;
+        padding: 2.5rem;
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .admin-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.04);
+    }
+
+    .amharic-grade {
+        font-family: 'Noto Sans Ethiopic', 'Segoe UI', sans-serif;
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+
+    .english-grade {
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+
+    .approval-card {
+        background: #FFFFFF !important;
+        border: 2px solid #E8EAED;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .approval-card.pending {
+        border-left: 6px solid #FBBC04;
+    }
+
+    .approval-card.approved {
+        border-left: 6px solid #34A853;
+    }
+
+    .approval-card.rejected {
+        border-left: 6px solid #EA4335;
+    }
+
+    @media (max-width: 768px) {
+        .block-container { padding: 0.5rem 0.75rem !important; }
+        .main-header .logo-text h1 { font-size: 1.8rem !important; }
+        .main-header .logo-text .subtitle { font-size: 1rem !important; }
+        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 8px 12px !important; }
+        .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
+        .main-header .header-stats .stat-item .label { font-size: 0.7rem !important; }
+    }
+
+    @media (max-width: 480px) {
+        .block-container { padding: 0.25rem 0.5rem !important; }
+        .main-header .logo-text h1 { font-size: 1.4rem !important; }
+        .main-header .header-content { flex-direction: column !important; align-items: flex-start !important; }
+        .main-header .header-right { width: 100% !important; flex-direction: column !important; align-items: stretch !important; }
+        .main-header .header-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+        .main-header .stat-item { min-width: auto !important; padding: 6px 10px !important; }
+        .main-header .logo-icon { width: 50px !important; height: 50px !important; font-size: 1.8rem !important; }
+        .login-container { padding: 1.5rem !important; margin: 1rem !important; }
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ---- Helper functions ----
 def get_grade_display(grade):
@@ -677,7 +1212,6 @@ def show_admin_panel():
                                 "batch_id": batch_id
                             }
                             st.session_state.evaluations.append(eval_item)
-                        # Remove batch from pending list (or keep as approved)
                         batch["status"] = "approved"
                         sync_all()
                         add_notification(f"✅ Batch from {teacher_name} approved ({student_count} students)", "success")
@@ -785,7 +1319,6 @@ def show_admin_panel():
                 if st.button("Delete Selected Student", type="primary", use_container_width=True):
                     if st.checkbox(f"⚠️ Confirm delete of {student_to_delete}?"):
                         st.session_state.students = [s for s in st.session_state.students if s["id"] != student_id]
-                        # Also remove associated evaluations
                         st.session_state.evaluations = [e for e in st.session_state.evaluations if e.get("student_id") != student_id]
                         sync_all()
                         add_notification(f"🗑️ Student {student_to_delete} deleted", "warning")
@@ -914,7 +1447,7 @@ def show_admin_panel():
     with tab11:
         show_penalty_log()
 
-# ---- STUDENT PANEL (unchanged) ----
+# ---- STUDENT PANEL ----
 def show_student_panel():
     st.markdown("### 👨‍🎓 Student Dashboard")
     if not is_registration_open():
@@ -1026,7 +1559,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (Batch Submission) ----
+# ---- TEACHER PANEL ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
