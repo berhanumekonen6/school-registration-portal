@@ -141,6 +141,11 @@ def init_user_db():
         }
         sync_all()
     
+    # --- ADD THIS INITIALISATION ---
+    if 'subjects' not in st.session_state:
+        st.session_state.subjects = ["Mathematics", "English", "Science", "History", "Geography", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education"]
+    # ---------------------------------
+    
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     if 'current_user' not in st.session_state:
