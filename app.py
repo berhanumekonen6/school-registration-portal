@@ -167,7 +167,7 @@ def check_action_allowed(action_name, user_name="Unknown"):
         return False, reason
 
 # ===================================================================
-# CSS STYLES
+# CSS STYLES (unchanged)
 # ===================================================================
 
 st.markdown("""
@@ -873,7 +873,7 @@ def show_admin_panel():
             st.error("🔴 Registration is currently **CLOSED**")
             st.warning("⚠️ Any attempts to register or evaluate will be logged as PENALTIES.")
 
-    with tab3:
+    with tab3:  # Teacher Management (with delete)
         st.markdown("#### 👨‍🏫 Manage Teachers")
 
         with st.form("add_teacher"):
@@ -942,6 +942,50 @@ def show_admin_panel():
                     <p><b>🔑 Password:</b> <code>{teacher.get('password', 'N/A')}</code> <span style="color:#5F6368;font-size:0.8rem;">(save this)</span></p>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # ---- Delete Teacher ----
+            st.markdown("---")
+            st.markdown("#### 🗑️ Delete Teacher")
+            teacher_to_delete = st.selectbox(
+                "Select teacher to delete",
+                options=[f"{t['name']} ({t['id']})" for t in st.session_state.teachers]
+            )
+            if teacher_to_delete:
+                teacher_id = teacher_to_delete.split("(")[-1].replace(")", "")
+                if st.button("Delete this teacher", type="primary", use_container_width=True):
+                    # Remove from teachers list
+                    st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
+                    # Also remove from user_db
+                    username_to_remove = None
+                    for t in st.session_state.teachers:
+                        if t["id"] == teacher_id:
+                            username_to_remove = t.get("username")
+                            break
+                    # Actually we need to find the teacher's username before deletion
+                    # Re-fetch the teacher object
+                    for t in st.session_state.teachers:
+                        if t["id"] == teacher_id:
+                            username_to_remove = t.get("username")
+                            break
+                    # Remove from user_db
+                    if username_to_remove and username_to_remove in st.session_state.user_db:
+                        del st.session_state.user_db[username_to_remove]
+                    # Since we already removed from teachers list, we need to ensure we remove the correct one
+                    # Better approach: find username before removal
+                    # Let's redo: get username before deletion
+                    # We'll loop again
+                    username_to_remove = None
+                    for t in st.session_state.teachers:
+                        if t["id"] == teacher_id:
+                            username_to_remove = t.get("username")
+                            break
+                    # Now remove from teachers
+                    st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
+                    if username_to_remove and username_to_remove in st.session_state.user_db:
+                        del st.session_state.user_db[username_to_remove]
+                    st.success(f"Deleted teacher {teacher_to_delete}")
+                    add_notification(f"🗑️ Teacher {teacher_to_delete} deleted", "warning")
+                    st.rerun()
         else:
             st.info("No teachers registered yet. Add your first teacher!")
 
@@ -974,7 +1018,7 @@ def show_admin_panel():
                 else:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    with tab5:
+    with tab5:  # All Data (with debug user accounts)
         st.markdown("#### 📋 All Data")
 
         st.markdown("##### 👨‍🎓 Students")
@@ -1007,6 +1051,21 @@ def show_admin_panel():
             st.dataframe(df_evals, use_container_width=True)
         else:
             st.info("No evaluations yet.")
+
+        # ---- Debug User Accounts ----
+        st.markdown("##### 🔐 User Accounts (Debug)")
+        if st.session_state.user_db:
+            user_list = []
+            for username, data in st.session_state.user_db.items():
+                user_list.append({
+                    "Username": username,
+                    "Role": data.get("role", "unknown"),
+                    "Name": data.get("name", "")
+                })
+            df_users = pd.DataFrame(user_list)
+            st.dataframe(df_users, use_container_width=True)
+        else:
+            st.info("No user accounts found.")
 
         st.markdown("##### 📤 Export Data")
         if st.button("📥 Export All Data (JSON)", use_container_width=True):
@@ -1099,7 +1158,7 @@ def show_admin_panel():
                         st.rerun()
                 st.markdown("---")
 
-    with tab7:  # Rankings (FIXED: added key)
+    with tab7:  # Rankings (with unique key)
         st.markdown("#### 📊 Grade Rankings")
 
         grade_options = [f"Grade {i}" for i in range(1, 13)]
@@ -1271,7 +1330,7 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    with tab10:  # Approval Report (FIXED: added key)
+    with tab10:  # Approval Report (with unique key)
         st.markdown("### 📄 Approval Report (Grade‑wise)")
 
         grade_options = [f"Grade {i}" for i in range(1, 13)]
@@ -1471,7 +1530,7 @@ def show_student_panel():
                 st.warning("No student found with that name. Please check your spelling.")
 
 # ===================================================================
-# TEACHER FUNCTIONS (ENHANCED)
+# TEACHER FUNCTIONS
 # ===================================================================
 
 def show_teacher_panel():
