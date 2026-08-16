@@ -54,14 +54,18 @@ GRADE_SUBJECTS = {
     ],
 }
 
-# ---- Assessment maximum scores (customise as needed) ----
-ASSESSMENT_MAX_SCORES = {
+# ---- Assessment default maximum scores (can be overridden per batch) ----
+# Now limited to allowed max options: 5,10,15,20,25,30,35,40,45,50
+DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
     "Test 3": 10,
     "Test 4": 10,
-    "Final Exam": 100
+    "Final Exam": 50
 }
+
+# ---- Allowed max score options ----
+MAX_SCORE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 # ---- Supabase Client ----
 def init_supabase():
@@ -1382,6 +1386,12 @@ def show_admin_panel():
                 student_count = len(batch.get("students", []))
                 submitted_date = batch.get("submitted_at", "N/A")
 
+                # Display weights and max scores
+                weights = batch.get("weights", {})
+                max_scores = batch.get("max_scores", DEFAULT_MAX_SCORES)
+                weight_str = f"Test1={weights.get('Test 1',0)}, Test2={weights.get('Test 2',0)}, Test3={weights.get('Test 3',0)}, Test4={weights.get('Test 4',0)}, Final={weights.get('Final Exam',0)}"
+                max_str = f"Max: Test1={max_scores.get('Test 1',0)}, Test2={max_scores.get('Test 2',0)}, Test3={max_scores.get('Test 3',0)}, Test4={max_scores.get('Test 4',0)}, Final={max_scores.get('Final Exam',0)}"
+
                 st.markdown(f"""
                 <div class="approval-card pending">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -1391,7 +1401,8 @@ def show_admin_panel():
                             <p><b>📋 Grade:</b> {grade}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
                             <p><b>📅 Submitted:</b> {submitted_date}</p>
-                            <p><b>Weights:</b> Test1={batch['weights']['Test 1']}, Test2={batch['weights']['Test 2']}, Test3={batch['weights']['Test 3']}, Test4={batch['weights']['Test 4']}, Final={batch['weights']['Final Exam']}</p>
+                            <p><b>Weights:</b> {weight_str}</p>
+                            <p><b>Max Scores:</b> {max_str}</p>
                         </div>
                         <div style="text-align:right;">
                             <span class="badge-pending">⏳ Pending</span>
@@ -1416,11 +1427,11 @@ def show_admin_panel():
                                 "teacher_name": batch["teacher_name"],
                                 "subject": batch["subject"],
                                 "assessments": [
-                                    {"name": "Test 1", "score": student_entry["Test 1"], "weight": batch["weights"]["Test 1"]},
-                                    {"name": "Test 2", "score": student_entry["Test 2"], "weight": batch["weights"]["Test 2"]},
-                                    {"name": "Test 3", "score": student_entry["Test 3"], "weight": batch["weights"]["Test 3"]},
-                                    {"name": "Test 4", "score": student_entry["Test 4"], "weight": batch["weights"]["Test 4"]},
-                                    {"name": "Final Exam", "score": student_entry["Final Exam"], "weight": batch["weights"]["Final Exam"]}
+                                    {"name": "Test 1", "score": student_entry["Test 1"], "weight": batch["weights"]["Test 1"], "max_score": batch["max_scores"]["Test 1"]},
+                                    {"name": "Test 2", "score": student_entry["Test 2"], "weight": batch["weights"]["Test 2"], "max_score": batch["max_scores"]["Test 2"]},
+                                    {"name": "Test 3", "score": student_entry["Test 3"], "weight": batch["weights"]["Test 3"], "max_score": batch["max_scores"]["Test 3"]},
+                                    {"name": "Test 4", "score": student_entry["Test 4"], "weight": batch["weights"]["Test 4"], "max_score": batch["max_scores"]["Test 4"]},
+                                    {"name": "Final Exam", "score": student_entry["Final Exam"], "weight": batch["weights"]["Final Exam"], "max_score": batch["max_scores"]["Final Exam"]}
                                 ],
                                 "remarks": batch.get("remarks", ""),
                                 "overall_score": student_entry["overall"],
@@ -1919,7 +1930,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores, and batch editing with direct update) ----
+# ---- TEACHER PANEL (with custom max scores dropdown) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -2015,9 +2026,11 @@ def show_teacher_panel():
         if existing_batch:
             student_data = existing_batch["students"]
             weights = existing_batch["weights"]
+            max_scores = existing_batch.get("max_scores", DEFAULT_MAX_SCORES.copy())
             remarks = existing_batch.get("remarks", "")
         else:
-            weights = {"Test 1": 10, "Test 2": 10, "Test 3": 10, "Test 4": 10, "Final Exam": 20}
+            weights = {"Test 1": 10, "Test 2": 10, "Test 3": 10, "Test 4": 10, "Final Exam": 50}
+            max_scores = DEFAULT_MAX_SCORES.copy()
             student_data = []
             for s in eligible_students:
                 student_data.append({
@@ -2032,45 +2045,71 @@ def show_teacher_panel():
                 })
             remarks = ""
 
-        st.markdown("**Set assessment weights (apply to all students):**")
+        # ---- Weight and Max Score inputs (dropdowns) ----
+        st.markdown("**Set assessment weights and maximum scores:**")
+        weight_options = [0,5,10,15,20,30,40,50]
+        # Build max options: ensure current max is included if not in the list
+        def get_max_options(current_max):
+            opts = MAX_SCORE_OPTIONS.copy()
+            if current_max not in opts:
+                opts.append(current_max)
+                opts.sort()
+            return opts
+
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            w1 = st.selectbox("Test 1", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 1"]), key="w1")
+            st.markdown("**Test 1**")
+            w1 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 1"]), key="w1")
+            max_opts1 = get_max_options(max_scores["Test 1"])
+            max1 = st.selectbox("Max Score", options=max_opts1, index=max_opts1.index(max_scores["Test 1"]), key="max1")
         with col2:
-            w2 = st.selectbox("Test 2", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 2"]), key="w2")
+            st.markdown("**Test 2**")
+            w2 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 2"]), key="w2")
+            max_opts2 = get_max_options(max_scores["Test 2"])
+            max2 = st.selectbox("Max Score", options=max_opts2, index=max_opts2.index(max_scores["Test 2"]), key="max2")
         with col3:
-            w3 = st.selectbox("Test 3", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 3"]), key="w3")
+            st.markdown("**Test 3**")
+            w3 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 3"]), key="w3")
+            max_opts3 = get_max_options(max_scores["Test 3"])
+            max3 = st.selectbox("Max Score", options=max_opts3, index=max_opts3.index(max_scores["Test 3"]), key="max3")
         with col4:
-            w4 = st.selectbox("Test 4", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 4"]), key="w4")
+            st.markdown("**Test 4**")
+            w4 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 4"]), key="w4")
+            max_opts4 = get_max_options(max_scores["Test 4"])
+            max4 = st.selectbox("Max Score", options=max_opts4, index=max_opts4.index(max_scores["Test 4"]), key="max4")
         with col5:
-            wf = st.selectbox("Final Exam", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Final Exam"]), key="wf")
-        new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
+            st.markdown("**Final Exam**")
+            wf = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Final Exam"]), key="wf")
+            max_optsf = get_max_options(max_scores["Final Exam"])
+            maxf = st.selectbox("Max Score", options=max_optsf, index=max_optsf.index(max_scores["Final Exam"]), key="maxf")
 
-        def compute_overall_row(row, weights):
-            # Convert raw scores to percentages based on max scores
+        new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
+        new_max_scores = {"Test 1": max1, "Test 2": max2, "Test 3": max3, "Test 4": max4, "Final Exam": maxf}
+
+        def compute_overall_row(row, weights, max_scores):
             total_weighted = 0
             total_weight = 0
             for name in weights.keys():
-                max_score = ASSESSMENT_MAX_SCORES.get(name, 100)
+                max_score = max_scores.get(name, 100)
                 raw = row.get(name, 0)
                 pct = (raw / max_score) * 100 if max_score > 0 else 0
                 total_weighted += pct * weights[name]
                 total_weight += weights[name]
             return round(total_weighted / total_weight, 2) if total_weight > 0 else 0
 
-        st.markdown(f"**Enter raw scores (max values: {', '.join([f'{k}={v}' for k,v in ASSESSMENT_MAX_SCORES.items()])}):**")
+        st.markdown(f"**Enter raw scores (each out of its max score):**")
         df_edit = pd.DataFrame(student_data)
         columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
         df_edit = df_edit[columns_order]
 
-        # Build column config dynamically
+        # Build column config dynamically using new_max_scores
         col_config = {
             "student_id": st.column_config.TextColumn("ID", disabled=True),
             "student_name": st.column_config.TextColumn("Student Name", disabled=True),
             "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
         }
         for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
-            max_val = ASSESSMENT_MAX_SCORES.get(name, 100)
+            max_val = new_max_scores.get(name, 100)
             col_config[name] = st.column_config.NumberColumn(
                 f"{name} (max {max_val})",
                 min_value=0,
@@ -2091,11 +2130,12 @@ def show_teacher_panel():
         if st.button("💾 Submit Batch for Approval", use_container_width=True):
             students_list = edited_df.to_dict(orient="records")
             for rec in students_list:
-                rec["overall"] = compute_overall_row(rec, new_weights)
+                rec["overall"] = compute_overall_row(rec, new_weights, new_max_scores)
 
             if existing_batch:
                 existing_batch["students"] = students_list
                 existing_batch["weights"] = new_weights
+                existing_batch["max_scores"] = new_max_scores
                 existing_batch["remarks"] = remarks
                 existing_batch["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {teacher_subject})", "info")
@@ -2109,6 +2149,7 @@ def show_teacher_panel():
                     "subject": teacher_subject,
                     "students": students_list,
                     "weights": new_weights,
+                    "max_scores": new_max_scores,
                     "remarks": remarks,
                     "status": "pending",
                     "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2120,7 +2161,7 @@ def show_teacher_panel():
             sync_all()
             st.rerun()
 
-    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) + EDIT BATCH (direct update) ----------
+    # ---------- TAB 2: My Submissions (with edit) ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -2158,37 +2199,64 @@ def show_teacher_panel():
                 if batch_to_edit and batch_to_edit["status"] == "pending":
                     st.markdown("---")
                     st.markdown("#### ✏️ Edit Batch")
-                    # Use the same editing logic as the submission tab, but pre‑populate
+                    # Pre-populate
                     students_data = batch_to_edit["students"]
                     weights = batch_to_edit["weights"]
+                    max_scores = batch_to_edit.get("max_scores", DEFAULT_MAX_SCORES.copy())
                     remarks = batch_to_edit.get("remarks", "")
 
-                    st.markdown("**Set assessment weights (apply to all students):**")
+                    st.markdown("**Set assessment weights and maximum scores:**")
+                    weight_options_edit = [0,5,10,15,20,30,40,50]
+
+                    def get_max_options_edit(current_max):
+                        opts = MAX_SCORE_OPTIONS.copy()
+                        if current_max not in opts:
+                            opts.append(current_max)
+                            opts.sort()
+                        return opts
+
                     col1, col2, col3, col4, col5 = st.columns(5)
                     with col1:
-                        w1 = st.selectbox("Test 1", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 1"]), key="edit_w1")
+                        st.markdown("**Test 1**")
+                        w1 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 1"]), key="edit_w1")
+                        max_opts1 = get_max_options_edit(max_scores["Test 1"])
+                        max1 = st.selectbox("Max Score", options=max_opts1, index=max_opts1.index(max_scores["Test 1"]), key="edit_max1")
                     with col2:
-                        w2 = st.selectbox("Test 2", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 2"]), key="edit_w2")
+                        st.markdown("**Test 2**")
+                        w2 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 2"]), key="edit_w2")
+                        max_opts2 = get_max_options_edit(max_scores["Test 2"])
+                        max2 = st.selectbox("Max Score", options=max_opts2, index=max_opts2.index(max_scores["Test 2"]), key="edit_max2")
                     with col3:
-                        w3 = st.selectbox("Test 3", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 3"]), key="edit_w3")
+                        st.markdown("**Test 3**")
+                        w3 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 3"]), key="edit_w3")
+                        max_opts3 = get_max_options_edit(max_scores["Test 3"])
+                        max3 = st.selectbox("Max Score", options=max_opts3, index=max_opts3.index(max_scores["Test 3"]), key="edit_max3")
                     with col4:
-                        w4 = st.selectbox("Test 4", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 4"]), key="edit_w4")
+                        st.markdown("**Test 4**")
+                        w4 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 4"]), key="edit_w4")
+                        max_opts4 = get_max_options_edit(max_scores["Test 4"])
+                        max4 = st.selectbox("Max Score", options=max_opts4, index=max_opts4.index(max_scores["Test 4"]), key="edit_max4")
                     with col5:
-                        wf = st.selectbox("Final Exam", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Final Exam"]), key="edit_wf")
-                    new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
+                        st.markdown("**Final Exam**")
+                        wf = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Final Exam"]), key="edit_wf")
+                        max_optsf = get_max_options_edit(max_scores["Final Exam"])
+                        maxf = st.selectbox("Max Score", options=max_optsf, index=max_optsf.index(max_scores["Final Exam"]), key="edit_maxf")
 
-                    def compute_overall_row_edit(row, w):
+                    new_weights_edit = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
+                    new_max_scores_edit = {"Test 1": max1, "Test 2": max2, "Test 3": max3, "Test 4": max4, "Final Exam": maxf}
+
+                    def compute_overall_row_edit(row, w, m):
                         total_weighted = 0
                         total_weight = 0
                         for name in w.keys():
-                            max_score = ASSESSMENT_MAX_SCORES.get(name, 100)
+                            max_score = m.get(name, 100)
                             raw = row.get(name, 0)
                             pct = (raw / max_score) * 100 if max_score > 0 else 0
                             total_weighted += pct * w[name]
                             total_weight += w[name]
                         return round(total_weighted / total_weight, 2) if total_weight > 0 else 0
 
-                    st.markdown(f"**Enter raw scores (max values: {', '.join([f'{k}={v}' for k,v in ASSESSMENT_MAX_SCORES.items()])}):**")
+                    st.markdown(f"**Enter raw scores (each out of its max score):**")
                     df_edit = pd.DataFrame(students_data)
                     columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
                     df_edit = df_edit[columns_order]
@@ -2199,7 +2267,7 @@ def show_teacher_panel():
                         "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
                     }
                     for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
-                        max_val = ASSESSMENT_MAX_SCORES.get(name, 100)
+                        max_val = new_max_scores_edit.get(name, 100)
                         col_config[name] = st.column_config.NumberColumn(
                             f"{name} (max {max_val})",
                             min_value=0,
@@ -2222,17 +2290,16 @@ def show_teacher_panel():
                         if st.button("💾 Update Batch", use_container_width=True):
                             students_list = edited_df.to_dict(orient="records")
                             for rec in students_list:
-                                rec["overall"] = compute_overall_row_edit(rec, new_weights)
+                                rec["overall"] = compute_overall_row_edit(rec, new_weights_edit, new_max_scores_edit)
                             batch_to_edit["students"] = students_list
-                            batch_to_edit["weights"] = new_weights
+                            batch_to_edit["weights"] = new_weights_edit
+                            batch_to_edit["max_scores"] = new_max_scores_edit
                             batch_to_edit["remarks"] = remarks
                             batch_to_edit["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-                            # 1. Directly update the batch in Supabase
                             supabase = get_supabase()
                             try:
                                 supabase.table("batches").update(batch_to_edit).eq("id", batch_to_edit["id"]).execute()
-                                # 2. Reload data
                                 load_all_data()
                                 add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit['subject']})", "info")
                                 st.success("✅ Batch updated successfully! Awaiting approval.")
@@ -2245,7 +2312,6 @@ def show_teacher_panel():
                             st.session_state.edit_batch_id = None
                             st.rerun()
                 else:
-                    # If batch no longer pending or not found, clear the edit id
                     st.session_state.edit_batch_id = None
                     st.rerun()
 
