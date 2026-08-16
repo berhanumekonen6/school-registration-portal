@@ -1069,7 +1069,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # --- Tab 3: Teachers (UPDATED with direct insert, delete, and edit) ---
+    # --- Tab 3: Teachers (with direct update for editing) ---
     with tab3:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         with st.form("add_teacher"):
@@ -1167,7 +1167,7 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ---------- EDIT TEACHER ----------
+            # ---------- EDIT TEACHER (direct update) ----------
             st.markdown("#### ✏️ Edit Teacher")
             teacher_options = {f"{t['name']} ({t['id']})": t for t in st.session_state.teachers}
             selected_teacher_label = st.selectbox("Select teacher to edit", options=list(teacher_options.keys()))
@@ -1180,17 +1180,26 @@ def show_admin_panel():
                                                    index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
                         new_email = st.text_input("Email Address", value=teacher.get("email", ""))
                         if st.form_submit_button("💾 Update Teacher"):
-                            # Update teacher record
+                            # 1. Update local teacher dict
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
-                            # Also update the user_db name if it changed
-                            if teacher.get("username") in st.session_state.user_db:
-                                st.session_state.user_db[teacher["username"]]["name"] = new_name
-                            sync_all()
-                            add_notification(f"✏️ Teacher {new_name} updated", "info")
-                            st.success(f"✅ Teacher {new_name} updated successfully!")
-                            st.rerun()
+
+                            # 2. Update the teacher record in Supabase
+                            supabase = get_supabase()
+                            try:
+                                supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
+                                # 3. Also update the user_db name if changed
+                                if teacher.get("username") in st.session_state.user_db:
+                                    st.session_state.user_db[teacher["username"]]["name"] = new_name
+                                    supabase.table("users").update({"name": new_name}).eq("username", teacher["username"]).execute()
+                                # 4. Reload data
+                                load_all_data()
+                                add_notification(f"✏️ Teacher {new_name} updated", "info")
+                                st.success(f"✅ Teacher {new_name} updated successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to update teacher: {e}")
 
             st.markdown("---")
             st.markdown("#### 🗑️ Delete Teacher")
@@ -1471,7 +1480,7 @@ def show_admin_panel():
             else:
                 st.info("No approved evaluations yet for this grade.")
 
-    # --- Tab 8: Students (with delete and edit) ---
+    # --- Tab 8: Students (with delete, edit, and bulk replacement) ---
     with tab8:
         st.markdown("### 👨‍🎓 Student Management")
         with st.expander("➕ Add New Student", expanded=False):
@@ -1511,13 +1520,67 @@ def show_admin_panel():
                         st.success(f"✅ Student {name} added!")
                         st.rerun()
 
+        # ---------- BULK SUBJECT REPLACEMENT ----------
+        with st.expander("🔄 Bulk Subject Replacement (by Grade)", expanded=False):
+            st.markdown("Replace a subject for all students in a selected grade with another subject.")
+            grade_options = [f"Grade {i}" for i in range(1, 13)]
+            target_grade = st.selectbox("Select Grade", grade_options, key="bulk_grade")
+            
+            # Get all subjects currently in use by students of that grade
+            students_in_grade = [s for s in st.session_state.students if s.get("grade") == target_grade]
+            if not students_in_grade:
+                st.info(f"No students in {target_grade} to update.")
+            else:
+                # Collect subjects that appear in these students' subject lists
+                used_subjects = set()
+                for s in students_in_grade:
+                    used_subjects.update(s.get("subjects", []))
+                used_subjects = sorted(list(used_subjects))
+                if not used_subjects:
+                    st.info(f"No subjects found for students in {target_grade}.")
+                else:
+                    old_subject = st.selectbox("Subject to replace", used_subjects, key="old_subj")
+                    new_subject = st.selectbox("Replace with", st.session_state.subjects, key="new_subj")
+                    
+                    if st.button(f"🔄 Replace '{old_subject}' with '{new_subject}' for all {target_grade} students", use_container_width=True):
+                        if old_subject == new_subject:
+                            st.warning("Old and new subjects are the same. No changes made.")
+                        else:
+                            # Count affected students
+                            affected = [s for s in students_in_grade if old_subject in s.get("subjects", [])]
+                            if not affected:
+                                st.info(f"No students in {target_grade} have '{old_subject}'.")
+                            else:
+                                # Confirm with user
+                                confirm = st.checkbox(f"⚠️ I confirm: update {len(affected)} students in {target_grade} – replace '{old_subject}' with '{new_subject}'.")
+                                if confirm:
+                                    supabase = get_supabase()
+                                    try:
+                                        # Update each student's subject list locally and in Supabase
+                                        for student in affected:
+                                            # Replace subject in list
+                                            subjects = student.get("subjects", [])
+                                            if old_subject in subjects:
+                                                idx = subjects.index(old_subject)
+                                                subjects[idx] = new_subject
+                                                student["subjects"] = subjects
+                                            # Update Supabase
+                                            supabase.table("students").update({"subjects": subjects}).eq("id", student["id"]).execute()
+                                        # Reload data
+                                        load_all_data()
+                                        add_notification(f"🔄 Bulk update: replaced '{old_subject}' with '{new_subject}' for {len(affected)} students in {target_grade}", "info")
+                                        st.success(f"✅ Successfully replaced '{old_subject}' with '{new_subject}' for {len(affected)} students in {target_grade}.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"❌ Error during bulk update: {e}")
+
         st.markdown("#### 📋 All Students")
         if st.session_state.students:
             df = pd.DataFrame(st.session_state.students)
             display_cols = ["id", "name", "grade", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
-            # ---------- EDIT STUDENT ----------
+            # ---------- EDIT STUDENT (direct update) ----------
             st.markdown("#### ✏️ Edit Student")
             student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
             selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
@@ -1541,7 +1604,7 @@ def show_admin_panel():
                             new_subjects = st.multiselect("Subjects", st.session_state.subjects,
                                                           default=student.get("subjects", []))
                         if st.form_submit_button("💾 Update Student"):
-                            # Update the student record
+                            # 1. Update the local student dict
                             student["name"] = new_name
                             student["age"] = new_age
                             student["grade"] = new_grade
@@ -1550,11 +1613,18 @@ def show_admin_panel():
                             student["parent_name"] = new_parent
                             student["contact"] = new_contact
                             student["subjects"] = new_subjects
-                            # Sync to Supabase
-                            sync_all()
-                            add_notification(f"✏️ Student {new_name} updated", "info")
-                            st.success(f"✅ Student {new_name} updated successfully!")
-                            st.rerun()
+
+                            # 2. Directly update the record in Supabase
+                            supabase = get_supabase()
+                            try:
+                                supabase.table("students").update(student).eq("id", student["id"]).execute()
+                                # 3. Reload data to refresh session state
+                                load_all_data()
+                                add_notification(f"✏️ Student {new_name} updated", "info")
+                                st.success(f"✅ Student {new_name} updated successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to update student: {e}")
 
             st.markdown("#### 🗑️ Delete Student")
             student_to_delete = st.selectbox(
@@ -1829,7 +1899,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores, and batch editing) ----
+# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores, and batch editing with direct update) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -2030,7 +2100,7 @@ def show_teacher_panel():
             sync_all()
             st.rerun()
 
-    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) + EDIT BATCH ----------
+    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) + EDIT BATCH (direct update) ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -2137,11 +2207,19 @@ def show_teacher_panel():
                             batch_to_edit["weights"] = new_weights
                             batch_to_edit["remarks"] = remarks
                             batch_to_edit["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            sync_all()
-                            add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit['subject']})", "info")
-                            st.success("✅ Batch updated successfully! Awaiting approval.")
-                            st.session_state.edit_batch_id = None
-                            st.rerun()
+
+                            # 1. Directly update the batch in Supabase
+                            supabase = get_supabase()
+                            try:
+                                supabase.table("batches").update(batch_to_edit).eq("id", batch_to_edit["id"]).execute()
+                                # 2. Reload data
+                                load_all_data()
+                                add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit['subject']})", "info")
+                                st.success("✅ Batch updated successfully! Awaiting approval.")
+                                st.session_state.edit_batch_id = None
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Failed to update batch: {e}")
                     with col2:
                         if st.button("❌ Cancel Editing", use_container_width=True):
                             st.session_state.edit_batch_id = None
