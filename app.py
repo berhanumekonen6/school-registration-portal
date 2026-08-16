@@ -284,7 +284,6 @@ def add_notification(message, notification_type="info", user=None):
         res = supabase.table("notifications").insert(new_notif).execute()
         if res.data:
             st.session_state.notifications.insert(0, res.data[0])
-        # No sync_all - direct insert
     except Exception as e:
         st.error(f"Error adding notification: {e}")
 
@@ -947,7 +946,7 @@ def show_notification_center():
                     supabase.table("notifications").update({"read": True}).eq("id", n["id"]).execute()
                 except:
                     pass
-            load_all_data()  # refresh
+            load_all_data()
             st.rerun()
     if st.session_state.notifications:
         for note in st.session_state.notifications[:10]:
@@ -1068,7 +1067,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # --- Tab 3: Teachers (with direct insert/update) ---
+    # --- Tab 3: Teachers ---
     with tab3:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         with st.form("add_teacher"):
@@ -1109,7 +1108,7 @@ def show_admin_panel():
                         "added": added_time
                     }
                     supabase.table("teachers").insert(teacher_data).execute()
-                    load_all_data()  # refresh
+                    load_all_data()
                     add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
                     st.success(f"""
                     ✅ Teacher {teacher_name} added successfully!
@@ -1138,7 +1137,7 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-            # ---------- EDIT TEACHER (direct update) ----------
+            # ---------- EDIT TEACHER ----------
             st.markdown("#### ✏️ Edit Teacher")
             teacher_options = {f"{t['name']} ({t['id']})": t for t in st.session_state.teachers}
             selected_teacher_label = st.selectbox("Select teacher to edit", options=list(teacher_options.keys()))
@@ -1219,7 +1218,6 @@ def show_admin_panel():
             if submitted and new_subject:
                 if new_subject not in current_subjects:
                     st.session_state.subjects.append(new_subject)
-                    # Direct insert into a subjects table (if you have one) – we store in session only
                     add_notification(f"📚 New subject added: {new_subject}", "info")
                     st.success(f"✅ Subject {new_subject} added!")
                     st.rerun()
@@ -1458,7 +1456,7 @@ def show_admin_panel():
             else:
                 st.info("No approved evaluations yet for this grade.")
 
-    # --- Tab 8: Students (with direct insert for add, direct update for edit) ---
+    # --- Tab 8: Students ---
     with tab8:
         st.markdown("### 👨‍🎓 Student Management")
         with st.expander("➕ Add New Student", expanded=False):
@@ -1574,7 +1572,7 @@ def show_admin_panel():
             display_cols = ["id", "name", "grade", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
-            # ---------- EDIT STUDENT (direct update) ----------
+            # ---------- EDIT STUDENT ----------
             st.markdown("#### ✏️ Edit Student")
             student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
             selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
@@ -1626,8 +1624,6 @@ def show_admin_panel():
                 student_id = student_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete Selected Student", type="primary", use_container_width=True):
                     if st.checkbox(f"⚠️ Confirm delete of {student_to_delete}?"):
-                        st.session_state.students = [s for s in st.session_state.students if s["id"] != student_id]
-                        st.session_state.evaluations = [e for e in st.session_state.evaluations if e.get("student_id") != student_id]
                         supabase = get_supabase()
                         try:
                             supabase.table("students").delete().eq("id", student_id).execute()
@@ -1641,7 +1637,7 @@ def show_admin_panel():
         else:
             st.info("No students registered yet.")
 
-    # --- Tab 9: Import/Export (with direct insert) ---
+    # --- Tab 9: Import/Export ---
     with tab9:
         st.markdown("### 📥 Import / Export Data")
         st.markdown("#### 📤 Import Students from Excel")
@@ -1776,6 +1772,56 @@ def show_admin_panel():
                     use_container_width=True
                 )
 
+        # ---- NEW: Download All Approved Evaluations ----
+        st.markdown("---")
+        st.markdown("#### 📤 Download All Approved Evaluations")
+        if st.session_state.evaluations:
+            approved_evals = [e for e in st.session_state.evaluations if e.get("status") == "approved"]
+            if approved_evals:
+                if st.button("📥 Download All Approved Evaluations (Excel)", use_container_width=True):
+                    df_all = pd.DataFrame(approved_evals)
+                    # Expand assessments into columns if needed, but we already have scores in the batch
+                    # We'll create a clean dataframe
+                    rows = []
+                    for e in approved_evals:
+                        # Get student name and grade
+                        student = get_student_by_id(e.get("student_id"))
+                        grade = student.get("grade", "N/A") if student else "N/A"
+                        # Get assessments
+                        assessments = e.get("assessments", [])
+                        scores = {a["name"]: a["score"] for a in assessments}
+                        row = {
+                            "Student ID": e.get("student_id"),
+                            "Student Name": e.get("student_name"),
+                            "Grade": grade,
+                            "Subject": e.get("subject"),
+                            "Teacher": e.get("teacher_name"),
+                            "Overall Score (%)": e.get("overall_score"),
+                            "Remarks": e.get("remarks", ""),
+                            "Date Approved": e.get("date", ""),
+                            "Test 1": scores.get("Test 1", ""),
+                            "Test 2": scores.get("Test 2", ""),
+                            "Test 3": scores.get("Test 3", ""),
+                            "Test 4": scores.get("Test 4", ""),
+                            "Final Exam": scores.get("Final Exam", "")
+                        }
+                        rows.append(row)
+                    df_export = pd.DataFrame(rows)
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_export.to_excel(writer, sheet_name="Approved Evaluations", index=False)
+                    st.download_button(
+                        label="📥 Download Excel",
+                        data=output.getvalue(),
+                        file_name=f"approved_evaluations_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+            else:
+                st.info("No approved evaluations yet.")
+        else:
+            st.info("No evaluations found.")
+
     # --- Tab 11: Penalty Log ---
     with tab11:
         show_penalty_log()
@@ -1894,7 +1940,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (with watermark, direct insert/update) ----
+# ---- TEACHER PANEL ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -2140,7 +2186,7 @@ def show_teacher_panel():
                 except Exception as e:
                     st.error(f"❌ Failed to save batch: {e}")
 
-    # ---------- TAB 2: My Submissions ----------
+    # ---------- TAB 2: My Submissions (with download for approved batches) ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -2152,6 +2198,7 @@ def show_teacher_panel():
                 status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
                 status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
                 student_count = len(batch.get("students", []))
+                batch_remarks = batch.get("remarks", "")
                 st.markdown(f"""
                 <div class="eval-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -2160,6 +2207,7 @@ def show_teacher_panel():
                             <p><b>📋 Grade:</b> {batch['grade']}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
                             <p><b>📅 Submitted:</b> {batch.get('submitted_at', 'N/A')}</p>
+                            <p><b>Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
                         </div>
                         <div style="text-align:right;">
                             <span class="{status_class}">{status_label}</span>
@@ -2167,6 +2215,30 @@ def show_teacher_panel():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # --- Download button for approved batches ---
+                if status == "approved":
+                    if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}"):
+                        df_batch = pd.DataFrame(batch["students"])
+                        # Add grade and subject info
+                        df_batch["Grade"] = batch["grade"]
+                        df_batch["Subject"] = batch["subject"]
+                        df_batch["Teacher"] = batch["teacher_name"]
+                        df_batch["Remarks"] = batch_remarks
+                        # Reorder columns
+                        cols = ["student_id", "student_name", "Grade", "Subject", "Teacher", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall", "Remarks"]
+                        available_cols = [c for c in cols if c in df_batch.columns]
+                        df_export = df_batch[available_cols]
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                            df_export.to_excel(writer, sheet_name="Batch", index=False)
+                        st.download_button(
+                            label="📥 Click to Download",
+                            data=output.getvalue(),
+                            file_name=f"batch_{batch['id']}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"download_btn_{batch['id']}"
+                        )
                 if status == "pending":
                     if st.button(f"✏️ Edit Batch", key=f"edit_batch_{batch['id']}"):
                         st.session_state.edit_batch_id = batch["id"]
