@@ -1140,21 +1140,44 @@ def show_admin_panel():
             if teacher_to_delete:
                 teacher_id = teacher_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete this teacher", type="primary", use_container_width=True):
-                    # Find username
-                    username_to_remove = None
-                    for t in st.session_state.teachers:
-                        if t["id"] == teacher_id:
-                            username_to_remove = t.get("username")
-                            break
-                    # Remove from teachers list
-                    st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
-                    # Remove from user_db
-                    if username_to_remove and username_to_remove in st.session_state.user_db:
-                        del st.session_state.user_db[username_to_remove]
-                    sync_all()
-                    st.success(f"Deleted teacher {teacher_to_delete}")
-                    add_notification(f"🗑️ Teacher {teacher_to_delete} deleted", "warning")
-                    st.rerun()
+                    try:
+                        supabase = get_supabase()
+                        
+                        # 1. Get the teacher's username before deletion
+                        username_to_remove = None
+                        for t in st.session_state.teachers:
+                            if t["id"] == teacher_id:
+                                username_to_remove = t.get("username")
+                                break
+                        
+                        if not username_to_remove:
+                            st.error("Username not found for this teacher.")
+                            st.stop()
+                        
+                        # 2. Delete all evaluations and batches for this teacher directly from Supabase
+                        # (This avoids foreign key errors when deleting the teacher)
+                        supabase.table("evaluations").delete().eq("teacher_id", teacher_id).execute()
+                        supabase.table("batches").delete().eq("teacher_id", teacher_id).execute()
+                        
+                        # 3. Delete the teacher from teachers table
+                        supabase.table("teachers").delete().eq("id", teacher_id).execute()
+                        
+                        # 4. Delete the user from users table
+                        supabase.table("users").delete().eq("username", username_to_remove).execute()
+                        
+                        # 5. Remove from session state
+                        st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
+                        if username_to_remove in st.session_state.user_db:
+                            del st.session_state.user_db[username_to_remove]
+                        
+                        # 6. Reload all data from Supabase to ensure session state matches database
+                        load_all_data()
+                        
+                        add_notification(f"🗑️ Teacher {teacher_to_delete} deleted permanently", "warning")
+                        st.success(f"✅ Teacher {teacher_to_delete} deleted successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error deleting teacher: {e}")
         else:
             st.info("No teachers registered yet. Add your first teacher!")
 
