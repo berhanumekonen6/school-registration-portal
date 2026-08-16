@@ -18,6 +18,51 @@ import uuid
 import math
 from supabase import create_client, Client
 
+# ===================================================================
+# GRADE-SUBJECT MAPPING (Ethiopian Curriculum - SNNPE)
+# ===================================================================
+
+GRADE_SUBJECTS = {
+    # Grades 1-4
+    "Grade 1": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 2": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 3": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 4": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+
+    # Grades 5-6
+    "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
+    "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
+
+    # Grades 7-8
+    "Grade 7": ["Ameharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    "Grade 8": ["Ameharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+
+    # Grades 9-10
+    "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
+    "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
+
+    # Grades 11-12 (combined Natural and Social streams)
+    "Grade 11": [
+        "Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English",
+        "Information Technology (IT)", "Citizenship Education / Civics",
+        "Geography", "History", "Economics", "General Business"
+    ],
+    "Grade 12": [
+        "Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English",
+        "Information Technology (IT)", "Citizenship Education / Civics",
+        "Geography", "History", "Economics", "General Business"
+    ],
+}
+
+# ---- Assessment maximum scores (customise as needed) ----
+ASSESSMENT_MAX_SCORES = {
+    "Test 1": 10,
+    "Test 2": 10,
+    "Test 3": 10,
+    "Test 4": 10,
+    "Final Exam": 100
+}
+
 # ---- Supabase Client ----
 def init_supabase():
     try:
@@ -190,6 +235,14 @@ def generate_random_password(length=8):
     chars = string.ascii_letters + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
+def get_all_subjects():
+    all_subs = set()
+    for subs in GRADE_SUBJECTS.values():
+        all_subs.update(subs)
+    return sorted(list(all_subs))
+
+ALL_SUBJECTS = get_all_subjects()
+
 def init_user_db():
     # Load data from Supabase if not already in session
     if 'students' not in st.session_state:
@@ -203,8 +256,9 @@ def init_user_db():
         }
         sync_all()
     
+    # Use the expanded subject list from GRADE_SUBJECTS
     if 'subjects' not in st.session_state:
-        st.session_state.subjects = ["Mathematics", "English", "Science", "History", "Geography", "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education"]
+        st.session_state.subjects = ALL_SUBJECTS
     
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
@@ -1020,7 +1074,7 @@ def show_admin_panel():
         st.markdown("#### 👨‍🏫 Manage Teachers")
         with st.form("add_teacher"):
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
-            teacher_subject = st.selectbox("Subject Taught *", [s if isinstance(s, str) else s.get("name", "") for s in st.session_state.subjects] if st.session_state.subjects else ["Mathematics", "English", "Science"])
+            teacher_subject = st.selectbox("Subject Taught *", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
             col1, col2 = st.columns([1, 3])
             with col1:
@@ -1462,57 +1516,75 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    # --- Tab 10: Approval Report ---
+    # --- Tab 10: Comprehensive Approval Report (Subject-wise, Rank, Excel) ---
     with tab10:
-        st.markdown("### 📄 Approval Report (Grade‑wise)")
+        st.markdown("### 📊 Comprehensive Grade Report (Subject-wise)")
+
         grade_options = [f"Grade {i}" for i in range(1, 13)]
         selected_grade = st.selectbox("Select Grade", grade_options, key="report_grade")
+
         students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
         if not students_in_grade:
-            st.info(f"No students in {selected_grade}.")
+            st.info(f"No students registered in {selected_grade}.")
         else:
-            report_data = []
-            for student in students_in_grade:
-                evals = get_approved_evaluations_for_student(student["id"])
-                if evals:
-                    avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-                    latest_eval = evals[-1]
-                    assessments = latest_eval.get("assessments", [])
-                    test_scores = {a["name"]: a["score"] for a in assessments}
-                else:
-                    avg_score = 0
-                    test_scores = {"Test 1": 0, "Test 2": 0, "Test 3": 0, "Test 4": 0, "Final Exam": 0}
-                report_data.append({
-                    "Student ID": student["id"],
-                    "Name": student["name"],
-                    "Semester": student.get("semester", ""),
-                    "Test 1": test_scores.get("Test 1", 0),
-                    "Test 2": test_scores.get("Test 2", 0),
-                    "Test 3": test_scores.get("Test 3", 0),
-                    "Test 4": test_scores.get("Test 4", 0),
-                    "Final Exam": test_scores.get("Final Exam", 0),
-                    "Overall Score": avg_score,
-                    "Evaluations": len(evals)
-                })
+            student_ids = [s["id"] for s in students_in_grade]
+            approved_evals = [e for e in st.session_state.evaluations
+                              if e.get("student_id") in student_ids and e.get("status") == "approved"]
 
-            df_report = pd.DataFrame(report_data)
-            if not df_report.empty:
-                df_report_sorted = df_report.sort_values("Overall Score", ascending=False).reset_index(drop=True)
-                df_report_sorted["Rank"] = df_report_sorted.index + 1
-                st.dataframe(df_report_sorted, use_container_width=True, hide_index=True)
+            if not approved_evals:
+                st.info("No approved evaluations found for this grade.")
+            else:
+                # Build: student_id -> subject -> list of scores
+                student_subject_scores = {}
+                for eval_item in approved_evals:
+                    sid = eval_item["student_id"]
+                    subject = eval_item["subject"]
+                    score = eval_item.get("overall_score", 0)  # already a percentage
+                    student_subject_scores.setdefault(sid, {}).setdefault(subject, []).append(score)
+
+                all_subjects = set()
+                for s_scores in student_subject_scores.values():
+                    all_subjects.update(s_scores.keys())
+                all_subjects = sorted(list(all_subjects))
+
+                report_data = []
+                for student in students_in_grade:
+                    sid = student["id"]
+                    name = student["name"]
+                    scores_by_subject = student_subject_scores.get(sid, {})
+                    row = {"Student ID": sid, "Name": name}
+                    subject_scores = []
+                    for subj in all_subjects:
+                        scores = scores_by_subject.get(subj, [])
+                        avg_score = round(sum(scores) / len(scores), 2) if scores else 0
+                        row[subj] = avg_score
+                        subject_scores.append(avg_score)
+                    valid_scores = [s for s in subject_scores if s > 0]
+                    overall = round(sum(valid_scores) / len(valid_scores), 2) if valid_scores else 0
+                    row["Overall Average (%)"] = overall
+                    row["Evaluations"] = len(scores_by_subject)
+                    report_data.append(row)
+
+                df_report = pd.DataFrame(report_data)
+                df_sorted = df_report.sort_values("Overall Average (%)", ascending=False).reset_index(drop=True)
+                df_sorted["Rank"] = df_sorted["Overall Average (%)"].rank(method="min", ascending=False).astype(int)
+
+                columns_order = ["Rank", "Student ID", "Name"] + all_subjects + ["Overall Average (%)", "Evaluations"]
+                columns_order = [col for col in columns_order if col in df_sorted.columns]
+                df_final = df_sorted[columns_order]
+
+                st.dataframe(df_final, use_container_width=True, hide_index=True)
 
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_report_sorted.to_excel(writer, sheet_name=f"{selected_grade}_Report", index=False)
+                    df_final.to_excel(writer, sheet_name=f"{selected_grade}_Report", index=False)
                 st.download_button(
-                    label="📥 Download Approval Report (Excel)",
+                    label="📥 Download Grade Report (Excel)",
                     data=output.getvalue(),
-                    file_name=f"Approval_Report_{selected_grade}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    file_name=f"Grade_Report_{selected_grade}_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
-            else:
-                st.info("No approved evaluations for this grade yet.")
 
     # --- Tab 11: Penalty Log ---
     with tab11:
@@ -1556,9 +1628,7 @@ def show_student_panel():
                 semester = st.selectbox("Semester *", ["Semester I", "Semester II"])
                 parent_name = st.text_input("Parent/Guardian Name", placeholder="e.g., Kebede Alemu")
                 contact = st.text_input("Contact Number", placeholder="+251 9XX XXX XXX")
-            current_subjects = [s if isinstance(s, str) else s.get("name", "") for s in st.session_state.subjects]
-            if not current_subjects:
-                current_subjects = ["Mathematics", "English", "Science", "History", "Geography"]
+            current_subjects = st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS
             selected_subjects = st.multiselect("Select Subjects *", current_subjects, default=current_subjects[:3])
             col1, col2 = st.columns([1, 3])
             with col1:
@@ -1630,7 +1700,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (UPDATED: Batch Submission & My Submissions with Teacher & Subject) ----
+# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -1659,6 +1729,24 @@ def show_teacher_panel():
     )
     st.session_state.teacher_selected_grade = selected_grade
 
+    # ---- Subject validation ----
+    valid_subjects = GRADE_SUBJECTS.get(selected_grade, [])
+    is_subject_valid = teacher_subject in valid_subjects
+
+    st.markdown(f"""
+    <div style="background:#F8F9FA;padding:0.75rem;border-radius:8px;margin-bottom:0.5rem;border:1px solid #E8EAED;">
+        <b>📋 Subjects for {selected_grade}:</b> {', '.join(valid_subjects) if valid_subjects else 'Not defined'}
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not is_subject_valid:
+        st.error(f"""
+        ⚠️ **Subject Mismatch!**  
+        Your assigned subject is **{teacher_subject}**, but this grade requires one of:  
+        **{', '.join(valid_subjects)}**.  
+        Please select a different grade or contact the administrator to update your assigned subject.
+        """)
+
     def get_eligible_students(grade):
         return [s for s in st.session_state.students
                 if s.get("grade") == grade
@@ -1671,16 +1759,19 @@ def show_teacher_panel():
         "✅ Approval Status"
     ])
 
-    # ---------- TAB 1: Submit Batch Evaluation (UPDATED with Teacher & Subject Title) ----------
+    # ---------- TAB 1: Submit Batch Evaluation ----------
     with tab1:
         st.markdown("#### 📝 Submit Batch Evaluation")
-        # ---- NEW: Display teacher and subject ----
         st.markdown(f"""
         <div style="background:#E8F0FE;padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid #1A73E8;">
             <h4 style="margin:0;color:#1A73E8;font-size:1.8rem;">👨‍🏫 Teacher: {teacher_name}</h4>
             <p style="margin:0;color:#202124;font-size:1.2rem;"><b>📚 Subject:</b> {teacher_subject}</p>
         </div>
         """, unsafe_allow_html=True)
+
+        if not is_subject_valid:
+            st.error("❌ You cannot submit evaluations for this grade because your subject is not part of the curriculum for this grade. Please select a valid grade.")
+            return
 
         allowed, reason = check_action_allowed("Student Evaluation (Batch)", teacher_name)
         if not allowed:
@@ -1737,37 +1828,46 @@ def show_teacher_panel():
         new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
 
         def compute_overall_row(row, weights):
-            total_weighted = (row["Test 1"] * weights["Test 1"] +
-                              row["Test 2"] * weights["Test 2"] +
-                              row["Test 3"] * weights["Test 3"] +
-                              row["Test 4"] * weights["Test 4"] +
-                              row["Final Exam"] * weights["Final Exam"])
-            total_weight = sum(weights.values())
+            # Convert raw scores to percentages based on max scores
+            total_weighted = 0
+            total_weight = 0
+            for name in weights.keys():
+                max_score = ASSESSMENT_MAX_SCORES.get(name, 100)
+                raw = row.get(name, 0)
+                pct = (raw / max_score) * 100 if max_score > 0 else 0
+                total_weighted += pct * weights[name]
+                total_weight += weights[name]
             return round(total_weighted / total_weight, 2) if total_weight > 0 else 0
 
-        st.markdown("**Enter scores for each student (0–100):**")
+        st.markdown(f"**Enter raw scores (max values: {', '.join([f'{k}={v}' for k,v in ASSESSMENT_MAX_SCORES.items()])}):**")
         df_edit = pd.DataFrame(student_data)
         columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
         df_edit = df_edit[columns_order]
 
+        # Build column config dynamically
+        col_config = {
+            "student_id": st.column_config.TextColumn("ID", disabled=True),
+            "student_name": st.column_config.TextColumn("Student Name", disabled=True),
+            "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
+        }
+        for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
+            max_val = ASSESSMENT_MAX_SCORES.get(name, 100)
+            col_config[name] = st.column_config.NumberColumn(
+                f"{name} (max {max_val})",
+                min_value=0,
+                max_value=max_val,
+                step=1
+            )
+
         edited_df = st.data_editor(
             df_edit,
-            column_config={
-                "student_id": st.column_config.TextColumn("ID", disabled=True),
-                "student_name": st.column_config.TextColumn("Student Name", disabled=True),
-                "Test 1": st.column_config.NumberColumn("Test 1", min_value=0, max_value=100, step=1),
-                "Test 2": st.column_config.NumberColumn("Test 2", min_value=0, max_value=100, step=1),
-                "Test 3": st.column_config.NumberColumn("Test 3", min_value=0, max_value=100, step=1),
-                "Test 4": st.column_config.NumberColumn("Test 4", min_value=0, max_value=100, step=1),
-                "Final Exam": st.column_config.NumberColumn("Final Exam", min_value=0, max_value=100, step=1),
-                "overall": st.column_config.NumberColumn("Overall (calc)", disabled=True)
-            },
+            column_config=col_config,
             hide_index=True,
             use_container_width=True,
             key="batch_editor"
         )
 
-        edited_df["overall"] = edited_df.apply(lambda row: compute_overall_row(row, new_weights), axis=1)
+        # Recompute overall on submit (we'll do it when the button is pressed)
         remarks = st.text_area("Remarks / Comments (optional)", value=remarks)
 
         if st.button("💾 Submit Batch for Approval", use_container_width=True):
@@ -1802,7 +1902,7 @@ def show_teacher_panel():
             sync_all()
             st.rerun()
 
-    # ---------- TAB 2: My Submissions (UPDATED with Teacher & Subject Title) ----------
+    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -1814,7 +1914,6 @@ def show_teacher_panel():
                 status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
                 status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
                 student_count = len(batch.get("students", []))
-                # ---- NEW: Large header with teacher and subject ----
                 st.markdown(f"""
                 <div class="eval-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -2045,7 +2144,7 @@ def main():
             with tab2:
                 with st.form("add_teacher_simple"):
                     name = st.text_input("Teacher Name")
-                    subject = st.selectbox("Subject", [s if isinstance(s, str) else s.get("name", "") for s in st.session_state.subjects] if st.session_state.subjects else ["Mathematics", "English", "Science"])
+                    subject = st.selectbox("Subject", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
                     email = st.text_input("Email")
                     if st.form_submit_button("Add Teacher"):
                         if name:
@@ -2128,52 +2227,8 @@ def main():
             st.info("Please use the **Admin Dashboard → Import/Export** tab for full functionality.")
         elif current_page == "📄 Approval Report":
             st.markdown("### 📄 Approval Report (Grade‑wise)")
-            grade_options = [f"Grade {i}" for i in range(1, 13)]
-            selected_grade = st.selectbox("Select Grade", grade_options, key="report_grade")
-            students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
-            if not students_in_grade:
-                st.info(f"No students in {selected_grade}.")
-            else:
-                report_data = []
-                for student in students_in_grade:
-                    evals = get_approved_evaluations_for_student(student["id"])
-                    if evals:
-                        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-                        latest_eval = evals[-1]
-                        assessments = latest_eval.get("assessments", [])
-                        test_scores = {a["name"]: a["score"] for a in assessments}
-                    else:
-                        avg_score = 0
-                        test_scores = {"Test 1": 0, "Test 2": 0, "Test 3": 0, "Test 4": 0, "Final Exam": 0}
-                    report_data.append({
-                        "Student ID": student["id"],
-                        "Name": student["name"],
-                        "Semester": student.get("semester", ""),
-                        "Test 1": test_scores.get("Test 1", 0),
-                        "Test 2": test_scores.get("Test 2", 0),
-                        "Test 3": test_scores.get("Test 3", 0),
-                        "Test 4": test_scores.get("Test 4", 0),
-                        "Final Exam": test_scores.get("Final Exam", 0),
-                        "Overall Score": avg_score,
-                        "Evaluations": len(evals)
-                    })
-                df_report = pd.DataFrame(report_data)
-                if not df_report.empty:
-                    df_report_sorted = df_report.sort_values("Overall Score", ascending=False).reset_index(drop=True)
-                    df_report_sorted["Rank"] = df_report_sorted.index + 1
-                    st.dataframe(df_report_sorted, use_container_width=True, hide_index=True)
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        df_report_sorted.to_excel(writer, sheet_name=f"{selected_grade}_Report", index=False)
-                    st.download_button(
-                        label="📥 Download Approval Report (Excel)",
-                        data=output.getvalue(),
-                        file_name=f"Approval_Report_{selected_grade}_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                else:
-                    st.info("No approved evaluations for this grade yet.")
+            # (the comprehensive report is already in tab10)
+            st.info("Please use the **Admin Dashboard → Approval Report** tab for the comprehensive grade report.")
         elif current_page == "⚠️ Penalty Log":
             show_penalty_log()
         elif current_page == "🔔 Notifications":
