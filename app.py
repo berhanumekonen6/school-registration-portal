@@ -33,9 +33,9 @@ GRADE_SUBJECTS = {
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
 
-    # Grades 7-8
-    "Grade 7": ["Ameharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
-    "Grade 8": ["Ameharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    # Grades 7-8 (FIXED: "Ameharic" → "Amharic")
+    "Grade 7": ["Amharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    "Grade 8": ["Amharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
 
     # Grades 9-10
     "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
@@ -118,7 +118,7 @@ def load_all_data():
     res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
     st.session_state.penalty_log = res.data if res.data else []
 
-# ---- NEW sync_table handles NaN and no neq ----
+# ---- sync_table handles NaN and no neq ----
 def sync_table(table_name, data, key_column="id"):
     """Sync a table: delete all rows and insert new data, handling foreign keys and NaNs."""
     supabase = get_supabase()
@@ -151,7 +151,7 @@ def sync_table(table_name, data, key_column="id"):
         except Exception as e:
             st.warning(f"Error inserting into {table_name}: {e}")
 
-# ---- NEW sync_all respects foreign keys ----
+# ---- sync_all respects foreign keys ----
 def sync_all():
     """Sync all session state data to Supabase, respecting foreign key constraints."""
     # Delete all in correct order (children first)
@@ -345,7 +345,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS (same as before - kept for brevity) ----
+# ---- CSS (full) ----
 st.markdown("""
 <style>
     :root {
@@ -1069,7 +1069,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # --- Tab 3: Teachers (with delete) ---
+    # --- Tab 3: Teachers (UPDATED with direct insert and delete) ---
     with tab3:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         with st.form("add_teacher"):
@@ -1080,6 +1080,7 @@ def show_admin_panel():
             with col1:
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
             if submitted and teacher_name:
+                # Generate credentials
                 username = generate_username(teacher_name)
                 if username in st.session_state.user_db:
                     counter = 1
@@ -1088,31 +1089,66 @@ def show_admin_panel():
                     username = f"{username}{counter}"
                 password = generate_random_password()
                 hashed_pw = hash_password(password)
-                # Add to user_db
-                st.session_state.user_db[username] = {
-                    "password": hashed_pw,
-                    "role": "teacher",
-                    "name": teacher_name
-                }
-                teacher = {
-                    "id": f"T{len(st.session_state.teachers)+1:04d}",
-                    "name": teacher_name,
-                    "subject": teacher_subject,
-                    "email": teacher_email,
-                    "username": username,
-                    "password": password,
-                    "added": datetime.now().strftime("%Y-%m-%d %H:%M")
-                }
-                st.session_state.teachers.append(teacher)
-                add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
-                sync_all()
-                st.success(f"""
-                ✅ Teacher {teacher_name} added successfully!
-                **Login Credentials:**
-                - **Username:** `{username}`
-                - **Password:** `{password}`
-                """)
-                st.rerun()
+                teacher_id = f"T{len(st.session_state.teachers)+1:04d}"
+                added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+                supabase = get_supabase()
+                try:
+                    # 1. Insert into users table
+                    user_data = {
+                        "username": username,
+                        "password": hashed_pw,
+                        "role": "teacher",
+                        "name": teacher_name
+                    }
+                    supabase.table("users").insert(user_data).execute()
+
+                    # 2. Insert into teachers table
+                    teacher_data = {
+                        "id": teacher_id,
+                        "name": teacher_name,
+                        "subject": teacher_subject,
+                        "email": teacher_email,
+                        "username": username,
+                        "password": password,
+                        "added": added_time
+                    }
+                    supabase.table("teachers").insert(teacher_data).execute()
+
+                    # 3. Update session state
+                    st.session_state.user_db[username] = {
+                        "password": hashed_pw,
+                        "role": "teacher",
+                        "name": teacher_name
+                    }
+                    teacher = {
+                        "id": teacher_id,
+                        "name": teacher_name,
+                        "subject": teacher_subject,
+                        "email": teacher_email,
+                        "username": username,
+                        "password": password,
+                        "added": added_time
+                    }
+                    st.session_state.teachers.append(teacher)
+
+                    # 4. Reload all data from Supabase to confirm consistency
+                    load_all_data()
+
+                    # 5. Verify the user was inserted
+                    if username in st.session_state.user_db:
+                        add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
+                        st.success(f"""
+                        ✅ Teacher {teacher_name} added successfully!
+                        **Login Credentials:**
+                        - **Username:** `{username}`
+                        - **Password:** `{password}`
+                        """)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Teacher was not found in the database after insertion. Please try again.")
+                except Exception as e:
+                    st.error(f"❌ Error adding teacher: {e}")
             elif submitted:
                 st.error("❌ Please enter teacher name.")
 
@@ -1142,37 +1178,26 @@ def show_admin_panel():
                 if st.button("Delete this teacher", type="primary", use_container_width=True):
                     try:
                         supabase = get_supabase()
-                        
-                        # 1. Get the teacher's username before deletion
                         username_to_remove = None
                         for t in st.session_state.teachers:
                             if t["id"] == teacher_id:
                                 username_to_remove = t.get("username")
                                 break
-                        
                         if not username_to_remove:
                             st.error("Username not found for this teacher.")
                             st.stop()
-                        
-                        # 2. Delete all evaluations and batches for this teacher directly from Supabase
-                        # (This avoids foreign key errors when deleting the teacher)
+                        # Delete evaluations and batches for this teacher
                         supabase.table("evaluations").delete().eq("teacher_id", teacher_id).execute()
                         supabase.table("batches").delete().eq("teacher_id", teacher_id).execute()
-                        
-                        # 3. Delete the teacher from teachers table
+                        # Delete teacher
                         supabase.table("teachers").delete().eq("id", teacher_id).execute()
-                        
-                        # 4. Delete the user from users table
+                        # Delete user
                         supabase.table("users").delete().eq("username", username_to_remove).execute()
-                        
-                        # 5. Remove from session state
+                        # Update session state
                         st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
                         if username_to_remove in st.session_state.user_db:
                             del st.session_state.user_db[username_to_remove]
-                        
-                        # 6. Reload all data from Supabase to ensure session state matches database
                         load_all_data()
-                        
                         add_notification(f"🗑️ Teacher {teacher_to_delete} deleted permanently", "warning")
                         st.success(f"✅ Teacher {teacher_to_delete} deleted successfully!")
                         st.rerun()
@@ -1306,7 +1331,6 @@ def show_admin_panel():
                 student_count = len(batch.get("students", []))
                 submitted_date = batch.get("submitted_at", "N/A")
 
-                # ---- NEW: Large header with teacher and subject ----
                 st.markdown(f"""
                 <div class="approval-card pending">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -1890,7 +1914,6 @@ def show_teacher_panel():
             key="batch_editor"
         )
 
-        # Recompute overall on submit (we'll do it when the button is pressed)
         remarks = st.text_area("Remarks / Comments (optional)", value=remarks)
 
         if st.button("💾 Submit Batch for Approval", use_container_width=True):
@@ -2250,7 +2273,6 @@ def main():
             st.info("Please use the **Admin Dashboard → Import/Export** tab for full functionality.")
         elif current_page == "📄 Approval Report":
             st.markdown("### 📄 Approval Report (Grade‑wise)")
-            # (the comprehensive report is already in tab10)
             st.info("Please use the **Admin Dashboard → Approval Report** tab for the comprehensive grade report.")
         elif current_page == "⚠️ Penalty Log":
             show_penalty_log()
