@@ -33,15 +33,15 @@ GRADE_SUBJECTS = {
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
 
-    # Grades 7-8 (FIXED: "Ameharic" → "Amharic")
-    "Grade 7": ["Amharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
-    "Grade 8": ["Amharic", "ግዕዝ", "English (G)", "Maths", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    # Grades 7-8 (UPDATED: "Maths" → "Mathematics")
+    "Grade 7": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    "Grade 8": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
 
     # Grades 9-10
     "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
     "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
 
-    # Grades 11-12 (combined Natural and Social streams)
+    # Grades 11-12
     "Grade 11": [
         "Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English",
         "Information Technology (IT)", "Citizenship Education / Civics",
@@ -1258,16 +1258,33 @@ def show_admin_panel():
                 else:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    # --- Tab 5: All Data ---
+    # --- Tab 5: All Data (with grade filter, default Grade 5) ---
     with tab5:
         st.markdown("#### 📋 All Data")
-        st.markdown("##### 👨‍🎓 Students")
-        if st.session_state.students:
-            df_students = pd.DataFrame(st.session_state.students)
+
+        # ---- Students with grade filter ----
+        st.markdown("##### 👨‍🎓 Students by Grade")
+        grade_options = ["All Grades"] + [f"Grade {i}" for i in range(1, 13)]
+        selected_grade_filter = st.selectbox(
+            "Filter by Grade",
+            options=grade_options,
+            index=grade_options.index("Grade 5") if "Grade 5" in grade_options else 0,
+            key="all_data_grade_filter"
+        )
+        if selected_grade_filter == "All Grades":
+            filtered_students = st.session_state.students
+            heading = "👨‍🎓 All Students"
+        else:
+            filtered_students = [s for s in st.session_state.students if s.get("grade") == selected_grade_filter]
+            heading = f"👨‍🎓 {selected_grade_filter} Students"
+
+        st.markdown(f"##### {heading}")
+        if filtered_students:
+            df_students = pd.DataFrame(filtered_students)
             df_students["Grade Display"] = df_students["grade"].apply(get_grade_display)
             st.dataframe(df_students, use_container_width=True)
         else:
-            st.info("No students registered yet.")
+            st.info(f"No students registered in {selected_grade_filter}.")
 
         st.markdown("##### 👨‍🏫 Teachers")
         if st.session_state.teachers:
