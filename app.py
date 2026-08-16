@@ -1069,7 +1069,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # --- Tab 3: Teachers (UPDATED with direct insert and delete) ---
+    # --- Tab 3: Teachers (UPDATED with direct insert, delete, and edit) ---
     with tab3:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         with st.form("add_teacher"):
@@ -1166,6 +1166,31 @@ def show_admin_panel():
                     <p><b>🔑 Password:</b> <code>{teacher.get('password', 'N/A')}</code> <span style="color:#5F6368;font-size:0.8rem;">(save this)</span></p>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # ---------- EDIT TEACHER ----------
+            st.markdown("#### ✏️ Edit Teacher")
+            teacher_options = {f"{t['name']} ({t['id']})": t for t in st.session_state.teachers}
+            selected_teacher_label = st.selectbox("Select teacher to edit", options=list(teacher_options.keys()))
+            if selected_teacher_label:
+                teacher = teacher_options[selected_teacher_label]
+                with st.expander("Edit this teacher", expanded=True):
+                    with st.form("edit_teacher_form"):
+                        new_name = st.text_input("Teacher Full Name", value=teacher["name"])
+                        new_subject = st.selectbox("Subject", st.session_state.subjects,
+                                                   index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
+                        new_email = st.text_input("Email Address", value=teacher.get("email", ""))
+                        if st.form_submit_button("💾 Update Teacher"):
+                            # Update teacher record
+                            teacher["name"] = new_name
+                            teacher["subject"] = new_subject
+                            teacher["email"] = new_email
+                            # Also update the user_db name if it changed
+                            if teacher.get("username") in st.session_state.user_db:
+                                st.session_state.user_db[teacher["username"]]["name"] = new_name
+                            sync_all()
+                            add_notification(f"✏️ Teacher {new_name} updated", "info")
+                            st.success(f"✅ Teacher {new_name} updated successfully!")
+                            st.rerun()
 
             st.markdown("---")
             st.markdown("#### 🗑️ Delete Teacher")
@@ -1429,7 +1454,7 @@ def show_admin_panel():
             else:
                 st.info("No approved evaluations yet for this grade.")
 
-    # --- Tab 8: Students (with delete) ---
+    # --- Tab 8: Students (with delete and edit) ---
     with tab8:
         st.markdown("### 👨‍🎓 Student Management")
         with st.expander("➕ Add New Student", expanded=False):
@@ -1475,10 +1500,50 @@ def show_admin_panel():
             display_cols = ["id", "name", "grade", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
+            # ---------- EDIT STUDENT ----------
+            st.markdown("#### ✏️ Edit Student")
+            student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
+            selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
+            if selected_student_label:
+                student = student_options[selected_student_label]
+                with st.expander("Edit this student", expanded=True):
+                    with st.form("edit_student_form"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            new_name = st.text_input("Full Name", value=student["name"])
+                            new_age = st.number_input("Age", min_value=5, max_value=25, step=1, value=int(student["age"]))
+                            new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 13)],
+                                                     index=[f"Grade {i}" for i in range(1, 13)].index(student["grade"]))
+                            new_semester = st.selectbox("Semester", ["Semester I", "Semester II"],
+                                                        index=["Semester I", "Semester II"].index(student["semester"]))
+                        with col2:
+                            new_gender = st.selectbox("Gender", ["M", "F", "Other"],
+                                                      index=["M", "F", "Other"].index(student.get("gender", "M")))
+                            new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name", ""))
+                            new_contact = st.text_input("Contact", value=student.get("contact", ""))
+                            new_subjects = st.multiselect("Subjects", st.session_state.subjects,
+                                                          default=student.get("subjects", []))
+                        if st.form_submit_button("💾 Update Student"):
+                            # Update the student record
+                            student["name"] = new_name
+                            student["age"] = new_age
+                            student["grade"] = new_grade
+                            student["semester"] = new_semester
+                            student["gender"] = new_gender
+                            student["parent_name"] = new_parent
+                            student["contact"] = new_contact
+                            student["subjects"] = new_subjects
+                            # Sync to Supabase
+                            sync_all()
+                            add_notification(f"✏️ Student {new_name} updated", "info")
+                            st.success(f"✅ Student {new_name} updated successfully!")
+                            st.rerun()
+
             st.markdown("#### 🗑️ Delete Student")
             student_to_delete = st.selectbox(
                 "Select student to delete",
-                options=[f"{s['name']} ({s['id']})" for s in st.session_state.students]
+                options=[f"{s['name']} ({s['id']})" for s in st.session_state.students],
+                key="delete_student"
             )
             if student_to_delete:
                 student_id = student_to_delete.split("(")[-1].replace(")", "")
@@ -1747,7 +1812,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores) ----
+# ---- TEACHER PANEL (UPDATED: Subject validation, per-assessment max scores, and batch editing) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -1948,7 +2013,7 @@ def show_teacher_panel():
             sync_all()
             st.rerun()
 
-    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) ----------
+    # ---------- TAB 2: My Submissions (with Teacher & Subject Title) + EDIT BATCH ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -1979,6 +2044,95 @@ def show_teacher_panel():
                     if st.button(f"✏️ Edit Batch", key=f"edit_batch_{batch['id']}"):
                         st.session_state.edit_batch_id = batch["id"]
                         st.rerun()
+
+            # ---------- EDIT BATCH (if a batch is selected for editing) ----------
+            if hasattr(st.session_state, 'edit_batch_id') and st.session_state.edit_batch_id:
+                batch_to_edit = next((b for b in my_batches if b["id"] == st.session_state.edit_batch_id), None)
+                if batch_to_edit and batch_to_edit["status"] == "pending":
+                    st.markdown("---")
+                    st.markdown("#### ✏️ Edit Batch")
+                    # Use the same editing logic as the submission tab, but pre‑populate
+                    students_data = batch_to_edit["students"]
+                    weights = batch_to_edit["weights"]
+                    remarks = batch_to_edit.get("remarks", "")
+
+                    st.markdown("**Set assessment weights (apply to all students):**")
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    with col1:
+                        w1 = st.selectbox("Test 1", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 1"]), key="edit_w1")
+                    with col2:
+                        w2 = st.selectbox("Test 2", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 2"]), key="edit_w2")
+                    with col3:
+                        w3 = st.selectbox("Test 3", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 3"]), key="edit_w3")
+                    with col4:
+                        w4 = st.selectbox("Test 4", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Test 4"]), key="edit_w4")
+                    with col5:
+                        wf = st.selectbox("Final Exam", options=[5,10,15,20,30,40,50], index=[5,10,15,20,30,40,50].index(weights["Final Exam"]), key="edit_wf")
+                    new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
+
+                    def compute_overall_row_edit(row, w):
+                        total_weighted = 0
+                        total_weight = 0
+                        for name in w.keys():
+                            max_score = ASSESSMENT_MAX_SCORES.get(name, 100)
+                            raw = row.get(name, 0)
+                            pct = (raw / max_score) * 100 if max_score > 0 else 0
+                            total_weighted += pct * w[name]
+                            total_weight += w[name]
+                        return round(total_weighted / total_weight, 2) if total_weight > 0 else 0
+
+                    st.markdown(f"**Enter raw scores (max values: {', '.join([f'{k}={v}' for k,v in ASSESSMENT_MAX_SCORES.items()])}):**")
+                    df_edit = pd.DataFrame(students_data)
+                    columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
+                    df_edit = df_edit[columns_order]
+
+                    col_config = {
+                        "student_id": st.column_config.TextColumn("ID", disabled=True),
+                        "student_name": st.column_config.TextColumn("Student Name", disabled=True),
+                        "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
+                    }
+                    for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
+                        max_val = ASSESSMENT_MAX_SCORES.get(name, 100)
+                        col_config[name] = st.column_config.NumberColumn(
+                            f"{name} (max {max_val})",
+                            min_value=0,
+                            max_value=max_val,
+                            step=1
+                        )
+
+                    edited_df = st.data_editor(
+                        df_edit,
+                        column_config=col_config,
+                        hide_index=True,
+                        use_container_width=True,
+                        key="edit_batch_editor"
+                    )
+
+                    remarks = st.text_area("Remarks / Comments (optional)", value=remarks)
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("💾 Update Batch", use_container_width=True):
+                            students_list = edited_df.to_dict(orient="records")
+                            for rec in students_list:
+                                rec["overall"] = compute_overall_row_edit(rec, new_weights)
+                            batch_to_edit["students"] = students_list
+                            batch_to_edit["weights"] = new_weights
+                            batch_to_edit["remarks"] = remarks
+                            batch_to_edit["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            sync_all()
+                            add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit['subject']})", "info")
+                            st.success("✅ Batch updated successfully! Awaiting approval.")
+                            st.session_state.edit_batch_id = None
+                            st.rerun()
+                    with col2:
+                        if st.button("❌ Cancel Editing", use_container_width=True):
+                            st.session_state.edit_batch_id = None
+                            st.rerun()
+                else:
+                    # If batch no longer pending or not found, clear the edit id
+                    st.session_state.edit_batch_id = None
+                    st.rerun()
 
     # ---------- TAB 3: My Students ----------
     with tab3:
