@@ -1520,13 +1520,12 @@ def show_admin_panel():
                         st.success(f"✅ Student {name} added!")
                         st.rerun()
 
-        # ---------- BULK SUBJECT REPLACEMENT ----------
+        # ---------- BULK SUBJECT REPLACEMENT (FIXED) ----------
         with st.expander("🔄 Bulk Subject Replacement (by Grade)", expanded=False):
             st.markdown("Replace a subject for all students in a selected grade with another subject.")
             grade_options = [f"Grade {i}" for i in range(1, 13)]
             target_grade = st.selectbox("Select Grade", grade_options, key="bulk_grade")
-            
-            # Get all subjects currently in use by students of that grade
+
             students_in_grade = [s for s in st.session_state.students if s.get("grade") == target_grade]
             if not students_in_grade:
                 st.info(f"No students in {target_grade} to update.")
@@ -1534,45 +1533,66 @@ def show_admin_panel():
                 # Collect subjects that appear in these students' subject lists
                 used_subjects = set()
                 for s in students_in_grade:
-                    used_subjects.update(s.get("subjects", []))
+                    subjects = s.get("subjects", [])
+                    # Normalize to list
+                    if isinstance(subjects, str):
+                        # If stored as comma-separated string
+                        subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
+                    elif isinstance(subjects, list):
+                        pass
+                    else:
+                        continue
+                    used_subjects.update(subjects)
                 used_subjects = sorted(list(used_subjects))
                 if not used_subjects:
                     st.info(f"No subjects found for students in {target_grade}.")
                 else:
                     old_subject = st.selectbox("Subject to replace", used_subjects, key="old_subj")
                     new_subject = st.selectbox("Replace with", st.session_state.subjects, key="new_subj")
-                    
+
                     if st.button(f"🔄 Replace '{old_subject}' with '{new_subject}' for all {target_grade} students", use_container_width=True):
                         if old_subject == new_subject:
                             st.warning("Old and new subjects are the same. No changes made.")
                         else:
-                            # Count affected students
-                            affected = [s for s in students_in_grade if old_subject in s.get("subjects", [])]
+                            # Find affected students
+                            affected = []
+                            for s in students_in_grade:
+                                subjects = s.get("subjects", [])
+                                if isinstance(subjects, str):
+                                    subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
+                                if old_subject in subjects:
+                                    affected.append(s)
                             if not affected:
                                 st.info(f"No students in {target_grade} have '{old_subject}'.")
                             else:
-                                # Confirm with user
                                 confirm = st.checkbox(f"⚠️ I confirm: update {len(affected)} students in {target_grade} – replace '{old_subject}' with '{new_subject}'.")
                                 if confirm:
                                     supabase = get_supabase()
-                                    try:
-                                        # Update each student's subject list locally and in Supabase
-                                        for student in affected:
-                                            # Replace subject in list
+                                    success_count = 0
+                                    error_list = []
+                                    for student in affected:
+                                        try:
+                                            # Get subjects as list
                                             subjects = student.get("subjects", [])
+                                            if isinstance(subjects, str):
+                                                subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
+                                            # Replace
                                             if old_subject in subjects:
                                                 idx = subjects.index(old_subject)
                                                 subjects[idx] = new_subject
-                                                student["subjects"] = subjects
-                                            # Update Supabase
-                                            supabase.table("students").update({"subjects": subjects}).eq("id", student["id"]).execute()
-                                        # Reload data
-                                        load_all_data()
-                                        add_notification(f"🔄 Bulk update: replaced '{old_subject}' with '{new_subject}' for {len(affected)} students in {target_grade}", "info")
-                                        st.success(f"✅ Successfully replaced '{old_subject}' with '{new_subject}' for {len(affected)} students in {target_grade}.")
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(f"❌ Error during bulk update: {e}")
+                                                # Update in Supabase
+                                                supabase.table("students").update({"subjects": subjects}).eq("id", student["id"]).execute()
+                                                success_count += 1
+                                        except Exception as e:
+                                            error_list.append(f"{student['name']}: {str(e)}")
+                                    # Reload data from Supabase to refresh session state
+                                    load_all_data()
+                                    if success_count > 0:
+                                        add_notification(f"🔄 Bulk update: replaced '{old_subject}' with '{new_subject}' for {success_count} students in {target_grade}", "info")
+                                        st.success(f"✅ Successfully replaced '{old_subject}' with '{new_subject}' for {success_count} students in {target_grade}.")
+                                    if error_list:
+                                        st.error(f"❌ Errors occurred for: {', '.join(error_list)}")
+                                    st.rerun()
 
         st.markdown("#### 📋 All Students")
         if st.session_state.students:
