@@ -19,6 +19,11 @@ import math
 from supabase import create_client, Client
 
 # ===================================================================
+# DEFAULT REMARKS TEXT (pre-filled for all new batches)
+# ===================================================================
+DEFAULT_REMARKS = "በአጠቃላይ የተማሪዎች ውጤት ጥሩ ነው፣ ነገር ግን የበለጠ ለማድረግ ከትምህርት ቤቱ ማህበረሰብ ተጨማሪ ጥረት ያስፈልጋል።"
+
+# ===================================================================
 # GRADE-SUBJECT MAPPING (Ethiopian Curriculum - SNNPE)
 # ===================================================================
 
@@ -55,7 +60,6 @@ GRADE_SUBJECTS = {
 }
 
 # ---- Assessment default maximum scores (can be overridden per batch) ----
-# Now limited to allowed max options: 5,10,15,20,25,30,35,40,45,50
 DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
@@ -122,7 +126,7 @@ def load_all_data():
     res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
     st.session_state.penalty_log = res.data if res.data else []
 
-# ---- sync_table handles NaN and no neq ----
+# ---- sync_table handles NaN and no neq (used only for bulk operations) ----
 def sync_table(table_name, data, key_column="id"):
     """Sync a table: delete all rows and insert new data, handling foreign keys and NaNs."""
     supabase = get_supabase()
@@ -155,7 +159,7 @@ def sync_table(table_name, data, key_column="id"):
         except Exception as e:
             st.warning(f"Error inserting into {table_name}: {e}")
 
-# ---- sync_all respects foreign keys ----
+# ---- sync_all (used only for bulk operations like clearing all data) ----
 def sync_all():
     """Sync all session state data to Supabase, respecting foreign key constraints."""
     # Delete all in correct order (children first)
@@ -248,10 +252,8 @@ def get_all_subjects():
 ALL_SUBJECTS = get_all_subjects()
 
 def init_user_db():
-    # Load data from Supabase if not already in session
     if 'students' not in st.session_state:
         load_all_data()
-    # Ensure default admin exists (if not in Supabase, it will be added)
     if "admin" not in st.session_state.user_db:
         st.session_state.user_db["admin"] = {
             "password": hash_password("admin123"),
@@ -259,11 +261,8 @@ def init_user_db():
             "name": "School Administrator"
         }
         sync_all()
-    
-    # Use the expanded subject list from GRADE_SUBJECTS
     if 'subjects' not in st.session_state:
         st.session_state.subjects = ALL_SUBJECTS
-    
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
     if 'current_user' not in st.session_state:
@@ -279,15 +278,12 @@ def init_user_db():
         st.session_state.registration_open = True
 
 def login_user(username, password):
-    # 🔒 TEMPORARY HARDCODE – allows admin login while we fix Supabase
     if username == "admin" and password == "admin123":
         st.session_state.logged_in = True
         st.session_state.current_user = "admin"
         st.session_state.current_role = "admin"
         add_notification("Welcome, School Administrator!", "success")
         return True, "✅ Login successful!"
-    
-    # Original authentication logic (for teachers and future admins)
     init_user_db()
     if username not in st.session_state.user_db:
         return False, "❌ User not found."
@@ -1084,7 +1080,6 @@ def show_admin_panel():
             with col1:
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
             if submitted and teacher_name:
-                # Generate credentials
                 username = generate_username(teacher_name)
                 if username in st.session_state.user_db:
                     counter = 1
@@ -1098,7 +1093,6 @@ def show_admin_panel():
 
                 supabase = get_supabase()
                 try:
-                    # 1. Insert into users table
                     user_data = {
                         "username": username,
                         "password": hashed_pw,
@@ -1106,8 +1100,6 @@ def show_admin_panel():
                         "name": teacher_name
                     }
                     supabase.table("users").insert(user_data).execute()
-
-                    # 2. Insert into teachers table
                     teacher_data = {
                         "id": teacher_id,
                         "name": teacher_name,
@@ -1118,8 +1110,6 @@ def show_admin_panel():
                         "added": added_time
                     }
                     supabase.table("teachers").insert(teacher_data).execute()
-
-                    # 3. Update session state
                     st.session_state.user_db[username] = {
                         "password": hashed_pw,
                         "role": "teacher",
@@ -1135,11 +1125,7 @@ def show_admin_panel():
                         "added": added_time
                     }
                     st.session_state.teachers.append(teacher)
-
-                    # 4. Reload all data from Supabase to confirm consistency
                     load_all_data()
-
-                    # 5. Verify the user was inserted
                     if username in st.session_state.user_db:
                         add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
                         st.success(f"""
@@ -1184,20 +1170,15 @@ def show_admin_panel():
                                                    index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
                         new_email = st.text_input("Email Address", value=teacher.get("email", ""))
                         if st.form_submit_button("💾 Update Teacher"):
-                            # 1. Update local teacher dict
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
-
-                            # 2. Update the teacher record in Supabase
                             supabase = get_supabase()
                             try:
                                 supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
-                                # 3. Also update the user_db name if changed
                                 if teacher.get("username") in st.session_state.user_db:
                                     st.session_state.user_db[teacher["username"]]["name"] = new_name
                                     supabase.table("users").update({"name": new_name}).eq("username", teacher["username"]).execute()
-                                # 4. Reload data
                                 load_all_data()
                                 add_notification(f"✏️ Teacher {new_name} updated", "info")
                                 st.success(f"✅ Teacher {new_name} updated successfully!")
@@ -1224,14 +1205,10 @@ def show_admin_panel():
                         if not username_to_remove:
                             st.error("Username not found for this teacher.")
                             st.stop()
-                        # Delete evaluations and batches for this teacher
                         supabase.table("evaluations").delete().eq("teacher_id", teacher_id).execute()
                         supabase.table("batches").delete().eq("teacher_id", teacher_id).execute()
-                        # Delete teacher
                         supabase.table("teachers").delete().eq("id", teacher_id).execute()
-                        # Delete user
                         supabase.table("users").delete().eq("username", username_to_remove).execute()
-                        # Update session state
                         st.session_state.teachers = [t for t in st.session_state.teachers if t["id"] != teacher_id]
                         if username_to_remove in st.session_state.user_db:
                             del st.session_state.user_db[username_to_remove]
@@ -1275,7 +1252,6 @@ def show_admin_panel():
     with tab5:
         st.markdown("#### 📋 All Data")
 
-        # ---- Students with grade filter ----
         st.markdown("##### 👨‍🎓 Students by Grade")
         grade_options = ["All Grades"] + [f"Grade {i}" for i in range(1, 13)]
         selected_grade_filter = st.selectbox(
@@ -1370,7 +1346,7 @@ def show_admin_panel():
                 st.warning("All data has been cleared.")
                 st.rerun()
 
-    # --- Tab 6: Approvals (Batches) - UPDATED with Teacher & Subject Title ---
+    # --- Tab 6: Approvals (Batches) - UPDATED with per-student remarks ---
     with tab6:
         st.markdown("#### ✅ Pending Batches")
         pending_batches = get_pending_batches()
@@ -1385,8 +1361,8 @@ def show_admin_panel():
                 grade = batch.get("grade", "N/A")
                 student_count = len(batch.get("students", []))
                 submitted_date = batch.get("submitted_at", "N/A")
+                batch_remarks = batch.get("remarks", "")
 
-                # Display weights and max scores
                 weights = batch.get("weights", {})
                 max_scores = batch.get("max_scores", DEFAULT_MAX_SCORES)
                 weight_str = f"Test1={weights.get('Test 1',0)}, Test2={weights.get('Test 2',0)}, Test3={weights.get('Test 3',0)}, Test4={weights.get('Test 4',0)}, Final={weights.get('Final Exam',0)}"
@@ -1403,6 +1379,7 @@ def show_admin_panel():
                             <p><b>📅 Submitted:</b> {submitted_date}</p>
                             <p><b>Weights:</b> {weight_str}</p>
                             <p><b>Max Scores:</b> {max_str}</p>
+                            <p><b>Batch Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
                         </div>
                         <div style="text-align:right;">
                             <span class="badge-pending">⏳ Pending</span>
@@ -1412,7 +1389,9 @@ def show_admin_panel():
                 """, unsafe_allow_html=True)
 
                 df_batch = pd.DataFrame(batch["students"])
-                st.dataframe(df_batch[["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]], use_container_width=True)
+                display_cols = ["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "remarks", "overall"]
+                available_cols = [col for col in display_cols if col in df_batch.columns]
+                st.dataframe(df_batch[available_cols], use_container_width=True)
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -1433,7 +1412,7 @@ def show_admin_panel():
                                     {"name": "Test 4", "score": student_entry["Test 4"], "weight": batch["weights"]["Test 4"], "max_score": batch["max_scores"]["Test 4"]},
                                     {"name": "Final Exam", "score": student_entry["Final Exam"], "weight": batch["weights"]["Final Exam"], "max_score": batch["max_scores"]["Final Exam"]}
                                 ],
-                                "remarks": batch.get("remarks", ""),
+                                "remarks": student_entry.get("remarks", ""),
                                 "overall_score": student_entry["overall"],
                                 "status": "approved",
                                 "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -1441,17 +1420,28 @@ def show_admin_panel():
                             }
                             st.session_state.evaluations.append(eval_item)
                         batch["status"] = "approved"
-                        sync_all()
-                        add_notification(f"✅ Batch from {teacher_name} approved ({student_count} students)", "success")
-                        st.success(f"✅ Batch approved! {student_count} student evaluations created.")
-                        st.rerun()
+                        # Update batch status in Supabase
+                        supabase = get_supabase()
+                        try:
+                            supabase.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
+                            load_all_data()
+                            add_notification(f"✅ Batch from {teacher_name} approved ({student_count} students)", "success")
+                            st.success(f"✅ Batch approved! {student_count} student evaluations created.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to approve batch: {e}")
                 with col2:
                     if st.button(f"❌ Reject Batch", key=f"reject_batch_{batch_id}", use_container_width=True):
                         batch["status"] = "rejected"
-                        sync_all()
-                        add_notification(f"❌ Batch from {teacher_name} rejected", "warning")
-                        st.warning("❌ Batch rejected!")
-                        st.rerun()
+                        supabase = get_supabase()
+                        try:
+                            supabase.table("batches").update({"status": "rejected"}).eq("id", batch_id).execute()
+                            load_all_data()
+                            add_notification(f"❌ Batch from {teacher_name} rejected", "warning")
+                            st.warning("❌ Batch rejected!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Failed to reject batch: {e}")
                 st.markdown("---")
 
     # --- Tab 7: Rankings ---
@@ -1531,7 +1521,7 @@ def show_admin_panel():
                         st.success(f"✅ Student {name} added!")
                         st.rerun()
 
-        # ---------- BULK SUBJECT REPLACEMENT (FIXED) ----------
+        # ---------- BULK SUBJECT REPLACEMENT ----------
         with st.expander("🔄 Bulk Subject Replacement (by Grade)", expanded=False):
             st.markdown("Replace a subject for all students in a selected grade with another subject.")
             grade_options = [f"Grade {i}" for i in range(1, 13)]
@@ -1541,13 +1531,10 @@ def show_admin_panel():
             if not students_in_grade:
                 st.info(f"No students in {target_grade} to update.")
             else:
-                # Collect subjects that appear in these students' subject lists
                 used_subjects = set()
                 for s in students_in_grade:
                     subjects = s.get("subjects", [])
-                    # Normalize to list
                     if isinstance(subjects, str):
-                        # If stored as comma-separated string
                         subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
                     elif isinstance(subjects, list):
                         pass
@@ -1565,7 +1552,6 @@ def show_admin_panel():
                         if old_subject == new_subject:
                             st.warning("Old and new subjects are the same. No changes made.")
                         else:
-                            # Find affected students
                             affected = []
                             for s in students_in_grade:
                                 subjects = s.get("subjects", [])
@@ -1583,20 +1569,16 @@ def show_admin_panel():
                                     error_list = []
                                     for student in affected:
                                         try:
-                                            # Get subjects as list
                                             subjects = student.get("subjects", [])
                                             if isinstance(subjects, str):
                                                 subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
-                                            # Replace
                                             if old_subject in subjects:
                                                 idx = subjects.index(old_subject)
                                                 subjects[idx] = new_subject
-                                                # Update in Supabase
                                                 supabase.table("students").update({"subjects": subjects}).eq("id", student["id"]).execute()
                                                 success_count += 1
                                         except Exception as e:
                                             error_list.append(f"{student['name']}: {str(e)}")
-                                    # Reload data from Supabase to refresh session state
                                     load_all_data()
                                     if success_count > 0:
                                         add_notification(f"🔄 Bulk update: replaced '{old_subject}' with '{new_subject}' for {success_count} students in {target_grade}", "info")
@@ -1635,7 +1617,6 @@ def show_admin_panel():
                             new_subjects = st.multiselect("Subjects", st.session_state.subjects,
                                                           default=student.get("subjects", []))
                         if st.form_submit_button("💾 Update Student"):
-                            # 1. Update the local student dict
                             student["name"] = new_name
                             student["age"] = new_age
                             student["grade"] = new_grade
@@ -1644,12 +1625,9 @@ def show_admin_panel():
                             student["parent_name"] = new_parent
                             student["contact"] = new_contact
                             student["subjects"] = new_subjects
-
-                            # 2. Directly update the record in Supabase
                             supabase = get_supabase()
                             try:
                                 supabase.table("students").update(student).eq("id", student["id"]).execute()
-                                # 3. Reload data to refresh session state
                                 load_all_data()
                                 add_notification(f"✏️ Student {new_name} updated", "info")
                                 st.success(f"✅ Student {new_name} updated successfully!")
@@ -1764,12 +1742,11 @@ def show_admin_panel():
             if not approved_evals:
                 st.info("No approved evaluations found for this grade.")
             else:
-                # Build: student_id -> subject -> list of scores
                 student_subject_scores = {}
                 for eval_item in approved_evals:
                     sid = eval_item["student_id"]
                     subject = eval_item["subject"]
-                    score = eval_item.get("overall_score", 0)  # already a percentage
+                    score = eval_item.get("overall_score", 0)
                     student_subject_scores.setdefault(sid, {}).setdefault(subject, []).append(score)
 
                 all_subjects = set()
@@ -1930,7 +1907,7 @@ def show_student_panel():
             else:
                 st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL (with custom max scores dropdown) ----
+# ---- TEACHER PANEL (with direct Supabase insert/update) ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -1959,7 +1936,6 @@ def show_teacher_panel():
     )
     st.session_state.teacher_selected_grade = selected_grade
 
-    # ---- Subject validation ----
     valid_subjects = GRADE_SUBJECTS.get(selected_grade, [])
     is_subject_valid = teacher_subject in valid_subjects
 
@@ -2027,7 +2003,7 @@ def show_teacher_panel():
             student_data = existing_batch["students"]
             weights = existing_batch["weights"]
             max_scores = existing_batch.get("max_scores", DEFAULT_MAX_SCORES.copy())
-            remarks = existing_batch.get("remarks", "")
+            remarks = existing_batch.get("remarks", DEFAULT_REMARKS)
         else:
             weights = {"Test 1": 10, "Test 2": 10, "Test 3": 10, "Test 4": 10, "Final Exam": 50}
             max_scores = DEFAULT_MAX_SCORES.copy()
@@ -2041,14 +2017,14 @@ def show_teacher_panel():
                     "Test 3": 0,
                     "Test 4": 0,
                     "Final Exam": 0,
+                    "remarks": DEFAULT_REMARKS,
                     "overall": 0
                 })
-            remarks = ""
+            remarks = DEFAULT_REMARKS
 
-        # ---- Weight and Max Score inputs (dropdowns) ----
         st.markdown("**Set assessment weights and maximum scores:**")
         weight_options = [0,5,10,15,20,30,40,50]
-        # Build max options: ensure current max is included if not in the list
+
         def get_max_options(current_max):
             opts = MAX_SCORE_OPTIONS.copy()
             if current_max not in opts:
@@ -2099,13 +2075,13 @@ def show_teacher_panel():
 
         st.markdown(f"**Enter raw scores (each out of its max score):**")
         df_edit = pd.DataFrame(student_data)
-        columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
+        columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "remarks", "overall"]
         df_edit = df_edit[columns_order]
 
-        # Build column config dynamically using new_max_scores
         col_config = {
             "student_id": st.column_config.TextColumn("ID", disabled=True),
             "student_name": st.column_config.TextColumn("Student Name", disabled=True),
+            "remarks": st.column_config.TextColumn("Remarks"),
             "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
         }
         for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
@@ -2125,7 +2101,7 @@ def show_teacher_panel():
             key="batch_editor"
         )
 
-        remarks = st.text_area("Remarks / Comments (optional)", value=remarks)
+        remarks = st.text_area("Batch Remarks / Comments (optional)", value=remarks)
 
         if st.button("💾 Submit Batch for Approval", use_container_width=True):
             students_list = edited_df.to_dict(orient="records")
@@ -2138,8 +2114,16 @@ def show_teacher_panel():
                 existing_batch["max_scores"] = new_max_scores
                 existing_batch["remarks"] = remarks
                 existing_batch["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {teacher_subject})", "info")
-                st.success("✅ Batch updated successfully! Awaiting approval.")
+                # Direct update in Supabase
+                supabase = get_supabase()
+                try:
+                    supabase.table("batches").update(existing_batch).eq("id", existing_batch["id"]).execute()
+                    load_all_data()
+                    add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {teacher_subject})", "info")
+                    st.success("✅ Batch updated successfully! Awaiting approval.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to update batch: {e}")
             else:
                 batch = {
                     "id": str(uuid.uuid4())[:8],
@@ -2154,12 +2138,17 @@ def show_teacher_panel():
                     "status": "pending",
                     "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                 }
-                st.session_state.batches.append(batch)
-                add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {teacher_subject})", "info")
-                st.success("✅ Batch submitted successfully! Waiting for admin approval.")
-                st.balloons()
-            sync_all()
-            st.rerun()
+                # Direct insert into Supabase
+                supabase = get_supabase()
+                try:
+                    supabase.table("batches").insert(batch).execute()
+                    load_all_data()
+                    add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {teacher_subject})", "info")
+                    st.success("✅ Batch submitted successfully! Waiting for admin approval.")
+                    st.balloons()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Failed to save batch: {e}")
 
     # ---------- TAB 2: My Submissions (with edit) ----------
     with tab2:
@@ -2193,17 +2182,16 @@ def show_teacher_panel():
                         st.session_state.edit_batch_id = batch["id"]
                         st.rerun()
 
-            # ---------- EDIT BATCH (if a batch is selected for editing) ----------
+            # ---------- EDIT BATCH ----------
             if hasattr(st.session_state, 'edit_batch_id') and st.session_state.edit_batch_id:
                 batch_to_edit = next((b for b in my_batches if b["id"] == st.session_state.edit_batch_id), None)
                 if batch_to_edit and batch_to_edit["status"] == "pending":
                     st.markdown("---")
                     st.markdown("#### ✏️ Edit Batch")
-                    # Pre-populate
                     students_data = batch_to_edit["students"]
                     weights = batch_to_edit["weights"]
                     max_scores = batch_to_edit.get("max_scores", DEFAULT_MAX_SCORES.copy())
-                    remarks = batch_to_edit.get("remarks", "")
+                    remarks = batch_to_edit.get("remarks", DEFAULT_REMARKS)
 
                     st.markdown("**Set assessment weights and maximum scores:**")
                     weight_options_edit = [0,5,10,15,20,30,40,50]
@@ -2258,12 +2246,13 @@ def show_teacher_panel():
 
                     st.markdown(f"**Enter raw scores (each out of its max score):**")
                     df_edit = pd.DataFrame(students_data)
-                    columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
+                    columns_order = ["student_id", "student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "remarks", "overall"]
                     df_edit = df_edit[columns_order]
 
                     col_config = {
                         "student_id": st.column_config.TextColumn("ID", disabled=True),
                         "student_name": st.column_config.TextColumn("Student Name", disabled=True),
+                        "remarks": st.column_config.TextColumn("Remarks"),
                         "overall": st.column_config.NumberColumn("Overall (%)", disabled=True)
                     }
                     for name in ["Test 1", "Test 2", "Test 3", "Test 4", "Final Exam"]:
@@ -2283,7 +2272,7 @@ def show_teacher_panel():
                         key="edit_batch_editor"
                     )
 
-                    remarks = st.text_area("Remarks / Comments (optional)", value=remarks)
+                    remarks = st.text_area("Batch Remarks / Comments (optional)", value=remarks)
 
                     col1, col2 = st.columns(2)
                     with col1:
