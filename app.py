@@ -2,7 +2,7 @@
 # SCHOOL REGISTRATION PORTAL - PERSISTENT WITH SUPABASE
 # All data stored in Supabase PostgreSQL – never lost.
 # Admin can delete any record permanently (using service_role key).
-# Berhanu Mekonen, PhD, Arba Minch University, August 14, 2026
+# Berhanu Mekonen, PhD, Arba Minch University, June 25, 2026
 # ===================================================================
 
 import streamlit as st
@@ -2467,7 +2467,7 @@ def main():
                     <div class="developer-credit">
                         🏫 <span class="highlight-name">Berhanu Mekonen, PhD</span> ·
                         <span class="highlight-institution">Arba Minch University</span> ·
-                        August 14, 2026
+                        June 25, 2026
                     </div>
                 </div>
             </div>
