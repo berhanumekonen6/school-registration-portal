@@ -38,15 +38,15 @@ GRADE_SUBJECTS = {
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
 
-    # Grades 7-8
-    "Grade 7": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
-    "Grade 8": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    # Grades 7-8 (UPDATED: "Amharic" → "አማርኛ")
+    "Grade 7": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
+    "Grade 8": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
 
-    # Grades 9-10
-    "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
-    "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "Amharic", "Health and Physical Education (HPE)"],
+    # Grades 9-10 (UPDATED: "Amharic" → "አማርኛ")
+    "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
+    "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
 
-    # Grades 11-12
+    # Grades 11-12 (UPDATED: "Amharic" → "አማርኛ")
     "Grade 11": [
         "Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English",
         "Information Technology (IT)", "Citizenship Education / Civics",
@@ -1591,7 +1591,7 @@ def show_admin_panel():
                             except (ValueError, TypeError):
                                 age_val = 5
                             new_age = st.number_input("Age", min_value=5, max_value=25, step=1, value=age_val)
-                            
+
                             grade_index = [f"Grade {i}" for i in range(1, 13)].index(student["grade"]) if student["grade"] in [f"Grade {i}" for i in range(1, 13)] else 0
                             new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 13)], index=grade_index)
                             new_semester = st.selectbox("Semester", ["Semester I", "Semester II"],
@@ -1601,8 +1601,10 @@ def show_admin_panel():
                             new_gender = st.selectbox("Gender", ["M", "F", "Other"], index=gender_index)
                             new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name", ""))
                             new_contact = st.text_input("Contact", value=student.get("contact", ""))
-                            new_subjects = st.multiselect("Subjects", st.session_state.subjects,
-                                                          default=student.get("subjects", []))
+                            # FIXED: Filter subjects to only those available
+                            available_subjects = st.session_state.subjects
+                            default_subjects = [s for s in student.get("subjects", []) if s in available_subjects]
+                            new_subjects = st.multiselect("Subjects", available_subjects, default=default_subjects)
                         if st.form_submit_button("💾 Update Student"):
                             student["name"] = new_name
                             student["age"] = new_age
