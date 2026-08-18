@@ -1084,7 +1084,7 @@ def show_admin_panel():
                 password = generate_random_password()
                 hashed_pw = hash_password(password)
 
-                # --- FIXED: Generate unique teacher ID from max existing ---
+                # --- Generate unique teacher ID from max existing ---
                 existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
                 next_num = max(existing_ids) + 1 if existing_ids else 1
                 teacher_id = f"T{next_num:04d}"
@@ -1479,7 +1479,7 @@ def show_admin_panel():
                     if not name or not subjects:
                         st.error("Name and at least one subject are required.")
                     else:
-                        # --- FIXED: Generate unique student ID from max existing ---
+                        # Generate unique student ID from max existing
                         existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
                         next_num = max(existing_ids) + 1 if existing_ids else 1
                         student_id = f"S{next_num:04d}"
@@ -1669,6 +1669,16 @@ def show_admin_panel():
                     return value
 
                 supabase = get_supabase()
+
+                # --- Get current max student ID from database ---
+                try:
+                    res = supabase.table("students").select("id").execute()
+                    existing_ids = [int(r['id'][1:]) for r in res.data if r['id'].startswith('S')]
+                    next_num = max(existing_ids) + 1 if existing_ids else 1
+                except Exception as e:
+                    st.error(f"Could not fetch existing student IDs: {e}")
+                    st.stop()
+
                 for sheet_name, sheet_df in df_sheets.items():
                     grade = " ".join(sheet_name.split()[:2]) if len(sheet_name.split()) >= 2 else sheet_name
                     header_row = None
@@ -1686,10 +1696,10 @@ def show_admin_panel():
                             continue
                         subject_cols = ["አማርኛ", "ግዕዝ", "እንግሊዘኛ(S", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"]
                         subjects = [col for col in subject_cols if col in sheet_df.columns]
-                        # Generate a unique ID for imported students as well
-                        existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
-                        next_num = max(existing_ids) + 1 if existing_ids else 1
+
+                        # --- Assign unique ID and increment even if insert fails ---
                         student_id = f"S{next_num:04d}"
+                        next_num += 1
 
                         student = {
                             "id": student_id,
@@ -1708,6 +1718,7 @@ def show_admin_panel():
                             total_added += 1
                         except Exception as e:
                             st.warning(f"Failed to insert student {student['name']}: {e}")
+
                 load_all_data()
                 st.success(f"✅ Imported {total_added} students from {len(df_sheets)} sheets.")
                 add_notification(f"📥 Imported {total_added} students via Excel", "info")
