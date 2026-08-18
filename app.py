@@ -1500,26 +1500,30 @@ def show_admin_panel():
                             st.error(f"❌ Failed to reject batch: {e}")
                 st.markdown("---")
 
-    # --- Tab 7: Rankings (UPDATED with section filter) ---
+    # --- Tab 7: Rankings (UPDATED with dynamic section) ---
     with tab7:
         st.markdown("#### 📊 Grade Rankings by Section")
-        
+
         grade_options = [f"Grade {i}" for i in range(1, 13)]
         col1, col2 = st.columns(2)
         with col1:
             selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="rank_grade")
         with col2:
-            # Get all sections for the selected grade
+            # Get sections for the selected grade from students
             students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
             sections = sorted(set([s.get("section", "A") for s in students_in_grade]))
             if not sections:
                 sections = ["A"]  # fallback
-            selected_section = st.selectbox("Select Section", sections, index=0, key="rank_section")
-        
+            # Add "All" option
+            section_options = ["All"] + sections
+            selected_section = st.selectbox("Select Section", section_options, index=0, key="rank_section")
+
         # Filter students by grade and section
-        students_in_grade_section = [s for s in st.session_state.students 
-                                     if s.get("grade") == selected_grade and s.get("section") == selected_section]
-        
+        if selected_section == "All":
+            students_in_grade_section = students_in_grade
+        else:
+            students_in_grade_section = [s for s in students_in_grade if s.get("section") == selected_section]
+
         if not students_in_grade_section:
             st.info(f"No students registered in {selected_grade} ({selected_section}) yet.")
         else:
@@ -1779,20 +1783,36 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    # --- Tab 10: Approval Report ---
+    # --- Tab 10: Comprehensive Approval Report (UPDATED with dynamic section) ---
     with tab10:
         st.markdown("### 📊 Comprehensive Grade Report (Subject-wise)")
+
         grade_options = [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options, key="report_grade")
-        students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
-        if not students_in_grade:
-            st.info(f"No students registered in {selected_grade}.")
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_grade = st.selectbox("Select Grade", grade_options, key="report_grade")
+        with col2:
+            students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
+            sections = sorted(set([s.get("section", "A") for s in students_in_grade]))
+            if not sections:
+                sections = ["A"]
+            section_options = ["All"] + sections
+            selected_section = st.selectbox("Select Section", section_options, key="report_section")
+
+        # Filter students by grade and section
+        if selected_section == "All":
+            students_in_grade_section = students_in_grade
         else:
-            student_ids = [s["id"] for s in students_in_grade]
+            students_in_grade_section = [s for s in students_in_grade if s.get("section") == selected_section]
+
+        if not students_in_grade_section:
+            st.info(f"No students registered in {selected_grade} ({selected_section}).")
+        else:
+            student_ids = [s["id"] for s in students_in_grade_section]
             approved_evals = [e for e in st.session_state.evaluations
                               if e.get("student_id") in student_ids and e.get("status") == "approved"]
             if not approved_evals:
-                st.info("No approved evaluations found for this grade.")
+                st.info("No approved evaluations found for this grade and section.")
             else:
                 student_subject_scores = {}
                 for eval_item in approved_evals:
@@ -1805,11 +1825,11 @@ def show_admin_panel():
                     all_subjects.update(s_scores.keys())
                 all_subjects = sorted(list(all_subjects))
                 report_data = []
-                for student in students_in_grade:
+                for student in students_in_grade_section:
                     sid = student["id"]
                     name = student["name"]
                     scores_by_subject = student_subject_scores.get(sid, {})
-                    row = {"Student ID": sid, "Name": name}
+                    row = {"Student ID": sid, "Name": name, "Section": student.get("section", "A")}
                     subject_scores = []
                     for subj in all_subjects:
                         scores = scores_by_subject.get(subj, [])
@@ -1824,17 +1844,17 @@ def show_admin_panel():
                 df_report = pd.DataFrame(report_data)
                 df_sorted = df_report.sort_values("Overall Average (%)", ascending=False).reset_index(drop=True)
                 df_sorted["Rank"] = df_sorted["Overall Average (%)"].rank(method="min", ascending=False).astype(int)
-                columns_order = ["Rank", "Student ID", "Name"] + all_subjects + ["Overall Average (%)", "Evaluations"]
+                columns_order = ["Rank", "Student ID", "Name", "Section"] + all_subjects + ["Overall Average (%)", "Evaluations"]
                 columns_order = [col for col in columns_order if col in df_sorted.columns]
                 df_final = df_sorted[columns_order]
                 st.dataframe(df_final, use_container_width=True, hide_index=True)
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_final.to_excel(writer, sheet_name=f"{selected_grade}_Report", index=False)
+                    df_final.to_excel(writer, sheet_name=f"{selected_grade}_{selected_section}_Report", index=False)
                 st.download_button(
                     label="📥 Download Grade Report (Excel)",
                     data=output.getvalue(),
-                    file_name=f"Grade_Report_{selected_grade}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    file_name=f"Grade_Report_{selected_grade}_{selected_section}_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 )
