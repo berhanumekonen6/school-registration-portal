@@ -1668,7 +1668,8 @@ def show_admin_panel():
                         return None
                     return value
 
-                supabase = get_supabase()
+                # ===== FIX: Use admin client for import =====
+                supabase = get_supabase_admin()   # <-- changed from get_supabase()
 
                 # --- Get current max student ID from database ---
                 try:
