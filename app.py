@@ -1,7 +1,7 @@
 # ===================================================================
 # SCHOOL REGISTRATION PORTAL - PERSISTENT WITH SUPABASE
 # All data stored in Supabase PostgreSQL – never lost.
-# Admin can delete any record if needed.
+# Admin can delete any record permanently (using service_role key).
 # Berhanu Mekonen, PhD, Arba Minch University, August 14, 2026
 # ===================================================================
 
@@ -38,15 +38,15 @@ GRADE_SUBJECTS = {
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
 
-    # Grades 7-8 (UPDATED: "Amharic" → "አማርኛ")
+    # Grades 7-8
     "Grade 7": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
     "Grade 8": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
 
-    # Grades 9-10 (UPDATED: "Amharic" → "አማርኛ")
+    # Grades 9-10
     "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
     "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
 
-    # Grades 11-12 (UPDATED: "Amharic" → "አማርኛ")
+    # Grades 11-12
     "Grade 11": [
         "Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English",
         "Information Technology (IT)", "Citizenship Education / Civics",
@@ -71,7 +71,7 @@ DEFAULT_MAX_SCORES = {
 # ---- Allowed max score options ----
 MAX_SCORE_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
-# ---- Supabase Client ----
+# ---- Supabase Client (anon) ----
 def init_supabase():
     try:
         url = st.secrets["supabase"]["url"]
@@ -86,9 +86,24 @@ def get_supabase():
         st.session_state.supabase = init_supabase()
     return st.session_state.supabase
 
+# ---- NEW: Admin Client (service_role) for deletions ----
+def init_supabase_admin():
+    try:
+        url = st.secrets["supabase"]["url"]
+        key = st.secrets["supabase"]["service_role_key"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"Admin Supabase connection error: {e}. Please check your service role key.")
+        st.stop()
+
+def get_supabase_admin():
+    if "supabase_admin" not in st.session_state:
+        st.session_state.supabase_admin = init_supabase_admin()
+    return st.session_state.supabase_admin
+
 # ---- Data Load ----
 def load_all_data():
-    supabase = get_supabase()
+    supabase = get_supabase()  # anon client for reads
     res = supabase.table("students").select("*").execute()
     st.session_state.students = res.data if res.data else []
     res = supabase.table("teachers").select("*").execute()
@@ -114,9 +129,10 @@ def load_all_data():
 
 # ---- sync_table ----
 def sync_table(table_name, data, key_column="id"):
-    supabase = get_supabase()
+    # Use admin client for deletion
+    supabase_admin = get_supabase_admin()
     try:
-        supabase.table(table_name).delete().execute()
+        supabase_admin.table(table_name).delete().execute()
     except Exception as e:
         st.warning(f"Could not clear table {table_name}: {e}")
     def clean_nan(item):
@@ -133,40 +149,22 @@ def sync_table(table_name, data, key_column="id"):
         cleaned_data.append(cleaned_record)
     if cleaned_data:
         try:
-            supabase.table(table_name).insert(cleaned_data).execute()
+            # Use admin client for insert as well (optional; anon may also work)
+            supabase_admin.table(table_name).insert(cleaned_data).execute()
         except Exception as e:
             st.warning(f"Error inserting into {table_name}: {e}")
 
 # ---- sync_all ----
 def sync_all():
-    try:
-        get_supabase().table("evaluations").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear evaluations: {e}")
-    try:
-        get_supabase().table("batches").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear batches: {e}")
-    try:
-        get_supabase().table("notifications").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear notifications: {e}")
-    try:
-        get_supabase().table("penalty_log").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear penalty_log: {e}")
-    try:
-        get_supabase().table("students").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear students: {e}")
-    try:
-        get_supabase().table("teachers").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear teachers: {e}")
-    try:
-        get_supabase().table("users").delete().execute()
-    except Exception as e:
-        st.warning(f"Could not clear users: {e}")
+    supabase_admin = get_supabase_admin()
+    # Clear all tables
+    tables = ["evaluations", "batches", "notifications", "penalty_log", "students", "teachers", "users"]
+    for table in tables:
+        try:
+            supabase_admin.table(table).delete().execute()
+        except Exception as e:
+            st.warning(f"Could not clear {table}: {e}")
+    # Re-insert users (admin)
     user_list = []
     for username, info in st.session_state.user_db.items():
         user_list.append({
@@ -1088,7 +1086,7 @@ def show_admin_panel():
                 teacher_id = f"T{len(st.session_state.teachers)+1:04d}"
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-                supabase = get_supabase()
+                supabase = get_supabase()  # insert uses anon (works)
                 try:
                     user_data = {
                         "username": username,
@@ -1152,7 +1150,7 @@ def show_admin_panel():
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
-                            supabase = get_supabase()
+                            supabase = get_supabase()  # update with anon may work if RLS allows; if not, we can use admin
                             try:
                                 supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
                                 if teacher.get("username") in st.session_state.user_db:
@@ -1175,7 +1173,7 @@ def show_admin_panel():
                 teacher_id = teacher_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete this teacher", type="primary", use_container_width=True):
                     try:
-                        supabase = get_supabase()
+                        supabase_admin = get_supabase_admin()  # ADMIN client for DELETE
                         username_to_remove = None
                         for t in st.session_state.teachers:
                             if t["id"] == teacher_id:
@@ -1184,10 +1182,10 @@ def show_admin_panel():
                         if not username_to_remove:
                             st.error("Username not found for this teacher.")
                             st.stop()
-                        supabase.table("evaluations").delete().eq("teacher_id", teacher_id).execute()
-                        supabase.table("batches").delete().eq("teacher_id", teacher_id).execute()
-                        supabase.table("teachers").delete().eq("id", teacher_id).execute()
-                        supabase.table("users").delete().eq("username", username_to_remove).execute()
+                        supabase_admin.table("evaluations").delete().eq("teacher_id", teacher_id).execute()
+                        supabase_admin.table("batches").delete().eq("teacher_id", teacher_id).execute()
+                        supabase_admin.table("teachers").delete().eq("id", teacher_id).execute()
+                        supabase_admin.table("users").delete().eq("username", username_to_remove).execute()
                         load_all_data()
                         add_notification(f"🗑️ Teacher {teacher_to_delete} deleted permanently", "warning")
                         st.success(f"✅ Teacher {teacher_to_delete} deleted successfully!")
@@ -1395,7 +1393,7 @@ def show_admin_panel():
                             }
                             st.session_state.evaluations.append(eval_item)
                         batch["status"] = "approved"
-                        supabase = get_supabase()
+                        supabase = get_supabase()  # update uses anon (may work if RLS allows)
                         try:
                             supabase.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
                             load_all_data()
@@ -1542,7 +1540,7 @@ def show_admin_panel():
                             else:
                                 confirm = st.checkbox(f"⚠️ I confirm: update {len(affected)} students in {target_grade} – replace '{old_subject}' with '{new_subject}'.")
                                 if confirm:
-                                    supabase = get_supabase()
+                                    supabase = get_supabase()  # update uses anon (may need admin)
                                     success_count = 0
                                     error_list = []
                                     for student in affected:
@@ -1571,7 +1569,7 @@ def show_admin_panel():
             display_cols = ["id", "name", "grade", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
-            # ---------- EDIT STUDENT - FIXED ----------
+            # ---------- EDIT STUDENT ----------
             st.markdown("#### ✏️ Edit Student")
             student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
             selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
@@ -1582,7 +1580,6 @@ def show_admin_panel():
                         col1, col2 = st.columns(2)
                         with col1:
                             new_name = st.text_input("Full Name", value=student["name"])
-                            # FIXED: Handle None/empty age
                             age_val = student.get("age")
                             if age_val is None or age_val == "":
                                 age_val = 5
@@ -1601,7 +1598,6 @@ def show_admin_panel():
                             new_gender = st.selectbox("Gender", ["M", "F", "Other"], index=gender_index)
                             new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name", ""))
                             new_contact = st.text_input("Contact", value=student.get("contact", ""))
-                            # FIXED: Filter subjects to only those available
                             available_subjects = st.session_state.subjects
                             default_subjects = [s for s in student.get("subjects", []) if s in available_subjects]
                             new_subjects = st.multiselect("Subjects", available_subjects, default=default_subjects)
@@ -1634,10 +1630,10 @@ def show_admin_panel():
                 student_id = student_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete Selected Student", type="primary", use_container_width=True):
                     if st.checkbox(f"⚠️ Confirm delete of {student_to_delete}?"):
-                        supabase = get_supabase()
+                        supabase_admin = get_supabase_admin()  # ADMIN client for DELETE
                         try:
-                            supabase.table("students").delete().eq("id", student_id).execute()
-                            supabase.table("evaluations").delete().eq("student_id", student_id).execute()
+                            supabase_admin.table("students").delete().eq("id", student_id).execute()
+                            supabase_admin.table("evaluations").delete().eq("student_id", student_id).execute()
                             load_all_data()
                             add_notification(f"🗑️ Student {student_to_delete} deleted", "warning")
                             st.success(f"✅ Deleted {student_to_delete}")
