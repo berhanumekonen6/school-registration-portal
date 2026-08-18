@@ -1067,34 +1067,48 @@ def show_admin_panel():
     # --- Tab 3: Teachers ---
     with tab3:
         st.markdown("#### 👨‍🏫 Manage Teachers")
+
+        # ---- Assignment management (outside the form) ----
+        st.markdown("##### 📌 Assignments (Grade & Section)")
+        st.caption("Add the grade(s) and section(s) this teacher is responsible for.")
+        if "assignments_list" not in st.session_state:
+            st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
+
+        # Display and edit assignments with add/remove buttons (outside form)
+        for i, assignment in enumerate(st.session_state.assignments_list):
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                assignment["grade"] = st.selectbox(
+                    f"Grade {i+1}",
+                    [f"Grade {g}" for g in range(1, 13)],
+                    index=[f"Grade {g}" for g in range(1, 13)].index(assignment["grade"]),
+                    key=f"assign_grade_{i}"
+                )
+            with col2:
+                assignment["section"] = st.text_input(
+                    f"Section {i+1}",
+                    value=assignment["section"],
+                    key=f"assign_section_{i}"
+                )
+            with col3:
+                if st.button("✖", key=f"remove_assign_{i}"):
+                    if len(st.session_state.assignments_list) > 1:
+                        st.session_state.assignments_list.pop(i)
+                        st.rerun()
+        if st.button("➕ Add Assignment"):
+            st.session_state.assignments_list.append({"grade": "Grade 1", "section": "A"})
+            st.rerun()
+
+        # ---- Add Teacher Form ----
         with st.form("add_teacher"):
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
             teacher_subject = st.selectbox("Subject Taught *", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
 
-            st.markdown("##### 📌 Assignments (Grade & Section)")
-            st.caption("Add the grade(s) and section(s) this teacher is responsible for.")
-            if "assignments_list" not in st.session_state:
-                st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
-            # Allow adding/removing assignments
-            for i, assignment in enumerate(st.session_state.assignments_list):
-                col1, col2, col3 = st.columns([2, 2, 1])
-                with col1:
-                    assignment["grade"] = st.selectbox(f"Grade {i+1}", [f"Grade {g}" for g in range(1,13)], index=[f"Grade {g}" for g in range(1,13)].index(assignment["grade"]), key=f"assign_grade_{i}")
-                with col2:
-                    assignment["section"] = st.text_input(f"Section {i+1}", value=assignment["section"], key=f"assign_section_{i}")
-                with col3:
-                    if st.button("✖", key=f"remove_assign_{i}"):
-                        if len(st.session_state.assignments_list) > 1:
-                            st.session_state.assignments_list.pop(i)
-                            st.rerun()
-            if st.button("➕ Add Assignment"):
-                st.session_state.assignments_list.append({"grade": "Grade 1", "section": "A"})
-                st.rerun()
-
             col1, col2 = st.columns([1, 3])
             with col1:
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
+
             if submitted and teacher_name:
                 username = generate_username(teacher_name)
                 if username in st.session_state.user_db:
@@ -1171,30 +1185,38 @@ def show_admin_panel():
             if selected_teacher_label:
                 teacher = teacher_options[selected_teacher_label]
                 with st.expander("Edit this teacher", expanded=True):
+                    # ---- Edit assignments (outside the edit form) ----
+                    st.markdown("##### 📌 Edit Assignments")
+                    current_assignments = json.loads(teacher.get("assignments", "[]"))
+                    if "edit_assignments" not in st.session_state:
+                        st.session_state.edit_assignments = current_assignments if current_assignments else [{"grade": "Grade 1", "section": "A"}]
+
+                    for i, ass in enumerate(st.session_state.edit_assignments):
+                        col1, col2, col3 = st.columns([2, 2, 1])
+                        with col1:
+                            ass["grade"] = st.selectbox(
+                                f"Grade {i+1}",
+                                [f"Grade {g}" for g in range(1, 13)],
+                                index=[f"Grade {g}" for g in range(1, 13)].index(ass["grade"]),
+                                key=f"edit_assign_grade_{i}"
+                            )
+                        with col2:
+                            ass["section"] = st.text_input(f"Section {i+1}", value=ass["section"], key=f"edit_assign_section_{i}")
+                        with col3:
+                            if st.button("✖", key=f"edit_remove_assign_{i}"):
+                                if len(st.session_state.edit_assignments) > 1:
+                                    st.session_state.edit_assignments.pop(i)
+                                    st.rerun()
+                    if st.button("➕ Add Assignment", key="edit_add_assign"):
+                        st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A"})
+                        st.rerun()
+
+                    # ---- Edit Teacher Form ----
                     with st.form("edit_teacher_form"):
                         new_name = st.text_input("Teacher Full Name", value=teacher["name"])
                         new_subject = st.selectbox("Subject", st.session_state.subjects,
                                                    index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
                         new_email = st.text_input("Email Address", value=teacher.get("email", ""))
-
-                        # Edit assignments
-                        current_assignments = json.loads(teacher.get("assignments", "[]"))
-                        if "edit_assignments" not in st.session_state:
-                            st.session_state.edit_assignments = current_assignments if current_assignments else [{"grade": "Grade 1", "section": "A"}]
-                        for i, ass in enumerate(st.session_state.edit_assignments):
-                            col1, col2, col3 = st.columns([2, 2, 1])
-                            with col1:
-                                ass["grade"] = st.selectbox(f"Grade {i+1}", [f"Grade {g}" for g in range(1,13)], index=[f"Grade {g}" for g in range(1,13)].index(ass["grade"]), key=f"edit_assign_grade_{i}")
-                            with col2:
-                                ass["section"] = st.text_input(f"Section {i+1}", value=ass["section"], key=f"edit_assign_section_{i}")
-                            with col3:
-                                if st.button("✖", key=f"edit_remove_assign_{i}"):
-                                    if len(st.session_state.edit_assignments) > 1:
-                                        st.session_state.edit_assignments.pop(i)
-                                        st.rerun()
-                        if st.button("➕ Add Assignment", key="edit_add_assign"):
-                            st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A"})
-                            st.rerun()
 
                         if st.form_submit_button("💾 Update Teacher"):
                             teacher["name"] = new_name
