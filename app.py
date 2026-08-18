@@ -65,7 +65,7 @@ DEFAULT_MAX_SCORES = {
     "Test 2": 10,
     "Test 3": 10,
     "Test 4": 10,
-    "Final Exam": 40   # <-- changed from 50 to 40
+    "Final Exam": 40
 }
 
 # ---- Allowed max score options ----
@@ -1500,17 +1500,31 @@ def show_admin_panel():
                             st.error(f"❌ Failed to reject batch: {e}")
                 st.markdown("---")
 
-    # --- Tab 7: Rankings ---
+    # --- Tab 7: Rankings (UPDATED with section filter) ---
     with tab7:
-        st.markdown("#### 📊 Grade Rankings")
+        st.markdown("#### 📊 Grade Rankings by Section")
+        
         grade_options = [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="rank_grade")
-        students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
-        if not students_in_grade:
-            st.info(f"No students registered in {selected_grade} yet.")
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="rank_grade")
+        with col2:
+            # Get all sections for the selected grade
+            students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
+            sections = sorted(set([s.get("section", "A") for s in students_in_grade]))
+            if not sections:
+                sections = ["A"]  # fallback
+            selected_section = st.selectbox("Select Section", sections, index=0, key="rank_section")
+        
+        # Filter students by grade and section
+        students_in_grade_section = [s for s in st.session_state.students 
+                                     if s.get("grade") == selected_grade and s.get("section") == selected_section]
+        
+        if not students_in_grade_section:
+            st.info(f"No students registered in {selected_grade} ({selected_section}) yet.")
         else:
             student_data = []
-            for student in students_in_grade:
+            for student in students_in_grade_section:
                 evals = get_approved_evaluations_for_student(student["id"])
                 if evals:
                     avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
@@ -1535,7 +1549,7 @@ def show_admin_panel():
                 st.metric("🏆 Highest Average", f"{df_sorted['Average Score'].max()}%")
                 st.metric("📉 Lowest Average", f"{df_sorted['Average Score'].min()}%")
             else:
-                st.info("No approved evaluations yet for this grade.")
+                st.info("No approved evaluations yet for this grade and section.")
 
     # --- Tab 8: Students ---
     with tab8:
