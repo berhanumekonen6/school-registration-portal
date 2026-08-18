@@ -38,7 +38,7 @@ GRADE_SUBJECTS = {
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
 
-    # Grades 7-8 (UPDATED: "Maths" → "Mathematics")
+    # Grades 7-8
     "Grade 7": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
     "Grade 8": ["Amharic", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
 
@@ -59,7 +59,7 @@ GRADE_SUBJECTS = {
     ],
 }
 
-# ---- Assessment default maximum scores (can be overridden per batch) ----
+# ---- Assessment default maximum scores ----
 DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
@@ -112,7 +112,7 @@ def load_all_data():
     res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
     st.session_state.penalty_log = res.data if res.data else []
 
-# ---- sync_table (used only for bulk operations like clearing all data) ----
+# ---- sync_table ----
 def sync_table(table_name, data, key_column="id"):
     supabase = get_supabase()
     try:
@@ -137,7 +137,7 @@ def sync_table(table_name, data, key_column="id"):
         except Exception as e:
             st.warning(f"Error inserting into {table_name}: {e}")
 
-# ---- sync_all (used only for clearing all data) ----
+# ---- sync_all ----
 def sync_all():
     try:
         get_supabase().table("evaluations").delete().execute()
@@ -218,7 +218,6 @@ def init_user_db():
             "role": "admin",
             "name": "School Administrator"
         }
-        # Ensure admin exists in Supabase
         supabase = get_supabase()
         try:
             supabase.table("users").insert({
@@ -815,7 +814,7 @@ st.markdown("""
         border-left: 6px solid #EA4335;
     }
 
-    /* ---- Watermark (diagonal remark) ---- */
+    /* ---- Watermark ---- */
     .watermark-container {
         position: relative;
         overflow: hidden;
@@ -1224,7 +1223,7 @@ def show_admin_panel():
                 else:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    # --- Tab 5: All Data (with grade filter, default Grade 5) ---
+    # --- Tab 5: All Data (with grade filter) ---
     with tab5:
         st.markdown("#### 📋 All Data")
 
@@ -1572,7 +1571,7 @@ def show_admin_panel():
             display_cols = ["id", "name", "grade", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
-            # ---------- EDIT STUDENT ----------
+            # ---------- EDIT STUDENT - FIXED ----------
             st.markdown("#### ✏️ Edit Student")
             student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
             selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
@@ -1583,14 +1582,23 @@ def show_admin_panel():
                         col1, col2 = st.columns(2)
                         with col1:
                             new_name = st.text_input("Full Name", value=student["name"])
-                            new_age = st.number_input("Age", min_value=5, max_value=25, step=1, value=int(student["age"]))
-                            new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 13)],
-                                                     index=[f"Grade {i}" for i in range(1, 13)].index(student["grade"]))
+                            # FIXED: Handle None/empty age
+                            age_val = student.get("age")
+                            if age_val is None or age_val == "":
+                                age_val = 5
+                            try:
+                                age_val = int(age_val)
+                            except (ValueError, TypeError):
+                                age_val = 5
+                            new_age = st.number_input("Age", min_value=5, max_value=25, step=1, value=age_val)
+                            
+                            grade_index = [f"Grade {i}" for i in range(1, 13)].index(student["grade"]) if student["grade"] in [f"Grade {i}" for i in range(1, 13)] else 0
+                            new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 13)], index=grade_index)
                             new_semester = st.selectbox("Semester", ["Semester I", "Semester II"],
-                                                        index=["Semester I", "Semester II"].index(student["semester"]))
+                                                        index=["Semester I", "Semester II"].index(student["semester"]) if student["semester"] in ["Semester I", "Semester II"] else 0)
                         with col2:
-                            new_gender = st.selectbox("Gender", ["M", "F", "Other"],
-                                                      index=["M", "F", "Other"].index(student.get("gender", "M")))
+                            gender_index = ["M", "F", "Other"].index(student.get("gender", "M")) if student.get("gender", "M") in ["M", "F", "Other"] else 0
+                            new_gender = st.selectbox("Gender", ["M", "F", "Other"], index=gender_index)
                             new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name", ""))
                             new_contact = st.text_input("Contact", value=student.get("contact", ""))
                             new_subjects = st.multiselect("Subjects", st.session_state.subjects,
@@ -1712,7 +1720,7 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    # --- Tab 10: Comprehensive Approval Report (Subject-wise, Rank, Excel) ---
+    # --- Tab 10: Comprehensive Approval Report ---
     with tab10:
         st.markdown("### 📊 Comprehensive Grade Report (Subject-wise)")
         grade_options = [f"Grade {i}" for i in range(1, 13)]
@@ -1772,22 +1780,16 @@ def show_admin_panel():
                     use_container_width=True
                 )
 
-        # ---- NEW: Download All Approved Evaluations ----
         st.markdown("---")
         st.markdown("#### 📤 Download All Approved Evaluations")
         if st.session_state.evaluations:
             approved_evals = [e for e in st.session_state.evaluations if e.get("status") == "approved"]
             if approved_evals:
                 if st.button("📥 Download All Approved Evaluations (Excel)", use_container_width=True):
-                    df_all = pd.DataFrame(approved_evals)
-                    # Expand assessments into columns if needed, but we already have scores in the batch
-                    # We'll create a clean dataframe
                     rows = []
                     for e in approved_evals:
-                        # Get student name and grade
                         student = get_student_by_id(e.get("student_id"))
                         grade = student.get("grade", "N/A") if student else "N/A"
-                        # Get assessments
                         assessments = e.get("assessments", [])
                         scores = {a["name"]: a["score"] for a in assessments}
                         row = {
@@ -2133,7 +2135,6 @@ def show_teacher_panel():
 
         remarks = st.text_area("Batch Remarks / Comments (optional)", value=remarks)
 
-        # Watermark
         if remarks.strip():
             st.markdown(f"""
             <div class="watermark-container">
@@ -2186,7 +2187,7 @@ def show_teacher_panel():
                 except Exception as e:
                     st.error(f"❌ Failed to save batch: {e}")
 
-    # ---------- TAB 2: My Submissions (with download for approved batches) ----------
+    # ---------- TAB 2: My Submissions ----------
     with tab2:
         st.markdown("#### 📊 My Submissions (Batches)")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id]
@@ -2216,16 +2217,13 @@ def show_teacher_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-                # --- Download button for approved batches ---
                 if status == "approved":
                     if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}"):
                         df_batch = pd.DataFrame(batch["students"])
-                        # Add grade and subject info
                         df_batch["Grade"] = batch["grade"]
                         df_batch["Subject"] = batch["subject"]
                         df_batch["Teacher"] = batch["teacher_name"]
                         df_batch["Remarks"] = batch_remarks
-                        # Reorder columns
                         cols = ["student_id", "student_name", "Grade", "Subject", "Teacher", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall", "Remarks"]
                         available_cols = [c for c in cols if c in df_batch.columns]
                         df_export = df_batch[available_cols]
@@ -2244,7 +2242,6 @@ def show_teacher_panel():
                         st.session_state.edit_batch_id = batch["id"]
                         st.rerun()
 
-            # ---------- EDIT BATCH ----------
             if hasattr(st.session_state, 'edit_batch_id') and st.session_state.edit_batch_id:
                 batch_to_edit = next((b for b in my_batches if b["id"] == st.session_state.edit_batch_id), None)
                 if batch_to_edit and batch_to_edit["status"] == "pending":
@@ -2679,7 +2676,7 @@ def main():
         elif current_page == "🔔 Notifications":
             show_notification_center()
 
-    else:  # student
+    else:
         if current_page == "👨‍🎓 My Profile" or current_page == "📝 Register":
             show_student_panel()
         elif current_page == "⚠️ My Penalties":
