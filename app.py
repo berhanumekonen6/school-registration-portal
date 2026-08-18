@@ -1072,21 +1072,27 @@ def show_admin_panel():
         st.markdown("##### 📌 Assignments (Grade & Section)")
         st.caption("Add the grade(s) and section(s) this teacher is responsible for.")
         if "assignments_list" not in st.session_state:
-            st.session_state.assignments_list = [{"grade": "Grade", "section": ""}]
+            st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
 
         # Display and edit assignments with add/remove buttons (outside form)
         for i, assignment in enumerate(st.session_state.assignments_list):
             col1, col2, col3 = st.columns([2, 2, 1])
             with col1:
+                grade_options = [f"Grade {g}" for g in range(1, 13)]
+                try:
+                    idx = grade_options.index(assignment["grade"])
+                except ValueError:
+                    idx = 0
+                    assignment["grade"] = grade_options[0]
                 assignment["grade"] = st.selectbox(
-                    f"Grade {i+1}",
-                    [f"Grade {g}" for g in range(1, 13)],
-                    index=[f"Grade {g}" for g in range(1, 13)].index(assignment["grade"]),
+                    "Grade",
+                    grade_options,
+                    index=idx,
                     key=f"assign_grade_{i}"
                 )
             with col2:
                 assignment["section"] = st.text_input(
-                    f"Section {i+1}",
+                    "Section",
                     value=assignment["section"],
                     key=f"assign_section_{i}"
                 )
@@ -1194,14 +1200,20 @@ def show_admin_panel():
                     for i, ass in enumerate(st.session_state.edit_assignments):
                         col1, col2, col3 = st.columns([2, 2, 1])
                         with col1:
+                            grade_options = [f"Grade {g}" for g in range(1, 13)]
+                            try:
+                                idx = grade_options.index(ass["grade"])
+                            except ValueError:
+                                idx = 0
+                                ass["grade"] = grade_options[0]
                             ass["grade"] = st.selectbox(
-                                f"Grade {i+1}",
-                                [f"Grade {g}" for g in range(1, 13)],
-                                index=[f"Grade {g}" for g in range(1, 13)].index(ass["grade"]),
+                                "Grade",
+                                grade_options,
+                                index=idx,
                                 key=f"edit_assign_grade_{i}"
                             )
                         with col2:
-                            ass["section"] = st.text_input(f"Section {i+1}", value=ass["section"], key=f"edit_assign_section_{i}")
+                            ass["section"] = st.text_input(f"Section", value=ass["section"], key=f"edit_assign_section_{i}")
                         with col3:
                             if st.button("✖", key=f"edit_remove_assign_{i}"):
                                 if len(st.session_state.edit_assignments) > 1:
