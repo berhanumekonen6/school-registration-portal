@@ -65,7 +65,7 @@ DEFAULT_MAX_SCORES = {
     "Test 2": 10,
     "Test 3": 10,
     "Test 4": 10,
-    "Final Exam": 50
+    "Final Exam": 40   # <-- changed from 50 to 40
 }
 
 # ---- Allowed max score options ----
@@ -86,7 +86,7 @@ def get_supabase():
         st.session_state.supabase = init_supabase()
     return st.session_state.supabase
 
-# ---- NEW: Admin Client (service_role) for deletions ----
+# ---- Admin Client (service_role) for deletions ----
 def init_supabase_admin():
     try:
         url = st.secrets["supabase"]["url"]
@@ -1071,6 +1071,27 @@ def show_admin_panel():
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
             teacher_subject = st.selectbox("Subject Taught *", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
+
+            st.markdown("##### 📌 Assignments (Grade & Section)")
+            st.caption("Add the grade(s) and section(s) this teacher is responsible for.")
+            if "assignments_list" not in st.session_state:
+                st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
+            # Allow adding/removing assignments
+            for i, assignment in enumerate(st.session_state.assignments_list):
+                col1, col2, col3 = st.columns([2, 2, 1])
+                with col1:
+                    assignment["grade"] = st.selectbox(f"Grade {i+1}", [f"Grade {g}" for g in range(1,13)], index=[f"Grade {g}" for g in range(1,13)].index(assignment["grade"]), key=f"assign_grade_{i}")
+                with col2:
+                    assignment["section"] = st.text_input(f"Section {i+1}", value=assignment["section"], key=f"assign_section_{i}")
+                with col3:
+                    if st.button("✖", key=f"remove_assign_{i}"):
+                        if len(st.session_state.assignments_list) > 1:
+                            st.session_state.assignments_list.pop(i)
+                            st.rerun()
+            if st.button("➕ Add Assignment"):
+                st.session_state.assignments_list.append({"grade": "Grade 1", "section": "A"})
+                st.rerun()
+
             col1, col2 = st.columns([1, 3])
             with col1:
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
@@ -1084,14 +1105,13 @@ def show_admin_panel():
                 password = generate_random_password()
                 hashed_pw = hash_password(password)
 
-                # --- Generate unique teacher ID from max existing ---
                 existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
                 next_num = max(existing_ids) + 1 if existing_ids else 1
                 teacher_id = f"T{next_num:04d}"
-
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+                assignments_json = json.dumps(st.session_state.assignments_list)
 
-                supabase = get_supabase()  # insert uses anon
+                supabase = get_supabase()
                 try:
                     user_data = {
                         "username": username,
@@ -1107,17 +1127,19 @@ def show_admin_panel():
                         "email": teacher_email,
                         "username": username,
                         "password": password,
-                        "added": added_time
+                        "added": added_time,
+                        "assignments": assignments_json
                     }
                     supabase.table("teachers").insert(teacher_data).execute()
                     load_all_data()
-                    add_notification(f"👨‍🏫 New teacher added: {teacher_name} (Username: {username})", "success")
+                    add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
                     st.success(f"""
                     ✅ Teacher {teacher_name} added successfully!
                     **Login Credentials:**
                     - **Username:** `{username}`
                     - **Password:** `{password}`
                     """)
+                    st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error adding teacher: {e}")
@@ -1128,14 +1150,17 @@ def show_admin_panel():
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
             for teacher in st.session_state.teachers:
+                assignments = json.loads(teacher.get("assignments", "[]"))
+                assign_str = ", ".join([f"{a['grade']} ({a['section']})" for a in assignments]) if assignments else "None"
                 st.markdown(f"""
                 <div class="teacher-card">
                     <h4>👨‍🏫 {teacher['name']}</h4>
                     <p><b>📚 Subject:</b> {teacher['subject']}</p>
+                    <p><b>📌 Assignments:</b> {assign_str}</p>
                     <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
                     <p><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></p>
                     <p><b>📅 Added:</b> {teacher.get('added', 'N/A')}</p>
-                    <p><b>🔑 Password:</b> <code>{teacher.get('password', 'N/A')}</code> <span style="color:#5F6368;font-size:0.8rem;">(save this)</span></p>
+                    <p><b>🔑 Password:</b> <code>{teacher.get('password', 'N/A')}</code></p>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1151,10 +1176,31 @@ def show_admin_panel():
                         new_subject = st.selectbox("Subject", st.session_state.subjects,
                                                    index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
                         new_email = st.text_input("Email Address", value=teacher.get("email", ""))
+
+                        # Edit assignments
+                        current_assignments = json.loads(teacher.get("assignments", "[]"))
+                        if "edit_assignments" not in st.session_state:
+                            st.session_state.edit_assignments = current_assignments if current_assignments else [{"grade": "Grade 1", "section": "A"}]
+                        for i, ass in enumerate(st.session_state.edit_assignments):
+                            col1, col2, col3 = st.columns([2, 2, 1])
+                            with col1:
+                                ass["grade"] = st.selectbox(f"Grade {i+1}", [f"Grade {g}" for g in range(1,13)], index=[f"Grade {g}" for g in range(1,13)].index(ass["grade"]), key=f"edit_assign_grade_{i}")
+                            with col2:
+                                ass["section"] = st.text_input(f"Section {i+1}", value=ass["section"], key=f"edit_assign_section_{i}")
+                            with col3:
+                                if st.button("✖", key=f"edit_remove_assign_{i}"):
+                                    if len(st.session_state.edit_assignments) > 1:
+                                        st.session_state.edit_assignments.pop(i)
+                                        st.rerun()
+                        if st.button("➕ Add Assignment", key="edit_add_assign"):
+                            st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A"})
+                            st.rerun()
+
                         if st.form_submit_button("💾 Update Teacher"):
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
+                            teacher["assignments"] = json.dumps(st.session_state.edit_assignments)
                             supabase = get_supabase()
                             try:
                                 supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
@@ -1164,6 +1210,7 @@ def show_admin_panel():
                                 load_all_data()
                                 add_notification(f"✏️ Teacher {new_name} updated", "info")
                                 st.success(f"✅ Teacher {new_name} updated successfully!")
+                                st.session_state.edit_assignments = json.loads(teacher.get("assignments", "[]")) if teacher.get("assignments") else [{"grade":"Grade 1","section":"A"}]
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Failed to update teacher: {e}")
@@ -1226,7 +1273,7 @@ def show_admin_panel():
                 else:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    # --- Tab 5: All Data (with grade filter) ---
+    # --- Tab 5: All Data ---
     with tab5:
         st.markdown("#### 📋 All Data")
 
@@ -1235,7 +1282,7 @@ def show_admin_panel():
         selected_grade_filter = st.selectbox(
             "Filter by Grade",
             options=grade_options,
-            index=grade_options.index("Grade 5") if "Grade 5" in grade_options else 0,
+            index=0,
             key="all_data_grade_filter"
         )
         if selected_grade_filter == "All Grades":
@@ -1244,7 +1291,6 @@ def show_admin_panel():
         else:
             filtered_students = [s for s in st.session_state.students if s.get("grade") == selected_grade_filter]
             heading = f"👨‍🎓 {selected_grade_filter} Students"
-
         st.markdown(f"##### {heading}")
         if filtered_students:
             df_students = pd.DataFrame(filtered_students)
@@ -1337,15 +1383,14 @@ def show_admin_panel():
                 teacher_name = batch.get("teacher_name", "Unknown")
                 subject = batch.get("subject", "N/A")
                 grade = batch.get("grade", "N/A")
+                section = batch.get("section", "N/A")
                 student_count = len(batch.get("students", []))
                 submitted_date = batch.get("submitted_at", "N/A")
                 batch_remarks = batch.get("remarks", "")
-
                 weights = batch.get("weights", {})
                 max_scores = batch.get("max_scores", DEFAULT_MAX_SCORES)
                 weight_str = f"Test1={weights.get('Test 1',0)}, Test2={weights.get('Test 2',0)}, Test3={weights.get('Test 3',0)}, Test4={weights.get('Test 4',0)}, Final={weights.get('Final Exam',0)}"
                 max_str = f"Max: Test1={max_scores.get('Test 1',0)}, Test2={max_scores.get('Test 2',0)}, Test3={max_scores.get('Test 3',0)}, Test4={max_scores.get('Test 4',0)}, Final={max_scores.get('Final Exam',0)}"
-
                 st.markdown(f"""
                 <div class="approval-card pending">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -1353,6 +1398,7 @@ def show_admin_panel():
                             <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">📦 Batch from {teacher_name} · {subject}</h4>
                             <p><b>📚 Subject:</b> {subject}</p>
                             <p><b>📋 Grade:</b> {grade}</p>
+                            <p><b>📌 Section:</b> {section}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
                             <p><b>📅 Submitted:</b> {submitted_date}</p>
                             <p><b>Weights:</b> {weight_str}</p>
@@ -1365,7 +1411,6 @@ def show_admin_panel():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
                 df_batch = pd.DataFrame(batch["students"])
                 display_cols = ["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
                 available_cols = [col for col in display_cols if col in df_batch.columns]
@@ -1473,23 +1518,25 @@ def show_admin_panel():
                     gender = st.selectbox("Gender", ["M", "F", "Other"])
                     parent = st.text_input("Parent/Guardian")
                     contact = st.text_input("Contact")
-                    subjects = st.multiselect("Subjects", st.session_state.subjects)
+                    section = st.text_input("Section (e.g., A, B, C)", value="A")
+                    # subjects are auto-set from GRADE_SUBJECTS[grade]
+                    subjects = GRADE_SUBJECTS.get(grade, [])
+                    st.info(f"📚 Subjects for {grade}: {', '.join(subjects)}")
                 submitted = st.form_submit_button("Add Student")
                 if submitted:
-                    if not name or not subjects:
-                        st.error("Name and at least one subject are required.")
+                    if not name:
+                        st.error("Name is required.")
                     else:
-                        # Generate unique student ID from max existing
                         existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
                         next_num = max(existing_ids) + 1 if existing_ids else 1
                         student_id = f"S{next_num:04d}"
-
                         new_student = {
                             "id": student_id,
                             "name": name,
                             "age": age,
                             "gender": gender,
                             "grade": grade,
+                            "section": section,
                             "semester": semester,
                             "subjects": subjects,
                             "parent_name": parent,
@@ -1507,79 +1554,13 @@ def show_admin_panel():
                         except Exception as e:
                             st.error(f"❌ Failed to add student: {e}")
 
-        # ---------- BULK SUBJECT REPLACEMENT ----------
-        with st.expander("🔄 Bulk Subject Replacement (by Grade)", expanded=False):
-            st.markdown("Replace a subject for all students in a selected grade with another subject.")
-            grade_options = [f"Grade {i}" for i in range(1, 13)]
-            target_grade = st.selectbox("Select Grade", grade_options, key="bulk_grade")
-
-            students_in_grade = [s for s in st.session_state.students if s.get("grade") == target_grade]
-            if not students_in_grade:
-                st.info(f"No students in {target_grade} to update.")
-            else:
-                used_subjects = set()
-                for s in students_in_grade:
-                    subjects = s.get("subjects", [])
-                    if isinstance(subjects, str):
-                        subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
-                    elif isinstance(subjects, list):
-                        pass
-                    else:
-                        continue
-                    used_subjects.update(subjects)
-                used_subjects = sorted(list(used_subjects))
-                if not used_subjects:
-                    st.info(f"No subjects found for students in {target_grade}.")
-                else:
-                    old_subject = st.selectbox("Subject to replace", used_subjects, key="old_subj")
-                    new_subject = st.selectbox("Replace with", st.session_state.subjects, key="new_subj")
-
-                    if st.button(f"🔄 Replace '{old_subject}' with '{new_subject}' for all {target_grade} students", use_container_width=True):
-                        if old_subject == new_subject:
-                            st.warning("Old and new subjects are the same. No changes made.")
-                        else:
-                            affected = []
-                            for s in students_in_grade:
-                                subjects = s.get("subjects", [])
-                                if isinstance(subjects, str):
-                                    subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
-                                if old_subject in subjects:
-                                    affected.append(s)
-                            if not affected:
-                                st.info(f"No students in {target_grade} have '{old_subject}'.")
-                            else:
-                                confirm = st.checkbox(f"⚠️ I confirm: update {len(affected)} students in {target_grade} – replace '{old_subject}' with '{new_subject}'.")
-                                if confirm:
-                                    supabase = get_supabase()
-                                    success_count = 0
-                                    error_list = []
-                                    for student in affected:
-                                        try:
-                                            subjects = student.get("subjects", [])
-                                            if isinstance(subjects, str):
-                                                subjects = [subj.strip() for subj in subjects.split(",") if subj.strip()]
-                                            if old_subject in subjects:
-                                                idx = subjects.index(old_subject)
-                                                subjects[idx] = new_subject
-                                                supabase.table("students").update({"subjects": subjects}).eq("id", student["id"]).execute()
-                                                success_count += 1
-                                        except Exception as e:
-                                            error_list.append(f"{student['name']}: {str(e)}")
-                                    load_all_data()
-                                    if success_count > 0:
-                                        add_notification(f"🔄 Bulk update: replaced '{old_subject}' with '{new_subject}' for {success_count} students in {target_grade}", "info")
-                                        st.success(f"✅ Successfully replaced '{old_subject}' with '{new_subject}' for {success_count} students in {target_grade}.")
-                                    if error_list:
-                                        st.error(f"❌ Errors occurred for: {', '.join(error_list)}")
-                                    st.rerun()
-
         st.markdown("#### 📋 All Students")
         if st.session_state.students:
             df = pd.DataFrame(st.session_state.students)
-            display_cols = ["id", "name", "grade", "semester", "subjects"]
+            display_cols = ["id", "name", "grade", "section", "semester", "subjects"]
             st.dataframe(df[display_cols], use_container_width=True)
 
-            # ---------- EDIT STUDENT ----------
+            # Edit Student
             st.markdown("#### ✏️ Edit Student")
             student_options = {f"{s['name']} ({s['id']})": s for s in st.session_state.students}
             selected_student_label = st.selectbox("Select student to edit", options=list(student_options.keys()))
@@ -1598,23 +1579,23 @@ def show_admin_panel():
                             except (ValueError, TypeError):
                                 age_val = 5
                             new_age = st.number_input("Age", min_value=5, max_value=25, step=1, value=age_val)
-
-                            grade_index = [f"Grade {i}" for i in range(1, 13)].index(student["grade"]) if student["grade"] in [f"Grade {i}" for i in range(1, 13)] else 0
-                            new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1, 13)], index=grade_index)
+                            grade_idx = [f"Grade {i}" for i in range(1,13)].index(student["grade"]) if student["grade"] in [f"Grade {i}" for i in range(1,13)] else 0
+                            new_grade = st.selectbox("Grade", [f"Grade {i}" for i in range(1,13)], index=grade_idx)
                             new_semester = st.selectbox("Semester", ["Semester I", "Semester II"],
                                                         index=["Semester I", "Semester II"].index(student["semester"]) if student["semester"] in ["Semester I", "Semester II"] else 0)
                         with col2:
-                            gender_index = ["M", "F", "Other"].index(student.get("gender", "M")) if student.get("gender", "M") in ["M", "F", "Other"] else 0
-                            new_gender = st.selectbox("Gender", ["M", "F", "Other"], index=gender_index)
-                            new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name", ""))
-                            new_contact = st.text_input("Contact", value=student.get("contact", ""))
-                            available_subjects = st.session_state.subjects
-                            default_subjects = [s for s in student.get("subjects", []) if s in available_subjects]
-                            new_subjects = st.multiselect("Subjects", available_subjects, default=default_subjects)
+                            gender_idx = ["M","F","Other"].index(student.get("gender","M")) if student.get("gender","M") in ["M","F","Other"] else 0
+                            new_gender = st.selectbox("Gender", ["M","F","Other"], index=gender_idx)
+                            new_parent = st.text_input("Parent/Guardian", value=student.get("parent_name",""))
+                            new_contact = st.text_input("Contact", value=student.get("contact",""))
+                            new_section = st.text_input("Section", value=student.get("section","A"))
+                            new_subjects = GRADE_SUBJECTS.get(new_grade, [])
+                            st.info(f"📚 Subjects for {new_grade}: {', '.join(new_subjects)}")
                         if st.form_submit_button("💾 Update Student"):
                             student["name"] = new_name
                             student["age"] = new_age
                             student["grade"] = new_grade
+                            student["section"] = new_section
                             student["semester"] = new_semester
                             student["gender"] = new_gender
                             student["parent_name"] = new_parent
@@ -1630,6 +1611,7 @@ def show_admin_panel():
                             except Exception as e:
                                 st.error(f"❌ Failed to update student: {e}")
 
+            # Delete Student
             st.markdown("#### 🗑️ Delete Student")
             student_to_delete = st.selectbox(
                 "Select student to delete",
@@ -1668,8 +1650,7 @@ def show_admin_panel():
                         return None
                     return value
 
-                # ===== FIX: Use admin client for import =====
-                supabase = get_supabase_admin()   # <-- changed from get_supabase()
+                supabase = get_supabase_admin()
 
                 # --- Get current max student ID from database ---
                 try:
@@ -1696,9 +1677,13 @@ def show_admin_panel():
                         if pd.isna(name) or name == "":
                             continue
                         subject_cols = ["አማርኛ", "ግዕዝ", "እንግሊዘኛ(S", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"]
-                        subjects = [col for col in subject_cols if col in sheet_df.columns]
+                        # If grade is in GRADE_SUBJECTS, use full list
+                        if grade in GRADE_SUBJECTS:
+                            subjects = GRADE_SUBJECTS[grade]
+                        else:
+                            subjects = [clean_nan_value(s) for s in subject_cols if s in sheet_df.columns]
 
-                        # --- Assign unique ID and increment even if insert fails ---
+                        # Assign unique ID
                         student_id = f"S{next_num:04d}"
                         next_num += 1
 
@@ -1706,8 +1691,9 @@ def show_admin_panel():
                             "id": student_id,
                             "name": clean_nan_value(name),
                             "grade": clean_nan_value(grade),
+                            "section": clean_nan_value(row.get("ክፍል", "A")),
                             "semester": clean_nan_value(row.get("ሴሚስተር", "I")),
-                            "subjects": [clean_nan_value(s) for s in subjects],
+                            "subjects": subjects,
                             "age": clean_nan_value(row.get("እድሜ", 0)),
                             "gender": clean_nan_value(row.get("ፆታ", "")),
                             "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -1745,7 +1731,7 @@ def show_admin_panel():
             else:
                 st.warning("No students to export.")
 
-    # --- Tab 10: Comprehensive Approval Report ---
+    # --- Tab 10: Approval Report ---
     with tab10:
         st.markdown("### 📊 Comprehensive Grade Report (Subject-wise)")
         grade_options = [f"Grade {i}" for i in range(1, 13)]
@@ -1853,124 +1839,51 @@ def show_admin_panel():
     with tab11:
         show_penalty_log()
 
-# ---- STUDENT PANEL ----
+# ---- STUDENT PANEL (Profile only) ----
 def show_student_panel():
     st.markdown("### 👨‍🎓 Student Dashboard")
-    if not is_registration_open():
-        period = st.session_state.registration_period
-        st.error(f"""
-        🔴 **Registration is currently CLOSED**
-        Registration period:
-        - **Start:** {period['start'].strftime('%B %d, %Y %I:%M %p')}
-        - **End:** {period['end'].strftime('%B %d, %Y %I:%M %p')}
-        ⚠️ **ATTENTION:** Any registration attempt outside this period will be logged as a PENALTY.
-        """)
-        return
-
-    tab1, tab2 = st.tabs(["📝 Register", "📊 My Profile"])
-    with tab1:
-        st.markdown("#### 📝 Student Registration")
-        allowed, reason = check_action_allowed("Student Registration", st.session_state.current_user)
-        if not allowed:
-            st.error(f"⚠️ **PENALTY WARNING!**\n{reason}")
-            return
-        with st.form("student_registration"):
-            col1, col2 = st.columns(2)
-            with col1:
-                student_name = st.text_input("Full Name *", placeholder="e.g., Abebe Kebede")
-                age = st.number_input("Age *", min_value=5, max_value=25, step=1)
-                grade_options = [f"Grade {i}" for i in range(1, 13)]
-                grade_display_options = [get_grade_display(g) for g in grade_options]
-                selected_grade_idx = st.selectbox(
-                    "Grade *",
-                    range(len(grade_options)),
-                    format_func=lambda i: grade_display_options[i]
-                )
-                grade = grade_options[selected_grade_idx]
-            with col2:
-                semester = st.selectbox("Semester *", ["Semester I", "Semester II"])
-                parent_name = st.text_input("Parent/Guardian Name", placeholder="e.g., Kebede Alemu")
-                contact = st.text_input("Contact Number", placeholder="+251 9XX XXX XXX")
-            current_subjects = st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS
-            selected_subjects = st.multiselect("Select Subjects *", current_subjects, default=current_subjects[:3])
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                submitted = st.form_submit_button("📝 Register", use_container_width=True)
-            if submitted:
-                if not student_name or not age or not grade or not selected_subjects:
-                    st.error("❌ Please fill in all required fields (*).")
-                else:
-                    # Generate unique student ID
-                    existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
-                    next_num = max(existing_ids) + 1 if existing_ids else 1
-                    student_id = f"S{next_num:04d}"
-
-                    student = {
-                        "id": student_id,
-                        "name": student_name,
-                        "age": age,
-                        "grade": grade,
-                        "grade_display": get_grade_display(grade),
-                        "semester": semester,
-                        "subjects": selected_subjects,
-                        "parent_name": parent_name,
-                        "contact": contact,
-                        "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "evaluations_count": 0
-                    }
-                    supabase = get_supabase()
-                    try:
-                        supabase.table("students").insert(student).execute()
-                        load_all_data()
-                        add_notification(f"👨‍🎓 New student registered: {student_name} (Grade: {get_grade_display(grade)})", "success")
-                        st.success(f"✅ Student {student_name} registered successfully!")
-                        st.balloons()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Failed to register student: {e}")
-
-    with tab2:
-        st.markdown("#### 📊 My Profile")
-        student_name_input = st.text_input("Enter your registered name to view profile:", placeholder="Your full name...")
-        if student_name_input:
-            matching_students = [s for s in st.session_state.students if s["name"].lower() == student_name_input.lower()]
-            if matching_students:
-                student = matching_students[0]
-                student_evals = [e for e in st.session_state.evaluations if e.get("student_id") == student["id"]]
-                grade_display = get_grade_display(student["grade"])
-                grade_class = get_grade_class(student["grade"])
-                st.markdown(f"""
-                <div class="student-card">
-                    <h3>👤 {student['name']}</h3>
-                    <p><b>ID:</b> {student['id']}</p>
-                    <p><b>Age:</b> {student['age']}</p>
-                    <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
-                    <p><b>Semester:</b> {student['semester']}</p>
-                    <p><b>Subjects:</b> {', '.join(student['subjects'])}</p>
-                    <p><b>Registered:</b> {student.get('registered_at', 'N/A')}</p>
-                    <p><b>Evaluations:</b> {len(student_evals)}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                if student_evals:
-                    st.markdown("##### 📝 My Evaluations")
-                    for eval_item in student_evals:
-                        teacher_name = get_teacher_name(eval_item.get("teacher_id", ""))
-                        status = eval_item.get("status", "pending")
-                        status_label = "✅ Approved" if status == "approved" else "❌ Rejected" if status == "rejected" else "⏳ Pending"
-                        status_class = "badge-approved" if status == "approved" else "badge-rejected" if status == "rejected" else "badge-pending"
-                        st.markdown(f"""
-                        <div class="eval-card">
-                            <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
-                            <p><b>👨‍🏫 Teacher:</b> {teacher_name}</p>
-                            <p><b>📊 Overall Score:</b> {eval_item.get('overall_score', 0)}%</p>
-                            <p><b>📅 Date:</b> {eval_item.get('date', 'N/A')}</p>
-                            <p><b>Status:</b> <span class="{status_class}">{status_label}</span></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No evaluations yet.")
+    st.markdown("#### 📊 My Profile")
+    student_name_input = st.text_input("Enter your registered name to view profile:", placeholder="Your full name...")
+    if student_name_input:
+        matching_students = [s for s in st.session_state.students if s["name"].lower() == student_name_input.lower()]
+        if matching_students:
+            student = matching_students[0]
+            student_evals = [e for e in st.session_state.evaluations if e.get("student_id") == student["id"]]
+            grade_display = get_grade_display(student["grade"])
+            grade_class = get_grade_class(student["grade"])
+            st.markdown(f"""
+            <div class="student-card">
+                <h3>👤 {student['name']}</h3>
+                <p><b>ID:</b> {student['id']}</p>
+                <p><b>Age:</b> {student['age']}</p>
+                <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
+                <p><b>Section:</b> {student.get('section', 'N/A')}</p>
+                <p><b>Semester:</b> {student['semester']}</p>
+                <p><b>Subjects:</b> {', '.join(student['subjects'])}</p>
+                <p><b>Registered:</b> {student.get('registered_at', 'N/A')}</p>
+                <p><b>Evaluations:</b> {len(student_evals)}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if student_evals:
+                st.markdown("##### 📝 My Evaluations")
+                for eval_item in student_evals:
+                    teacher_name = get_teacher_name(eval_item.get("teacher_id", ""))
+                    status = eval_item.get("status", "pending")
+                    status_label = "✅ Approved" if status == "approved" else "❌ Rejected" if status == "rejected" else "⏳ Pending"
+                    status_class = "badge-approved" if status == "approved" else "badge-rejected" if status == "rejected" else "badge-pending"
+                    st.markdown(f"""
+                    <div class="eval-card">
+                        <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
+                        <p><b>👨‍🏫 Teacher:</b> {teacher_name}</p>
+                        <p><b>📊 Overall Score:</b> {eval_item.get('overall_score', 0)}%</p>
+                        <p><b>📅 Date:</b> {eval_item.get('date', 'N/A')}</p>
+                        <p><b>Status:</b> <span class="{status_class}">{status_label}</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
             else:
-                st.warning("No student found with that name. Please check your spelling.")
+                st.info("No evaluations yet.")
+        else:
+            st.warning("No student found with that name. Please check your spelling.")
 
 # ---- TEACHER PANEL ----
 def show_teacher_panel():
@@ -1984,26 +1897,49 @@ def show_teacher_panel():
     teacher_id = teacher["id"]
     teacher_name = teacher["name"]
     teacher_subject = teacher.get("subject", "")
+    assignments = json.loads(teacher.get("assignments", "[]"))
 
     if not teacher_subject:
         st.warning("No subject assigned. Please contact administrator.")
         return
 
-    if "teacher_selected_grade" not in st.session_state:
-        st.session_state.teacher_selected_grade = "Grade 1"
+    if not assignments:
+        st.warning("No grade/section assignments. Please contact administrator.")
+        return
 
-    grade_options = [f"Grade {i}" for i in range(1, 13)]
+    # Build list of assigned grades
+    assigned_grades = list(set([a["grade"] for a in assignments]))
+    if "teacher_selected_grade" not in st.session_state or st.session_state.teacher_selected_grade not in assigned_grades:
+        st.session_state.teacher_selected_grade = assigned_grades[0] if assigned_grades else "Grade 1"
+
     selected_grade = st.selectbox(
         "📚 Select Grade to Evaluate",
-        grade_options,
-        index=grade_options.index(st.session_state.teacher_selected_grade),
+        assigned_grades,
+        index=assigned_grades.index(st.session_state.teacher_selected_grade) if st.session_state.teacher_selected_grade in assigned_grades else 0,
         key="grade_selector"
     )
     st.session_state.teacher_selected_grade = selected_grade
 
+    # Get sections assigned for this grade
+    assigned_sections = [a["section"] for a in assignments if a["grade"] == selected_grade]
+    if not assigned_sections:
+        st.error("No sections assigned for this grade. Contact admin.")
+        return
+
+    if "teacher_selected_section" not in st.session_state or st.session_state.teacher_selected_section not in assigned_sections:
+        st.session_state.teacher_selected_section = assigned_sections[0]
+
+    selected_section = st.selectbox(
+        "📚 Select Section",
+        assigned_sections,
+        index=assigned_sections.index(st.session_state.teacher_selected_section) if st.session_state.teacher_selected_section in assigned_sections else 0,
+        key="section_selector"
+    )
+    st.session_state.teacher_selected_section = selected_section
+
+    # Validate subject for grade
     valid_subjects = GRADE_SUBJECTS.get(selected_grade, [])
     is_subject_valid = teacher_subject in valid_subjects
-
     st.markdown(f"""
     <div style="background:#F8F9FA;padding:0.75rem;border-radius:8px;margin-bottom:0.5rem;border:1px solid #E8EAED;">
         <b>📋 Subjects for {selected_grade}:</b> {', '.join(valid_subjects) if valid_subjects else 'Not defined'}
@@ -2015,12 +1951,12 @@ def show_teacher_panel():
         ⚠️ **Subject Mismatch!**  
         Your assigned subject is **{teacher_subject}**, but this grade requires one of:  
         **{', '.join(valid_subjects)}**.  
-        Please select a different grade or contact the administrator to update your assigned subject.
+        Please select a different grade or contact the administrator.
         """)
 
-    def get_eligible_students(grade):
+    def get_eligible_students(grade, section):
         return [s for s in st.session_state.students
-                if s.get("grade") == grade
+                if s.get("grade") == grade and s.get("section") == section
                 and teacher_subject in s.get("subjects", [])]
 
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -2030,18 +1966,19 @@ def show_teacher_panel():
         "✅ Approval Status"
     ])
 
-    # ---------- TAB 1: Submit Batch Evaluation ----------
+    # ---------- TAB 1: Submit Batch ----------
     with tab1:
         st.markdown("#### 📝 Submit Batch Evaluation")
         st.markdown(f"""
         <div style="background:#E8F0FE;padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid #1A73E8;">
             <h4 style="margin:0;color:#1A73E8;font-size:1.8rem;">👨‍🏫 Teacher: {teacher_name}</h4>
             <p style="margin:0;color:#202124;font-size:1.2rem;"><b>📚 Subject:</b> {teacher_subject}</p>
+            <p style="margin:0;color:#202124;font-size:1.2rem;"><b>📋 Grade:</b> {selected_grade} · <b>Section:</b> {selected_section}</p>
         </div>
         """, unsafe_allow_html=True)
 
         if not is_subject_valid:
-            st.error("❌ You cannot submit evaluations for this grade because your subject is not part of the curriculum for this grade. Please select a valid grade.")
+            st.error("❌ You cannot submit evaluations for this grade because your subject is not in the curriculum.")
             return
 
         allowed, reason = check_action_allowed("Student Evaluation (Batch)", teacher_name)
@@ -2049,15 +1986,16 @@ def show_teacher_panel():
             st.error(f"⚠️ **PENALTY WARNING!**\n{reason}")
             return
 
-        eligible_students = get_eligible_students(selected_grade)
+        eligible_students = get_eligible_students(selected_grade, selected_section)
         if not eligible_students:
-            st.info(f"No students in {selected_grade} taking {teacher_subject}.")
+            st.info(f"No students in {selected_grade} ({selected_section}) taking {teacher_subject}.")
             return
 
         existing_batch = None
         for b in st.session_state.batches:
             if (b.get("teacher_id") == teacher_id and
                 b.get("grade") == selected_grade and
+                b.get("section") == selected_section and
                 b.get("subject") == teacher_subject and
                 b.get("status") == "pending"):
                 existing_batch = b
@@ -2087,7 +2025,6 @@ def show_teacher_panel():
 
         st.markdown("**Set assessment weights and maximum scores:**")
         weight_options = [0,5,10,15,20,30,40,50]
-
         def get_max_options(current_max):
             opts = MAX_SCORE_OPTIONS.copy()
             if current_max not in opts:
@@ -2099,28 +2036,23 @@ def show_teacher_panel():
         with col1:
             st.markdown("**Test 1**")
             w1 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 1"]), key="w1")
-            max_opts1 = get_max_options(max_scores["Test 1"])
-            max1 = st.selectbox("Max Score", options=max_opts1, index=max_opts1.index(max_scores["Test 1"]), key="max1")
+            max1 = st.selectbox("Max Score", options=get_max_options(max_scores["Test 1"]), index=get_max_options(max_scores["Test 1"]).index(max_scores["Test 1"]), key="max1")
         with col2:
             st.markdown("**Test 2**")
             w2 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 2"]), key="w2")
-            max_opts2 = get_max_options(max_scores["Test 2"])
-            max2 = st.selectbox("Max Score", options=max_opts2, index=max_opts2.index(max_scores["Test 2"]), key="max2")
+            max2 = st.selectbox("Max Score", options=get_max_options(max_scores["Test 2"]), index=get_max_options(max_scores["Test 2"]).index(max_scores["Test 2"]), key="max2")
         with col3:
             st.markdown("**Test 3**")
             w3 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 3"]), key="w3")
-            max_opts3 = get_max_options(max_scores["Test 3"])
-            max3 = st.selectbox("Max Score", options=max_opts3, index=max_opts3.index(max_scores["Test 3"]), key="max3")
+            max3 = st.selectbox("Max Score", options=get_max_options(max_scores["Test 3"]), index=get_max_options(max_scores["Test 3"]).index(max_scores["Test 3"]), key="max3")
         with col4:
             st.markdown("**Test 4**")
             w4 = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Test 4"]), key="w4")
-            max_opts4 = get_max_options(max_scores["Test 4"])
-            max4 = st.selectbox("Max Score", options=max_opts4, index=max_opts4.index(max_scores["Test 4"]), key="max4")
+            max4 = st.selectbox("Max Score", options=get_max_options(max_scores["Test 4"]), index=get_max_options(max_scores["Test 4"]).index(max_scores["Test 4"]), key="max4")
         with col5:
             st.markdown("**Final Exam**")
             wf = st.selectbox("Weight", options=weight_options, index=weight_options.index(weights["Final Exam"]), key="wf")
-            max_optsf = get_max_options(max_scores["Final Exam"])
-            maxf = st.selectbox("Max Score", options=max_optsf, index=max_optsf.index(max_scores["Final Exam"]), key="maxf")
+            maxf = st.selectbox("Max Score", options=get_max_options(max_scores["Final Exam"]), index=get_max_options(max_scores["Final Exam"]).index(max_scores["Final Exam"]), key="maxf")
 
         new_weights = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
         new_max_scores = {"Test 1": max1, "Test 2": max2, "Test 3": max3, "Test 4": max4, "Final Exam": maxf}
@@ -2187,7 +2119,7 @@ def show_teacher_panel():
                 try:
                     supabase.table("batches").update(existing_batch).eq("id", existing_batch["id"]).execute()
                     load_all_data()
-                    add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {teacher_subject})", "info")
+                    add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {selected_section} {teacher_subject})", "info")
                     st.success("✅ Batch updated successfully! Awaiting approval.")
                     st.rerun()
                 except Exception as e:
@@ -2198,6 +2130,7 @@ def show_teacher_panel():
                     "teacher_id": teacher_id,
                     "teacher_name": teacher_name,
                     "grade": selected_grade,
+                    "section": selected_section,
                     "subject": teacher_subject,
                     "students": students_list,
                     "weights": new_weights,
@@ -2210,7 +2143,7 @@ def show_teacher_panel():
                 try:
                     supabase.table("batches").insert(batch).execute()
                     load_all_data()
-                    add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {teacher_subject})", "info")
+                    add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {selected_section} {teacher_subject})", "info")
                     st.success("✅ Batch submitted successfully! Waiting for admin approval.")
                     st.balloons()
                     st.rerun()
@@ -2236,6 +2169,7 @@ def show_teacher_panel():
                         <div>
                             <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">👨‍🏫 {batch['teacher_name']} · 📚 {batch['subject']}</h4>
                             <p><b>📋 Grade:</b> {batch['grade']}</p>
+                            <p><b>📌 Section:</b> {batch.get('section', 'N/A')}</p>
                             <p><b>👥 Students:</b> {student_count}</p>
                             <p><b>📅 Submitted:</b> {batch.get('submitted_at', 'N/A')}</p>
                             <p><b>Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
@@ -2251,10 +2185,11 @@ def show_teacher_panel():
                     if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}"):
                         df_batch = pd.DataFrame(batch["students"])
                         df_batch["Grade"] = batch["grade"]
+                        df_batch["Section"] = batch.get("section", "")
                         df_batch["Subject"] = batch["subject"]
                         df_batch["Teacher"] = batch["teacher_name"]
                         df_batch["Remarks"] = batch_remarks
-                        cols = ["student_id", "student_name", "Grade", "Subject", "Teacher", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall", "Remarks"]
+                        cols = ["student_id", "student_name", "Grade", "Section", "Subject", "Teacher", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall", "Remarks"]
                         available_cols = [c for c in cols if c in df_batch.columns]
                         df_export = df_batch[available_cols]
                         output = io.BytesIO()
@@ -2284,7 +2219,6 @@ def show_teacher_panel():
 
                     st.markdown("**Set assessment weights and maximum scores:**")
                     weight_options_edit = [0,5,10,15,20,30,40,50]
-
                     def get_max_options_edit(current_max):
                         opts = MAX_SCORE_OPTIONS.copy()
                         if current_max not in opts:
@@ -2294,30 +2228,20 @@ def show_teacher_panel():
 
                     col1, col2, col3, col4, col5 = st.columns(5)
                     with col1:
-                        st.markdown("**Test 1**")
                         w1 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 1"]), key="edit_w1")
-                        max_opts1 = get_max_options_edit(max_scores["Test 1"])
-                        max1 = st.selectbox("Max Score", options=max_opts1, index=max_opts1.index(max_scores["Test 1"]), key="edit_max1")
+                        max1 = st.selectbox("Max Score", options=get_max_options_edit(max_scores["Test 1"]), index=get_max_options_edit(max_scores["Test 1"]).index(max_scores["Test 1"]), key="edit_max1")
                     with col2:
-                        st.markdown("**Test 2**")
                         w2 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 2"]), key="edit_w2")
-                        max_opts2 = get_max_options_edit(max_scores["Test 2"])
-                        max2 = st.selectbox("Max Score", options=max_opts2, index=max_opts2.index(max_scores["Test 2"]), key="edit_max2")
+                        max2 = st.selectbox("Max Score", options=get_max_options_edit(max_scores["Test 2"]), index=get_max_options_edit(max_scores["Test 2"]).index(max_scores["Test 2"]), key="edit_max2")
                     with col3:
-                        st.markdown("**Test 3**")
                         w3 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 3"]), key="edit_w3")
-                        max_opts3 = get_max_options_edit(max_scores["Test 3"])
-                        max3 = st.selectbox("Max Score", options=max_opts3, index=max_opts3.index(max_scores["Test 3"]), key="edit_max3")
+                        max3 = st.selectbox("Max Score", options=get_max_options_edit(max_scores["Test 3"]), index=get_max_options_edit(max_scores["Test 3"]).index(max_scores["Test 3"]), key="edit_max3")
                     with col4:
-                        st.markdown("**Test 4**")
                         w4 = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Test 4"]), key="edit_w4")
-                        max_opts4 = get_max_options_edit(max_scores["Test 4"])
-                        max4 = st.selectbox("Max Score", options=max_opts4, index=max_opts4.index(max_scores["Test 4"]), key="edit_max4")
+                        max4 = st.selectbox("Max Score", options=get_max_options_edit(max_scores["Test 4"]), index=get_max_options_edit(max_scores["Test 4"]).index(max_scores["Test 4"]), key="edit_max4")
                     with col5:
-                        st.markdown("**Final Exam**")
                         wf = st.selectbox("Weight", options=weight_options_edit, index=weight_options_edit.index(weights["Final Exam"]), key="edit_wf")
-                        max_optsf = get_max_options_edit(max_scores["Final Exam"])
-                        maxf = st.selectbox("Max Score", options=max_optsf, index=max_optsf.index(max_scores["Final Exam"]), key="edit_maxf")
+                        maxf = st.selectbox("Max Score", options=get_max_options_edit(max_scores["Final Exam"]), index=get_max_options_edit(max_scores["Final Exam"]).index(max_scores["Final Exam"]), key="edit_maxf")
 
                     new_weights_edit = {"Test 1": w1, "Test 2": w2, "Test 3": w3, "Test 4": w4, "Final Exam": wf}
                     new_max_scores_edit = {"Test 1": max1, "Test 2": max2, "Test 3": max3, "Test 4": max4, "Final Exam": maxf}
@@ -2380,12 +2304,11 @@ def show_teacher_panel():
                             batch_to_edit["max_scores"] = new_max_scores_edit
                             batch_to_edit["remarks"] = remarks
                             batch_to_edit["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-
                             supabase = get_supabase()
                             try:
                                 supabase.table("batches").update(batch_to_edit).eq("id", batch_to_edit["id"]).execute()
                                 load_all_data()
-                                add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit['subject']})", "info")
+                                add_notification(f"📝 Batch updated by {teacher_name} ({batch_to_edit['grade']} {batch_to_edit.get('section','')} {batch_to_edit['subject']})", "info")
                                 st.success("✅ Batch updated successfully! Awaiting approval.")
                                 st.session_state.edit_batch_id = None
                                 st.rerun()
@@ -2402,10 +2325,10 @@ def show_teacher_panel():
     # ---------- TAB 3: My Students ----------
     with tab3:
         st.markdown("#### 📊 My Students")
-        students_in_grade = get_eligible_students(selected_grade)
-        if students_in_grade:
-            st.markdown(f"**Students in {selected_grade} taking {teacher_subject}:**")
-            for s in students_in_grade:
+        students_in_grade_section = get_eligible_students(selected_grade, selected_section)
+        if students_in_grade_section:
+            st.markdown(f"**Students in {selected_grade} ({selected_section}) taking {teacher_subject}:**")
+            for s in students_in_grade_section:
                 evals = get_approved_evaluations_for_student(s["id"])
                 approved_count = len(evals)
                 status = "✅ Approved" if approved_count > 0 else "📝 Not Evaluated"
@@ -2415,11 +2338,12 @@ def show_teacher_panel():
                 <div class="student-card">
                     <h4>👤 {s['name']}</h4>
                     <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
+                    <p><b>Section:</b> {s.get('section', 'N/A')}</p>
                     <p><b>Status:</b> {status}</p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info(f"No students in {selected_grade} taking your subject.")
+            st.info(f"No students in {selected_grade} ({selected_section}) taking your subject.")
 
     # ---------- TAB 4: Approval Status ----------
     with tab4:
@@ -2509,7 +2433,7 @@ def main():
         elif role == "teacher":
             nav_options = ["👨‍🏫 My Dashboard", "📝 Submit Evaluation", "📊 My Students", "✅ Approval Status", "⚠️ My Penalties", "🔔 Notifications"]
         else:
-            nav_options = ["👨‍🎓 My Profile", "📝 Register", "⚠️ My Penalties", "🔔 Notifications"]
+            nav_options = ["👨‍🎓 My Profile", "⚠️ My Penalties", "🔔 Notifications"]   # no registration
 
         selected_page = st.radio("Navigation", nav_options, index=0)
         st.session_state.current_page = selected_page
@@ -2620,7 +2544,6 @@ def main():
                                     counter += 1
                                 username = f"{username}{counter}"
                             password = generate_random_password()
-                            # Use same ID fix for this simple add too
                             existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
                             next_num = max(existing_ids) + 1 if existing_ids else 1
                             teacher_id = f"T{next_num:04d}"
@@ -2636,7 +2559,8 @@ def main():
                                 "email": email,
                                 "username": username,
                                 "password": password,
-                                "added": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                "added": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "assignments": json.dumps([{"grade": "Grade 1", "section": "A"}])  # default
                             })
                             add_notification(f"👨‍🏫 New teacher: {name}", "success")
                             sync_all()
@@ -2703,15 +2627,15 @@ def main():
             show_notification_center()
 
     elif role == "teacher":
-        if current_page == "👨‍🏫 My Dashboard" or current_page == "📝 Submit Evaluation" or current_page == "📊 My Students" or current_page == "✅ Approval Status":
+        if current_page in ["👨‍🏫 My Dashboard", "📝 Submit Evaluation", "📊 My Students", "✅ Approval Status"]:
             show_teacher_panel()
         elif current_page == "⚠️ My Penalties":
             show_penalty_log()
         elif current_page == "🔔 Notifications":
             show_notification_center()
 
-    else:
-        if current_page == "👨‍🎓 My Profile" or current_page == "📝 Register":
+    else:  # student
+        if current_page == "👨‍🎓 My Profile":
             show_student_panel()
         elif current_page == "⚠️ My Penalties":
             show_penalty_log()
