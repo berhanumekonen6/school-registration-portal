@@ -1072,7 +1072,7 @@ def show_admin_panel():
         st.markdown("##### 📌 Assignments (Grade & Section)")
         st.caption("Add the grade(s) and section(s) this teacher is responsible for.")
         if "assignments_list" not in st.session_state:
-            st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A"}]
+            st.session_state.assignments_list = [{"grade": "Grade", "section": ""}]
 
         # Display and edit assignments with add/remove buttons (outside form)
         for i, assignment in enumerate(st.session_state.assignments_list):
