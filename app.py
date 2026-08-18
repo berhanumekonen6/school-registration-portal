@@ -1083,10 +1083,15 @@ def show_admin_panel():
                     username = f"{username}{counter}"
                 password = generate_random_password()
                 hashed_pw = hash_password(password)
-                teacher_id = f"T{len(st.session_state.teachers)+1:04d}"
+
+                # --- FIXED: Generate unique teacher ID from max existing ---
+                existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
+                next_num = max(existing_ids) + 1 if existing_ids else 1
+                teacher_id = f"T{next_num:04d}"
+
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-                supabase = get_supabase()  # insert uses anon (works)
+                supabase = get_supabase()  # insert uses anon
                 try:
                     user_data = {
                         "username": username,
@@ -1150,7 +1155,7 @@ def show_admin_panel():
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
-                            supabase = get_supabase()  # update with anon may work if RLS allows; if not, we can use admin
+                            supabase = get_supabase()
                             try:
                                 supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
                                 if teacher.get("username") in st.session_state.user_db:
@@ -1173,7 +1178,7 @@ def show_admin_panel():
                 teacher_id = teacher_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete this teacher", type="primary", use_container_width=True):
                     try:
-                        supabase_admin = get_supabase_admin()  # ADMIN client for DELETE
+                        supabase_admin = get_supabase_admin()
                         username_to_remove = None
                         for t in st.session_state.teachers:
                             if t["id"] == teacher_id:
@@ -1393,7 +1398,7 @@ def show_admin_panel():
                             }
                             st.session_state.evaluations.append(eval_item)
                         batch["status"] = "approved"
-                        supabase = get_supabase()  # update uses anon (may work if RLS allows)
+                        supabase = get_supabase()
                         try:
                             supabase.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
                             load_all_data()
@@ -1474,8 +1479,13 @@ def show_admin_panel():
                     if not name or not subjects:
                         st.error("Name and at least one subject are required.")
                     else:
+                        # --- FIXED: Generate unique student ID from max existing ---
+                        existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
+                        next_num = max(existing_ids) + 1 if existing_ids else 1
+                        student_id = f"S{next_num:04d}"
+
                         new_student = {
-                            "id": f"S{len(st.session_state.students)+1:04d}",
+                            "id": student_id,
                             "name": name,
                             "age": age,
                             "gender": gender,
@@ -1540,7 +1550,7 @@ def show_admin_panel():
                             else:
                                 confirm = st.checkbox(f"⚠️ I confirm: update {len(affected)} students in {target_grade} – replace '{old_subject}' with '{new_subject}'.")
                                 if confirm:
-                                    supabase = get_supabase()  # update uses anon (may need admin)
+                                    supabase = get_supabase()
                                     success_count = 0
                                     error_list = []
                                     for student in affected:
@@ -1630,7 +1640,7 @@ def show_admin_panel():
                 student_id = student_to_delete.split("(")[-1].replace(")", "")
                 if st.button("Delete Selected Student", type="primary", use_container_width=True):
                     if st.checkbox(f"⚠️ Confirm delete of {student_to_delete}?"):
-                        supabase_admin = get_supabase_admin()  # ADMIN client for DELETE
+                        supabase_admin = get_supabase_admin()
                         try:
                             supabase_admin.table("students").delete().eq("id", student_id).execute()
                             supabase_admin.table("evaluations").delete().eq("student_id", student_id).execute()
@@ -1676,8 +1686,13 @@ def show_admin_panel():
                             continue
                         subject_cols = ["አማርኛ", "ግዕዝ", "እንግሊዘኛ(S", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"]
                         subjects = [col for col in subject_cols if col in sheet_df.columns]
+                        # Generate a unique ID for imported students as well
+                        existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
+                        next_num = max(existing_ids) + 1 if existing_ids else 1
+                        student_id = f"S{next_num:04d}"
+
                         student = {
-                            "id": f"S{len(st.session_state.students)+1:04d}",
+                            "id": student_id,
                             "name": clean_nan_value(name),
                             "grade": clean_nan_value(grade),
                             "semester": clean_nan_value(row.get("ሴሚስተር", "I")),
@@ -1873,8 +1888,13 @@ def show_student_panel():
                 if not student_name or not age or not grade or not selected_subjects:
                     st.error("❌ Please fill in all required fields (*).")
                 else:
+                    # Generate unique student ID
+                    existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
+                    next_num = max(existing_ids) + 1 if existing_ids else 1
+                    student_id = f"S{next_num:04d}"
+
                     student = {
-                        "id": f"S{len(st.session_state.students)+1:04d}",
+                        "id": student_id,
                         "name": student_name,
                         "age": age,
                         "grade": grade,
@@ -2588,13 +2608,17 @@ def main():
                                     counter += 1
                                 username = f"{username}{counter}"
                             password = generate_random_password()
+                            # Use same ID fix for this simple add too
+                            existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
+                            next_num = max(existing_ids) + 1 if existing_ids else 1
+                            teacher_id = f"T{next_num:04d}"
                             st.session_state.user_db[username] = {
                                 "password": hash_password(password),
                                 "role": "teacher",
                                 "name": name
                             }
                             st.session_state.teachers.append({
-                                "id": f"T{len(st.session_state.teachers)+1:04d}",
+                                "id": teacher_id,
                                 "name": name,
                                 "subject": subject,
                                 "email": email,
