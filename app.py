@@ -231,7 +231,7 @@ def init_user_db():
         load_all_data()
     if "admin" not in st.session_state.user_db:
         st.session_state.user_db["admin"] = {
-            "password": hash_password("admin123"),
+            "password": hash_password("adminb1"),
             "role": "admin",
             "name": "School Administrator"
         }
