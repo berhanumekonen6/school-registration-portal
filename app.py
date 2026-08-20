@@ -979,6 +979,29 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
+# ---- Helper function to compute student rank ----
+def get_student_rank(student_id, grade, section):
+    """Return rank and total students in the same grade and section."""
+    students = [s for s in st.session_state.students if s.get('grade') == grade and s.get('section') == section]
+    if not students:
+        return 0, 0
+    student_avgs = []
+    for s in students:
+        evals = get_approved_evaluations_for_student(s['id'])
+        if evals:
+            avg = round(sum(e.get('overall_score', 0) for e in evals) / len(evals), 2)
+        else:
+            avg = 0
+        student_avgs.append({'id': s['id'], 'avg': avg})
+    sorted_students = sorted(student_avgs, key=lambda x: x['avg'], reverse=True)
+    rank = 1
+    for i, item in enumerate(sorted_students):
+        if item['id'] == student_id:
+            rank = i + 1
+            break
+    total = len(sorted_students)
+    return rank, total
+
 # ===================================================================
 # Penalty Log and Notification Center
 # ===================================================================
@@ -1034,15 +1057,15 @@ def show_notification_center():
         st.info("No notifications")
 
 # ===================================================================
-# COMPREHENSIVE TWO-PAGE STUDENT REPORT CARD
+# ATTRACTIVE TWO-PAGE STUDENT REPORT CARD
 # ===================================================================
 
 def generate_student_card(student, semester="Semester III"):
     """
-    Generate a comprehensive two-sided Ethiopian student report card.
-    Front: school header, student info, marks table (two semesters), totals/averages,
-           absence/conduct/rank, grading policy.
-    Back: teacher/parent comments and signatures for both semesters, director's signature.
+    Generate an attractive two-sided Ethiopian student report card.
+    Front: school header, student info, results table, summary (absence, rank),
+           grading policy.
+    Back: subject summary, teacher/parent comments and signatures.
     """
     # Get subject scores for both semesters
     sem1_scores = get_student_subject_scores(student["id"], "Semester I")
@@ -1075,13 +1098,49 @@ def generate_student_card(student, semester="Semester III"):
         elif score >= 50: return "መጠነኛ / Fair"
         else: return "ዝቅተኛ / Poor"
     
-    # Placeholder data for fields not yet stored in the student object
+    # Placeholder data
     address = student.get('address', '_________')
     academic_year = "2019 ዓ.ም."
     promoted_to = student.get('promoted_to', '_________')
     director_name = st.session_state.get('director_name', 'በረከት ስጦታዉ አለኸኝ (Bereket Setotaw Alehegn)')
     
-    # Start building HTML
+    # Compute rank
+    grade = student.get('grade')
+    section = student.get('section')
+    rank, total = get_student_rank(student['id'], grade, section) if grade and section else (0, 0)
+    rank_display = f"{rank}ኛ / {total}" if total > 0 else "N/A"
+    
+    # Current date for "የቀረበት ቀን"
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Sort subjects for consistent display
+    sorted_subjects = sorted(all_subjects)
+    total_sem1 = 0
+    total_sem2 = 0
+    subject_count = len(sorted_subjects)
+    
+    # Build subject rows for the table
+    subject_rows = ""
+    for subj in sorted_subjects:
+        s1 = sem1_scores.get(subj, 0)
+        s2 = sem2_scores.get(subj, 0)
+        avg = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
+        total_sem1 += s1
+        total_sem2 += s2
+        subject_rows += f"""
+                        <tr>
+                            <td style="text-align:left; padding-left:10px;">{subj}</td>
+                            <td style="text-align:center;">{s1}</td>
+                            <td style="text-align:center;">{s2}</td>
+                            <td style="text-align:center; font-weight:600;">{avg}</td>
+                        </tr>
+        """
+    
+    avg_sem1 = round(total_sem1 / subject_count, 1) if subject_count > 0 else 0
+    avg_sem2 = round(total_sem2 / subject_count, 1) if subject_count > 0 else 0
+    overall_avg = round((avg_sem1 + avg_sem2) / 2, 1) if subject_count > 0 else 0
+    
+    # Build HTML
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -1089,13 +1148,13 @@ def generate_student_card(student, semester="Semester III"):
         <meta charset="UTF-8">
         <title>Student Report Card - {student['name']}</title>
         <style>
-            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@300;400;600;700&display=swap');
             
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
             body {{
                 font-family: 'Segoe UI', 'Noto Sans Ethiopic', Tahoma, Geneva, Verdana, sans-serif;
-                background: #e8ecf1;
+                background: #f0f2f5;
                 display: flex;
                 justify-content: center;
                 align-items: center;
@@ -1105,33 +1164,46 @@ def generate_student_card(student, semester="Semester III"):
             }}
             
             .card-container {{
-                max-width: 820px;
+                max-width: 900px;
                 width: 100%;
                 background: #ffffff;
-                border-radius: 8px;
-                box-shadow: 0 8px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.06);
+                border-radius: 16px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.15), 0 4px 20px rgba(0,0,0,0.05);
                 overflow: hidden;
-                border: 1px solid #d0d5d0;
+                border: 1px solid #e0e5e0;
+                transition: box-shadow 0.3s ease;
             }}
             
-            /* ===== FRONT PAGE STYLES ===== */
+            .card-container:hover {{
+                box-shadow: 0 25px 70px rgba(0,0,0,0.2);
+            }}
+            
+            /* ===== HEADER ===== */
             .header {{
-                background: #1a472a;
-                padding: 18px 25px 14px 25px;
+                background: linear-gradient(135deg, #1a472a 0%, #2d6a4f 60%, #40916c 100%);
+                padding: 22px 30px 16px 30px;
                 text-align: center;
+                position: relative;
                 border-bottom: 4px solid #d4a843;
             }}
             
+            .header .school-icon {{
+                font-size: 2.5rem;
+                margin-right: 10px;
+                vertical-align: middle;
+            }}
+            
             .header .school-name-amharic {{
-                font-size: 1.8rem;
+                font-size: 2rem;
                 font-weight: 700;
                 color: #ffffff;
                 letter-spacing: 2px;
                 text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                display: inline-block;
             }}
             
             .header .school-name-english {{
-                font-size: 1rem;
+                font-size: 1.1rem;
                 font-weight: 400;
                 color: #c8e6c9;
                 letter-spacing: 1px;
@@ -1139,28 +1211,29 @@ def generate_student_card(student, semester="Semester III"):
             }}
             
             .header .card-title {{
-                margin-top: 6px;
+                margin-top: 8px;
                 display: flex;
                 justify-content: center;
-                gap: 20px;
+                gap: 25px;
                 flex-wrap: wrap;
                 border-top: 1px solid rgba(255,255,255,0.15);
-                padding-top: 8px;
+                padding-top: 10px;
             }}
             
             .header .card-title span {{
-                font-size: 0.95rem;
+                font-size: 1rem;
                 font-weight: 600;
                 color: #f5d06a;
                 letter-spacing: 2px;
             }}
             
+            /* ===== STUDENT INFO ===== */
             .student-info {{
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 4px 20px;
-                background: #f5f8f5;
-                padding: 12px 25px;
+                gap: 6px 25px;
+                background: #f8faf8;
+                padding: 14px 25px;
                 border-bottom: 2px solid #e0e8e0;
             }}
             
@@ -1185,65 +1258,118 @@ def generate_student_card(student, semester="Semester III"):
                 padding-top: 1px;
             }}
             
+            /* ===== FRONT PAGE: TWO COLUMNS ===== */
+            .front-grid {{
+                display: grid;
+                grid-template-columns: 1.2fr 1.8fr;
+                gap: 20px;
+                padding: 16px 25px 12px 25px;
+                background: #ffffff;
+            }}
+            
+            /* Left column: Grading Policy */
+            .grading-policy {{
+                background: #f5f8f5;
+                border-radius: 10px;
+                padding: 14px 16px;
+                border: 1px solid #e0e8e0;
+                box-shadow: inset 0 1px 3px rgba(0,0,0,0.03);
+            }}
+            
+            .grading-policy .title {{
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: #1a472a;
+                text-align: center;
+                margin-bottom: 8px;
+                letter-spacing: 1px;
+                border-bottom: 2px solid #1a472a;
+                padding-bottom: 4px;
+            }}
+            
+            .grading-policy .policy-item {{
+                display: flex;
+                justify-content: space-between;
+                padding: 3px 0;
+                border-bottom: 1px dotted #d0d8d0;
+                font-size: 0.78rem;
+            }}
+            
+            .grading-policy .policy-item .range {{
+                font-weight: 600;
+                color: #1a472a;
+            }}
+            
+            .grading-policy .policy-item .grade {{
+                color: #2a5a3a;
+                text-align: right;
+            }}
+            
+            .grading-policy .policy-note {{
+                font-size: 0.7rem;
+                color: #6a7a6a;
+                margin-top: 8px;
+                text-align: center;
+                font-style: italic;
+                border-top: 1px solid #d0d8d0;
+                padding-top: 6px;
+            }}
+            
+            /* Right column: Results Table */
             .results-section {{
-                padding: 14px 25px 10px 25px;
+                background: #ffffff;
+                border-radius: 10px;
+                border: 1px solid #e0e8e0;
+                overflow: hidden;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.02);
             }}
             
             .results-title {{
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding-bottom: 6px;
-                border-bottom: 2px solid #2d6a4f;
-                margin-bottom: 6px;
-            }}
-            
-            .results-title .title {{
-                font-size: 1.1rem;
+                background: #e8f5e9;
+                padding: 8px 14px;
                 font-weight: 700;
                 color: #1a472a;
-                letter-spacing: 0.5px;
+                border-bottom: 2px solid #1a472a;
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.9rem;
             }}
             
             .results-title .overall-grade {{
-                font-size: 0.85rem;
-                font-weight: 600;
-                color: #1a472a;
-                background: #e8f5e9;
-                padding: 4px 16px;
+                background: #1a472a;
+                color: white;
+                padding: 2px 14px;
                 border-radius: 20px;
+                font-size: 0.75rem;
+                font-weight: 600;
             }}
             
             table {{
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 0.9rem;
+                font-size: 0.82rem;
             }}
             
             th {{
-                background: #e8f0e8;
+                background: #eef3ee;
                 color: #1a3a1a;
-                padding: 6px 10px;
+                padding: 5px 8px;
                 text-align: center;
                 font-weight: 700;
                 border: 1px solid #c0d0c0;
-                font-size: 0.75rem;
+                font-size: 0.7rem;
                 text-transform: uppercase;
-                letter-spacing: 0.3px;
             }}
             
             td {{
-                padding: 5px 10px;
+                padding: 5px 8px;
                 border: 1px solid #d0d8d0;
                 text-align: center;
-                font-size: 0.85rem;
+                font-size: 0.82rem;
             }}
             
-            .subject-name {{
-                text-align: left;
-                font-weight: 500;
-                color: #1a2a1a;
-                padding-left: 14px;
+            tr:nth-child(even) {{
+                background: #f9fbf9;
             }}
             
             .total-row {{
@@ -1254,7 +1380,6 @@ def generate_student_card(student, semester="Semester III"):
             .total-row td {{
                 font-weight: 700;
                 color: #1a472a;
-                padding: 6px 10px;
             }}
             
             .average-row {{
@@ -1267,83 +1392,32 @@ def generate_student_card(student, semester="Semester III"):
                 color: #1a5a3a;
             }}
             
-            .absence-conduct {{
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                gap: 10px;
-                margin-top: 8px;
+            /* ===== SUMMARY (absence, rank) ===== */
+            .summary-row {{
+                display: flex;
+                justify-content: space-around;
                 padding: 8px 0;
                 border-top: 2px solid #e0e8e0;
+                margin-top: 6px;
+                font-size: 0.85rem;
             }}
             
-            .absence-conduct .item {{
+            .summary-row .item {{
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                padding: 4px 0;
             }}
             
-            .absence-conduct .label {{
-                font-size: 0.7rem;
+            .summary-row .label {{
+                font-size: 0.65rem;
                 font-weight: 600;
                 color: #6a8a6a;
                 text-transform: uppercase;
-                letter-spacing: 0.5px;
             }}
             
-            .absence-conduct .value {{
-                font-size: 1rem;
+            .summary-row .value {{
                 font-weight: 700;
                 color: #1a2a1a;
-            }}
-            
-            .grading-policy {{
-                padding: 12px 25px 16px 25px;
-                background: #f5f8f5;
-                border-top: 2px solid #e0e8e0;
-            }}
-            
-            .grading-policy .title {{
-                font-size: 0.85rem;
-                font-weight: 700;
-                color: #1a472a;
-                text-align: center;
-                margin-bottom: 6px;
-                letter-spacing: 1px;
-            }}
-            
-            .grading-policy .policy-grid {{
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 2px 30px;
-                font-size: 0.8rem;
-                color: #2a3a2a;
-            }}
-            
-            .grading-policy .policy-grid .policy-item {{
-                display: flex;
-                justify-content: space-between;
-                padding: 2px 0;
-                border-bottom: 1px dotted #d0d8d0;
-            }}
-            
-            .grading-policy .policy-grid .policy-item .range {{
-                font-weight: 600;
-                color: #1a472a;
-            }}
-            
-            .grading-policy .policy-grid .policy-item .grade {{
-                color: #2a5a3a;
-            }}
-            
-            .grading-policy .policy-note {{
-                font-size: 0.7rem;
-                color: #6a7a6a;
-                margin-top: 6px;
-                text-align: center;
-                font-style: italic;
-                border-top: 1px solid #d0d8d0;
-                padding-top: 6px;
             }}
             
             /* ===== BACK PAGE ===== */
@@ -1365,20 +1439,66 @@ def generate_student_card(student, semester="Semester III"):
                 letter-spacing: 2px;
             }}
             
-            .signature-grid {{
+            .back-grid {{
                 display: grid;
                 grid-template-columns: 1fr 1fr;
-                gap: 20px 30px;
+                gap: 20px;
             }}
             
-            .signature-block {{
-                padding: 8px 12px;
-                background: #fafcfa;
-                border-radius: 4px;
+            /* Left column: Subject-wise summary */
+            .subject-summary {{
                 border: 1px solid #e0e8e0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                background: #fafcfa;
             }}
             
-            .signature-block .block-title {{
+            .subject-summary .sub-title {{
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: #1a472a;
+                border-bottom: 1px solid #1a472a;
+                padding-bottom: 4px;
+                margin-bottom: 6px;
+                text-align: center;
+            }}
+            
+            .subject-summary .sub-item {{
+                display: flex;
+                justify-content: space-between;
+                padding: 2px 0;
+                border-bottom: 1px dotted #e0e8e0;
+                font-size: 0.8rem;
+            }}
+            
+            .subject-summary .sub-item .subj {{
+                font-weight: 500;
+            }}
+            
+            .subject-summary .sub-item .sc {{
+                font-weight: 600;
+                color: #1a5a3a;
+            }}
+            
+            .subject-summary .overall-avg {{
+                font-weight: 700;
+                color: #1a472a;
+                border-top: 2px solid #1a472a;
+                margin-top: 4px;
+                padding-top: 4px;
+                display: flex;
+                justify-content: space-between;
+            }}
+            
+            /* Right column: Remarks & Signatures */
+            .remarks-signatures {{
+                border: 1px solid #e0e8e0;
+                border-radius: 10px;
+                padding: 10px 14px;
+                background: #fafcfa;
+            }}
+            
+            .remarks-signatures .block-title {{
                 font-size: 0.8rem;
                 font-weight: 700;
                 color: #1a472a;
@@ -1389,7 +1509,7 @@ def generate_student_card(student, semester="Semester III"):
                 letter-spacing: 0.5px;
             }}
             
-            .signature-block .comment {{
+            .remarks-signatures .comment {{
                 font-size: 0.85rem;
                 color: #2a3a2a;
                 padding: 4px 0;
@@ -1397,23 +1517,24 @@ def generate_student_card(student, semester="Semester III"):
                 min-height: 20px;
             }}
             
-            .signature-block .signature-line {{
+            .remarks-signatures .signature-line {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
                 padding: 3px 0;
-                font-size: 0.8rem;
+                font-size: 0.75rem;
                 color: #5a6a5a;
             }}
             
-            .signature-block .signature-line .line {{
+            .remarks-signatures .signature-line .line {{
                 border-bottom: 1px solid #8a9a8a;
-                min-width: 80px;
+                min-width: 60px;
                 flex: 1;
                 margin-left: 8px;
-                height: 18px;
+                height: 16px;
             }}
             
+            /* ===== FOOTER (motto + print) ===== */
             .footer {{
                 text-align: center;
                 padding: 14px 25px 16px 25px;
@@ -1452,66 +1573,21 @@ def generate_student_card(student, semester="Semester III"):
             }}
             
             @media print {{
-                body {{
-                    background: white;
-                    margin: 0;
-                    padding: 0;
-                }}
-                .card-container {{
-                    box-shadow: none;
-                    border: 1px solid #aaa;
-                    border-radius: 0;
-                    max-width: 100%;
-                    page-break-after: avoid;
-                }}
-                .header, th, .total-row, .average-row, .student-info,
-                .grading-policy, .signature-block, .footer,
-                .absence-conduct, .back-page {{
+                body {{ background: white; margin: 0; padding: 0; }}
+                .card-container {{ box-shadow: none; border: 1px solid #aaa; border-radius: 0; max-width: 100%; page-break-after: avoid; }}
+                .header, .student-info, .grading-policy, .results-section, .back-page, .footer,
+                .subject-summary, .remarks-signatures, .summary-row {{
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                 }}
-                .print-btn {{
-                    display: none !important;
-                }}
-                .back-page {{
-                    page-break-before: always;
-                    border-top: none;
-                    margin-top: 0;
-                    padding-top: 30px;
-                }}
+                .print-btn {{ display: none !important; }}
+                .back-page {{ page-break-before: always; border-top: none; margin-top: 0; padding-top: 30px; }}
             }}
             
             @media (max-width: 768px) {{
-                .student-info {{
-                    grid-template-columns: 1fr 1fr;
-                    gap: 4px 12px;
-                    padding: 10px 16px;
-                }}
-                .header {{ padding: 14px 16px 10px 16px; }}
-                .header .school-name-amharic {{ font-size: 1.3rem; }}
-                .results-section {{ padding: 10px 16px 8px 16px; }}
-                .grading-policy {{ padding: 10px 16px 12px 16px; }}
-                .grading-policy .policy-grid {{ grid-template-columns: 1fr; }}
-                .absence-conduct {{ grid-template-columns: 1fr 1fr; }}
-                .signature-grid {{ grid-template-columns: 1fr; gap: 15px; }}
-                .back-page {{ padding: 14px 16px 12px 16px; }}
-                th, td {{ padding: 4px 6px; font-size: 0.75rem; }}
-            }}
-            
-            @media (max-width: 480px) {{
-                .student-info {{ grid-template-columns: 1fr; gap: 2px 0; }}
-                .header .school-name-amharic {{ font-size: 1.1rem; }}
-                .header .card-title span {{ font-size: 0.8rem; }}
-                .absence-conduct {{ grid-template-columns: 1fr; }}
-                th, td {{ padding: 3px 4px; font-size: 0.7rem; }}
-                .signature-block .signature-line {{
-                    flex-direction: column;
-                    align-items: flex-start;
-                }}
-                .signature-block .signature-line .line {{
-                    min-width: 100%;
-                    margin-left: 0;
-                }}
+                .front-grid {{ grid-template-columns: 1fr; }}
+                .back-grid {{ grid-template-columns: 1fr; }}
+                .student-info {{ grid-template-columns: 1fr; }}
             }}
         </style>
     </head>
@@ -1523,11 +1599,14 @@ def generate_student_card(student, semester="Semester III"):
             
             <!-- HEADER -->
             <div class="header">
-                <div class="school-name-amharic">የሙከራ ትምህርት ቤቶች</div>
+                <div>
+                    <span class="school-icon">🏫</span>
+                    <span class="school-name-amharic">የሙከራ ትምህርት ቤቶች</span>
+                </div>
                 <div class="school-name-english">{school_name} / Yemukera Temehert Betoch</div>
                 <div class="card-title">
                     <span>የተማሪ ውጤት መግለጫ</span>
-                    <span>School Student Report Card</span>
+                    <span>Student Report Card</span>
                 </div>
             </div>
             
@@ -1571,95 +1650,68 @@ def generate_student_card(student, semester="Semester III"):
                 </div>
             </div>
             
-            <!-- RESULTS TABLE -->
-            <div class="results-section">
-                <div class="results-title">
-                    <span class="title">📊 ውጤቶች / Academic Results</span>
-                    <span class="overall-grade">አማካይ: {overall}% ({get_letter_grade(overall).split('/')[0].strip()})</span>
-                </div>
-                
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; padding-left:14px;">የትምህርት ዓይነት / Subject</th>
-                            <th>1ኛ ት/ም ወቅት<br>1st Semester</th>
-                            <th>2ኛ ት/ም ወቅት<br>2nd Semester</th>
-                            <th>አማካይ<br>Average</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-    """
-    
-    sorted_subjects = sorted(all_subjects)
-    total_sem1 = 0
-    total_sem2 = 0
-    subject_count = len(sorted_subjects)
-    
-    for subj in sorted_subjects:
-        s1 = sem1_scores.get(subj, 0)
-        s2 = sem2_scores.get(subj, 0)
-        avg = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
-        total_sem1 += s1
-        total_sem2 += s2
-        html += f"""
-                        <tr>
-                            <td class="subject-name">{subj}</td>
-                            <td>{s1}</td>
-                            <td>{s2}</td>
-                            <td>{avg}</td>
-                        </tr>
-        """
-    
-    avg_sem1 = round(total_sem1 / subject_count, 1) if subject_count > 0 else 0
-    avg_sem2 = round(total_sem2 / subject_count, 1) if subject_count > 0 else 0
-    overall_avg = round((avg_sem1 + avg_sem2) / 2, 1) if subject_count > 0 else 0
-    
-    html += f"""
-                        <tr class="total-row">
-                            <td class="subject-name" style="font-weight:700;">Total / ድምር</td>
-                            <td style="font-weight:700;">{total_sem1}</td>
-                            <td style="font-weight:700;">{total_sem2}</td>
-                            <td style="font-weight:700;">{round((total_sem1 + total_sem2) / 2, 1)}</td>
-                        </tr>
-                        <tr class="average-row">
-                            <td class="subject-name" style="font-weight:700;">Average / አማካይ</td>
-                            <td style="font-weight:700;">{avg_sem1}</td>
-                            <td style="font-weight:700;">{avg_sem2}</td>
-                            <td style="font-weight:700;">{overall_avg}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <!-- Absence, Conduct, Rank -->
-                <div class="absence-conduct">
-                    <div class="item">
-                        <span class="label">Absence / መቅረት</span>
-                        <span class="value">1 / 3</span>
-                    </div>
-                    <div class="item">
-                        <span class="label">Conduct / ስነምግባር</span>
-                        <span class="value">A / A</span>
-                    </div>
-                    <div class="item">
-                        <span class="label">Rank / ደረጃ</span>
-                        <span class="value">30ኛ / 49</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- GRADING POLICY -->
-            <div class="grading-policy">
-                <div class="title">የማርክ አሰጣጥ ደንብ / METHOD OF MARKING</div>
-                <div class="policy-grid">
-                    <div class="policy-item"><span class="range">100 - 90%</span><span class="grade">እጅግ በጣም ጥሩ / Excellent</span></div>
-                    <div class="policy-item"><span class="range">89 - 80%</span><span class="grade">በጣም ጥሩ / Very Good</span></div>
-                    <div class="policy-item"><span class="range">79 - 60%</span><span class="grade">በቂ / Satisfactory</span></div>
-                    <div class="policy-item"><span class="range">59 - 50%</span><span class="grade">መጠነኛ / Fair</span></div>
+            <!-- FRONT GRID: Grading Policy (left) + Results (right) -->
+            <div class="front-grid">
+                <!-- Left: Grading Policy -->
+                <div class="grading-policy">
+                    <div class="title">የማርክ አሰጣጥ ደንብ<br>Method of Marking</div>
+                    <div class="policy-item"><span class="range">100 – 90%</span><span class="grade">እጅግ በጣም ጥሩ / Excellent</span></div>
+                    <div class="policy-item"><span class="range">89 – 80%</span><span class="grade">በጣም ጥሩ / Very Good</span></div>
+                    <div class="policy-item"><span class="range">79 – 60%</span><span class="grade">በቂ / Satisfactory</span></div>
+                    <div class="policy-item"><span class="range">59 – 50%</span><span class="grade">መጠነኛ / Fair</span></div>
                     <div class="policy-item"><span class="range">50% በታች</span><span class="grade">ዝቅተኛ / Poor</span></div>
+                    <div class="policy-note">
+                        ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው።<br>
+                        Point Zero (0%) should never be given.
+                    </div>
                 </div>
-                <div class="policy-note">
-                    ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው።<br>
-                    Point Zero (0%) should never be given, since it would mean no work has been done absolutely.
+                
+                <!-- Right: Results Table -->
+                <div class="results-section">
+                    <div class="results-title">
+                        <span>📊 ውጤቶች / Academic Results</span>
+                        <span class="overall-grade">አማካይ: {overall}% ({get_letter_grade(overall).split('/')[0].strip()})</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; padding-left:8px;">የትምህርት ዓይነት / Subject</th>
+                                <th>1ኛ ት/ም</th>
+                                <th>2ኛ ት/ም</th>
+                                <th>አማካይ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {subject_rows}
+                            <tr class="total-row">
+                                <td style="font-weight:700; text-align:left;">Total / ድምር</td>
+                                <td style="font-weight:700;">{total_sem1}</td>
+                                <td style="font-weight:700;">{total_sem2}</td>
+                                <td style="font-weight:700;">{round((total_sem1 + total_sem2) / 2, 1)}</td>
+                            </tr>
+                            <tr class="average-row">
+                                <td style="font-weight:700; text-align:left;">Average / አማካይ</td>
+                                <td style="font-weight:700;">{avg_sem1}</td>
+                                <td style="font-weight:700;">{avg_sem2}</td>
+                                <td style="font-weight:700;">{overall_avg}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <!-- Summary: Absence (የቀረበት ቀን) and Rank -->
+                    <div class="summary-row">
+                        <div class="item">
+                            <span class="label">የቀረበት ቀን / Date</span>
+                            <span class="value">{current_date}</span>
+                        </div>
+                        <div class="item">
+                            <span class="label">Conduct / ስነምግባር</span>
+                            <span class="value">A</span>
+                        </div>
+                        <div class="item">
+                            <span class="label">Rank / ደረጃ</span>
+                            <span class="value">{rank_display}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -1670,46 +1722,56 @@ def generate_student_card(student, semester="Semester III"):
             <div class="back-page">
                 <div class="section-title">📝 የክፍል መምህር እና የወላጅ አስተያየት / Teacher & Parent Comments</div>
                 
-                <div class="signature-grid">
-                    <!-- First Semester -->
-                    <div class="signature-block">
-                        <div class="block-title">1ኛ መንፈቅ ዓመት / FIRST SEMESTER</div>
-                        <div class="comment">
-                            <label style="font-size:0.75rem; font-weight:600; color:#6a8a6a;">የክፍሉ መምህር አስተያየት / Teacher Comment:</label>
-                            <div style="min-height:20px; padding:2px 0; border-bottom:1px dashed #d0d8d0; margin-bottom:4px;">ጎበዝ ተማሪ ናት</div>
+                <div class="back-grid">
+                    <!-- Left: Subject-wise summary -->
+                    <div class="subject-summary">
+                        <div class="sub-title">📋 የትምህርት ዓይነቶች አማካይ / Subject-wise Average</div>
+    """
+    # Build subject summary list
+    for subj in sorted_subjects:
+        avg = avg_scores.get(subj, 0)
+        html += f"""
+                        <div class="sub-item">
+                            <span class="subj">{subj}</span>
+                            <span class="sc">{avg}%</span>
                         </div>
-                        <div class="signature-line">
-                            <span>የመምህሩ ስም እና ፊርማ / Name & Signature:</span>
-                            <span class="line"></span>
-                        </div>
-                        <div class="signature-line" style="margin-top:4px;">
-                            <span>የወላጅ ፊርማ / Parent Signature:</span>
-                            <span class="line"></span>
+        """
+    html += f"""
+                        <div class="overall-avg">
+                            <span>⭐ አጠቃላይ አማካይ / Overall</span>
+                            <span>{overall}%</span>
                         </div>
                     </div>
                     
-                    <!-- Second Semester -->
-                    <div class="signature-block">
-                        <div class="block-title">2ኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
-                        <div class="comment">
-                            <label style="font-size:0.75rem; font-weight:600; color:#6a8a6a;">የክፍሉ መምህር አስተያየት / Teacher Comment:</label>
-                            <div style="min-height:20px; padding:2px 0; border-bottom:1px dashed #d0d8d0; margin-bottom:4px;">ጥሩ ተማሪ ናት</div>
-                        </div>
+                    <!-- Right: Remarks & Signatures -->
+                    <div class="remarks-signatures">
+                        <div class="block-title">1ኛ መንፈቅ ዓመት / FIRST SEMESTER</div>
+                        <div class="comment">የክፍሉ መምህር አስተያየት / Teacher Comment: ጎበዝ ተማሪ ናት</div>
                         <div class="signature-line">
-                            <span>የመምህሩ ስም እና ፊርማ / Name & Signature:</span>
+                            <span>የመምህሩ ስም እና ፊርማ:</span>
                             <span class="line"></span>
                         </div>
                         <div class="signature-line" style="margin-top:4px;">
-                            <span>የወላጅ ፊርማ / Parent Signature:</span>
+                            <span>የወላጅ ፊርማ:</span>
                             <span class="line"></span>
                         </div>
+                        
+                        <div class="block-title" style="margin-top:10px;">2ኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
+                        <div class="comment">የክፍሉ መምህር አስተያየት / Teacher Comment: ጥሩ ተማሪ ናት</div>
+                        <div class="signature-line">
+                            <span>የመምህሩ ስም እና ፊርማ:</span>
+                            <span class="line"></span>
+                        </div>
+                        <div class="signature-line" style="margin-top:4px;">
+                            <span>የወላጅ ፊርማ:</span>
+                            <span class="line"></span>
+                        </div>
+                        
+                        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #e0e8e0; display:flex; justify-content:space-between; font-size:0.75rem; color:#5a6a5a;">
+                            <span><strong>የዳይሬክተሩ ፊርማ:</strong> _________________</span>
+                            <span><strong>ቀን:</strong> _________________</span>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- Director's signature line -->
-                <div style="margin-top:12px; padding-top:10px; border-top:1px solid #e0e8e0; display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.8rem; color:#5a6a5a;">
-                    <div><strong>የት/ቤቱ ርዕሰ መምህር ፊርማ / Director's Signature:</strong> _________________</div>
-                    <div><strong>ቀን / Date:</strong> _________________</div>
                 </div>
             </div>
             
@@ -1717,7 +1779,7 @@ def generate_student_card(student, semester="Semester III"):
             <div class="footer">
                 <div class="motto">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
                 <div class="print-section">
-                    <button class="print-btn" onclick="window.print()">🖨️ አትም / Print Card</button>
+                    <button class="print-btn" onclick="window.print()">🖨️ አትም / Save as PDF</button>
                 </div>
             </div>
         </div>
@@ -1764,13 +1826,28 @@ def show_student_card_panel():
     for student in filtered_students:
         with st.expander(f"📄 {student['name']} - {student.get('grade', '')} {student.get('section', '')}"):
             html = generate_student_card(student, selected_semester)
-            st.download_button(
-                label=f"📥 Download HTML Card for {student['name']}",
-                data=html.encode('utf-8'),
-                file_name=f"Student_Card_{student['name']}_{selected_semester}.html",
-                mime="text/html",
-                key=f"download_{student['id']}"
-            )
+            
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.download_button(
+                    label=f"📥 Download HTML Card for {student['name']}",
+                    data=html.encode('utf-8'),
+                    file_name=f"Student_Card_{student['name']}_{selected_semester}.html",
+                    mime="text/html",
+                    key=f"download_{student['id']}"
+                )
+            with col2:
+                # Full-screen button: open in new tab
+                st.markdown(
+                    f"""
+                    <a href="data:text/html;charset=utf-8,{html.replace('"', '%22').replace('#', '%23')}" target="_blank">
+                        <button style="width:100%; padding:10px; background:#1A73E8; color:white; border:none; border-radius:30px; font-weight:600; cursor:pointer;">
+                            🖥️ Full Screen View
+                        </button>
+                    </a>
+                    """,
+                    unsafe_allow_html=True
+                )
             st.markdown("#### Preview")
             st.components.v1.html(html, height=800, scrolling=True)
 
