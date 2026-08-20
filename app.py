@@ -1079,7 +1079,7 @@ def generate_student_card(student, semester="Semester III"):
     address = student.get('address', '_________')
     academic_year = "2016 ዓ.ም."
     promoted_to = student.get('promoted_to', '_________')
-    director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ (Abaye Abayneh Daba)')
+    director_name = st.session_state.get('director_name', 'በረከት ስጦታዉ አለኸኝ (Bereket Setotaw Alehegn)')
     
     # Start building HTML
     html = f"""
@@ -1523,8 +1523,8 @@ def generate_student_card(student, semester="Semester III"):
             
             <!-- HEADER -->
             <div class="header">
-                <div class="school-name-amharic">አቡነ ጎርጎርዮስ ት/ቤቶች</div>
-                <div class="school-name-english">{school_name} / Abune Gorgorios Schools</div>
+                <div class="school-name-amharic">የሙከራ ትምህርት ቤቶች</div>
+                <div class="school-name-english">{school_name} / Yemukera Temehert Betoch</div>
                 <div class="card-title">
                     <span>የተማሪ ውጤት መግለጫ</span>
                     <span>School Student Report Card</span>
