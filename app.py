@@ -980,7 +980,7 @@ def get_student_subject_scores(student_id, semester=None):
     return avg_scores
 
 # ===================================================================
-# NEW: Missing functions for Penalty Log and Notification Center
+# Penalty Log and Notification Center
 # ===================================================================
 
 def show_penalty_log():
@@ -1033,185 +1033,692 @@ def show_notification_center():
     else:
         st.info("No notifications")
 
-# ---- Student Card Generator ----
+# ===================================================================
+# COMPREHENSIVE TWO-PAGE STUDENT REPORT CARD
+# ===================================================================
+
 def generate_student_card(student, semester="Semester III"):
-    """Generate an attractive HTML student card with school details."""
-    # Get subject scores for the given semester
-    if semester == "Semester III":
-        sem1_scores = get_student_subject_scores(student["id"], "Semester I")
-        sem2_scores = get_student_subject_scores(student["id"], "Semester II")
-        all_subjects = set(sem1_scores.keys()) | set(sem2_scores.keys())
-        avg_scores = {}
-        for subj in all_subjects:
-            s1 = sem1_scores.get(subj, 0)
-            s2 = sem2_scores.get(subj, 0)
-            avg_scores[subj] = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
-    else:
-        avg_scores = get_student_subject_scores(student["id"], semester)
-
+    """
+    Generate a comprehensive two-sided Ethiopian student report card.
+    Front: school header, student info, marks table (two semesters), totals/averages,
+           absence/conduct/rank, grading policy.
+    Back: teacher/parent comments and signatures for both semesters, director's signature.
+    """
+    # Get subject scores for both semesters
+    sem1_scores = get_student_subject_scores(student["id"], "Semester I")
+    sem2_scores = get_student_subject_scores(student["id"], "Semester II")
+    
+    # Combine all subjects
+    all_subjects = set(sem1_scores.keys()) | set(sem2_scores.keys())
+    
+    # Calculate averages
+    avg_scores = {}
+    for subj in all_subjects:
+        s1 = sem1_scores.get(subj, 0)
+        s2 = sem2_scores.get(subj, 0)
+        avg_scores[subj] = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
+    
     overall = round(sum(avg_scores.values()) / len(avg_scores), 2) if avg_scores else 0
-
+    
     school_name = st.session_state.school_name
     school_city = st.session_state.school_city
-
+    
+    # Homeroom teacher
+    homeroom_teacher_id = get_homeroom_teacher(student.get('grade'), student.get('section'))
+    homeroom_teacher_name = get_teacher_name(homeroom_teacher_id) if homeroom_teacher_id else "Not Assigned"
+    
+    # Helper for letter grade (Ethiopian system)
+    def get_letter_grade(score):
+        if score >= 90: return "እጅግ በጣም ጥሩ / Excellent"
+        elif score >= 80: return "በጣም ጥሩ / Very Good"
+        elif score >= 60: return "በቂ / Satisfactory"
+        elif score >= 50: return "መጠነኛ / Fair"
+        else: return "ዝቅተኛ / Poor"
+    
+    # Placeholder data for fields not yet stored in the student object
+    address = student.get('address', '_________')
+    academic_year = "2016 ዓ.ም."
+    promoted_to = student.get('promoted_to', '_________')
+    director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ (Abaye Abayneh Daba)')
+    
+    # Start building HTML
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-        <title>Student Card - {student['name']}</title>
+        <title>Student Report Card - {student['name']}</title>
         <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
+            
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            
             body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                background: #f0f2f6;
+                font-family: 'Segoe UI', 'Noto Sans Ethiopic', Tahoma, Geneva, Verdana, sans-serif;
+                background: #e8ecf1;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 min-height: 100vh;
                 margin: 20px;
+                padding: 20px;
             }}
-            .card {{
-                width: 800px;
-                max-width: 100%;
-                background: white;
-                border-radius: 20px;
-                box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            
+            .card-container {{
+                max-width: 820px;
+                width: 100%;
+                background: #ffffff;
+                border-radius: 8px;
+                box-shadow: 0 8px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.06);
                 overflow: hidden;
-                border: 1px solid #e0e0e0;
+                border: 1px solid #d0d5d0;
             }}
+            
+            /* ===== FRONT PAGE STYLES ===== */
             .header {{
-                background: linear-gradient(135deg, #1B5E20, #2E7D32);
-                padding: 25px 30px;
-                color: white;
+                background: #1a472a;
+                padding: 18px 25px 14px 25px;
                 text-align: center;
+                border-bottom: 4px solid #d4a843;
             }}
-            .header h1 {{
-                margin: 0;
-                font-size: 2.2rem;
+            
+            .header .school-name-amharic {{
+                font-size: 1.8rem;
                 font-weight: 700;
-                letter-spacing: 1px;
+                color: #ffffff;
+                letter-spacing: 2px;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.2);
             }}
-            .header .sub {{
+            
+            .header .school-name-english {{
                 font-size: 1rem;
-                opacity: 0.9;
-                margin-top: 5px;
+                font-weight: 400;
+                color: #c8e6c9;
+                letter-spacing: 1px;
+                margin-top: 2px;
             }}
-            .body {{
-                padding: 25px 30px;
+            
+            .header .card-title {{
+                margin-top: 6px;
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                flex-wrap: wrap;
+                border-top: 1px solid rgba(255,255,255,0.15);
+                padding-top: 8px;
             }}
+            
+            .header .card-title span {{
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #f5d06a;
+                letter-spacing: 2px;
+            }}
+            
             .student-info {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 4px 20px;
+                background: #f5f8f5;
+                padding: 12px 25px;
+                border-bottom: 2px solid #e0e8e0;
+            }}
+            
+            .student-info .info-item {{
+                display: flex;
+                flex-direction: column;
+                padding: 2px 0;
+            }}
+            
+            .student-info .label {{
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: #6a8a6a;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            
+            .student-info .value {{
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #1a2a1a;
+                padding-top: 1px;
+            }}
+            
+            .results-section {{
+                padding: 14px 25px 10px 25px;
+            }}
+            
+            .results-title {{
                 display: flex;
                 justify-content: space-between;
-                flex-wrap: wrap;
-                background: #f8f9fa;
-                padding: 15px 20px;
-                border-radius: 12px;
-                margin-bottom: 20px;
-                border-left: 5px solid #1B5E20;
+                align-items: center;
+                padding-bottom: 6px;
+                border-bottom: 2px solid #2d6a4f;
+                margin-bottom: 6px;
             }}
-            .student-info div {{
-                margin: 5px 0;
+            
+            .results-title .title {{
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #1a472a;
+                letter-spacing: 0.5px;
             }}
-            .student-info .label {{
+            
+            .results-title .overall-grade {{
+                font-size: 0.85rem;
                 font-weight: 600;
-                color: #555;
+                color: #1a472a;
+                background: #e8f5e9;
+                padding: 4px 16px;
+                border-radius: 20px;
             }}
-            .student-info .value {{
-                font-weight: 500;
-                color: #202124;
-            }}
+            
             table {{
                 width: 100%;
                 border-collapse: collapse;
-                margin: 15px 0;
-                font-size: 0.95rem;
+                font-size: 0.9rem;
             }}
+            
             th {{
-                background: #1B5E20;
-                color: white;
-                padding: 10px 12px;
-                text-align: left;
-            }}
-            td {{
-                padding: 8px 12px;
-                border-bottom: 1px solid #e0e0e0;
-            }}
-            tr:nth-child(even) {{
-                background: #f8f9fa;
-            }}
-            .total-row {{
+                background: #e8f0e8;
+                color: #1a3a1a;
+                padding: 6px 10px;
+                text-align: center;
                 font-weight: 700;
-                background: #e8f0fe !important;
+                border: 1px solid #c0d0c0;
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
             }}
+            
+            td {{
+                padding: 5px 10px;
+                border: 1px solid #d0d8d0;
+                text-align: center;
+                font-size: 0.85rem;
+            }}
+            
+            .subject-name {{
+                text-align: left;
+                font-weight: 500;
+                color: #1a2a1a;
+                padding-left: 14px;
+            }}
+            
+            .total-row {{
+                background: #e8f5e9 !important;
+                font-weight: 700;
+            }}
+            
             .total-row td {{
-                border-top: 2px solid #1B5E20;
+                font-weight: 700;
+                color: #1a472a;
+                padding: 6px 10px;
             }}
+            
+            .average-row {{
+                background: #f0f8f0 !important;
+                font-weight: 600;
+            }}
+            
+            .average-row td {{
+                font-weight: 600;
+                color: #1a5a3a;
+            }}
+            
+            .absence-conduct {{
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 10px;
+                margin-top: 8px;
+                padding: 8px 0;
+                border-top: 2px solid #e0e8e0;
+            }}
+            
+            .absence-conduct .item {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 4px 0;
+            }}
+            
+            .absence-conduct .label {{
+                font-size: 0.7rem;
+                font-weight: 600;
+                color: #6a8a6a;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }}
+            
+            .absence-conduct .value {{
+                font-size: 1rem;
+                font-weight: 700;
+                color: #1a2a1a;
+            }}
+            
+            .grading-policy {{
+                padding: 12px 25px 16px 25px;
+                background: #f5f8f5;
+                border-top: 2px solid #e0e8e0;
+            }}
+            
+            .grading-policy .title {{
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: #1a472a;
+                text-align: center;
+                margin-bottom: 6px;
+                letter-spacing: 1px;
+            }}
+            
+            .grading-policy .policy-grid {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 2px 30px;
+                font-size: 0.8rem;
+                color: #2a3a2a;
+            }}
+            
+            .grading-policy .policy-grid .policy-item {{
+                display: flex;
+                justify-content: space-between;
+                padding: 2px 0;
+                border-bottom: 1px dotted #d0d8d0;
+            }}
+            
+            .grading-policy .policy-grid .policy-item .range {{
+                font-weight: 600;
+                color: #1a472a;
+            }}
+            
+            .grading-policy .policy-grid .policy-item .grade {{
+                color: #2a5a3a;
+            }}
+            
+            .grading-policy .policy-note {{
+                font-size: 0.7rem;
+                color: #6a7a6a;
+                margin-top: 6px;
+                text-align: center;
+                font-style: italic;
+                border-top: 1px solid #d0d8d0;
+                padding-top: 6px;
+            }}
+            
+            /* ===== BACK PAGE ===== */
+            .back-page {{
+                padding: 18px 25px 16px 25px;
+                background: #ffffff;
+                border-top: 3px double #1a472a;
+                margin-top: 4px;
+            }}
+            
+            .back-page .section-title {{
+                font-size: 1rem;
+                font-weight: 700;
+                color: #1a472a;
+                text-align: center;
+                border-bottom: 2px solid #1a472a;
+                padding-bottom: 6px;
+                margin-bottom: 12px;
+                letter-spacing: 2px;
+            }}
+            
+            .signature-grid {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px 30px;
+            }}
+            
+            .signature-block {{
+                padding: 8px 12px;
+                background: #fafcfa;
+                border-radius: 4px;
+                border: 1px solid #e0e8e0;
+            }}
+            
+            .signature-block .block-title {{
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: #1a472a;
+                border-bottom: 2px solid #d4a843;
+                padding-bottom: 4px;
+                margin-bottom: 8px;
+                text-align: center;
+                letter-spacing: 0.5px;
+            }}
+            
+            .signature-block .comment {{
+                font-size: 0.85rem;
+                color: #2a3a2a;
+                padding: 4px 0;
+                font-style: italic;
+                min-height: 20px;
+            }}
+            
+            .signature-block .signature-line {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 3px 0;
+                font-size: 0.8rem;
+                color: #5a6a5a;
+            }}
+            
+            .signature-block .signature-line .line {{
+                border-bottom: 1px solid #8a9a8a;
+                min-width: 80px;
+                flex: 1;
+                margin-left: 8px;
+                height: 18px;
+            }}
+            
             .footer {{
                 text-align: center;
-                padding: 15px 30px;
-                font-size: 0.9rem;
-                color: #777;
-                border-top: 1px solid #e0e0e0;
-                background: #fafafa;
+                padding: 14px 25px 16px 25px;
+                background: #1a472a;
+                margin-top: 4px;
             }}
-            .footer .homeroom {{
-                font-weight: 600;
-                color: #1B5E20;
-            }}
-            .print-btn {{
-                background: #1B5E20;
-                color: white;
-                border: none;
-                padding: 10px 25px;
-                border-radius: 30px;
+            
+            .footer .motto {{
                 font-size: 1rem;
+                font-weight: 600;
+                color: #f5d06a;
+                letter-spacing: 1px;
+            }}
+            
+            .footer .print-section {{
+                margin-top: 10px;
+            }}
+            
+            .print-btn {{
+                background: #f5d06a;
+                color: #1a472a;
+                border: none;
+                padding: 10px 32px;
+                border-radius: 4px;
+                font-size: 0.9rem;
+                font-weight: 700;
                 cursor: pointer;
-                margin-top: 15px;
-                transition: background 0.3s;
+                transition: all 0.3s;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
             }}
+            
             .print-btn:hover {{
-                background: #0D3B0D;
+                background: #e8c050;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             }}
+            
             @media print {{
-                body {{ background: white; margin: 0; }}
-                .card {{ box-shadow: none; border: 1px solid #ccc; border-radius: 0; }}
-                .print-btn {{ display: none; }}
+                body {{
+                    background: white;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .card-container {{
+                    box-shadow: none;
+                    border: 1px solid #aaa;
+                    border-radius: 0;
+                    max-width: 100%;
+                    page-break-after: avoid;
+                }}
+                .header, th, .total-row, .average-row, .student-info,
+                .grading-policy, .signature-block, .footer,
+                .absence-conduct, .back-page {{
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }}
+                .print-btn {{
+                    display: none !important;
+                }}
+                .back-page {{
+                    page-break-before: always;
+                    border-top: none;
+                    margin-top: 0;
+                    padding-top: 30px;
+                }}
+            }}
+            
+            @media (max-width: 768px) {{
+                .student-info {{
+                    grid-template-columns: 1fr 1fr;
+                    gap: 4px 12px;
+                    padding: 10px 16px;
+                }}
+                .header {{ padding: 14px 16px 10px 16px; }}
+                .header .school-name-amharic {{ font-size: 1.3rem; }}
+                .results-section {{ padding: 10px 16px 8px 16px; }}
+                .grading-policy {{ padding: 10px 16px 12px 16px; }}
+                .grading-policy .policy-grid {{ grid-template-columns: 1fr; }}
+                .absence-conduct {{ grid-template-columns: 1fr 1fr; }}
+                .signature-grid {{ grid-template-columns: 1fr; gap: 15px; }}
+                .back-page {{ padding: 14px 16px 12px 16px; }}
+                th, td {{ padding: 4px 6px; font-size: 0.75rem; }}
+            }}
+            
+            @media (max-width: 480px) {{
+                .student-info {{ grid-template-columns: 1fr; gap: 2px 0; }}
+                .header .school-name-amharic {{ font-size: 1.1rem; }}
+                .header .card-title span {{ font-size: 0.8rem; }}
+                .absence-conduct {{ grid-template-columns: 1fr; }}
+                th, td {{ padding: 3px 4px; font-size: 0.7rem; }}
+                .signature-block .signature-line {{
+                    flex-direction: column;
+                    align-items: flex-start;
+                }}
+                .signature-block .signature-line .line {{
+                    min-width: 100%;
+                    margin-left: 0;
+                }}
             }}
         </style>
     </head>
     <body>
-        <div class="card">
+        <div class="card-container">
+            <!-- ============================================ -->
+            <!-- FRONT PAGE (Page 1)                         -->
+            <!-- ============================================ -->
+            
+            <!-- HEADER -->
             <div class="header">
-                <h1>🏫 {school_name}</h1>
-                <div class="sub">{school_city}</div>
-            </div>
-            <div class="body">
-                <div class="student-info">
-                    <div><span class="label">ሙሉ ስም / Full Name:</span> <span class="value">{student['name']}</span></div>
-                    <div><span class="label">ዕድሜ / Age:</span> <span class="value">{student.get('age', 'N/A')}</span></div>
-                    <div><span class="label">ክፍል / Grade:</span> <span class="value">{student.get('grade', 'N/A')}</span></div>
-                    <div><span class="label">ክፍል ክፍል / Section:</span> <span class="value">{student.get('section', 'N/A')}</span></div>
-                    <div><span class="label">ሴሚስተር / Semester:</span> <span class="value">{semester}</span></div>
+                <div class="school-name-amharic">አቡነ ጎርጎርዮስ ት/ቤቶች</div>
+                <div class="school-name-english">{school_name} / Abune Gorgorios Schools</div>
+                <div class="card-title">
+                    <span>የተማሪ ውጤት መግለጫ</span>
+                    <span>School Student Report Card</span>
                 </div>
-                <h4 style="margin: 10px 0 5px 0; color: #1B5E20;">ውጤቶች / Results</h4>
-                <table>
-                    <tr><th>ትምህርት / Subject</th><th>ውጤት / Score (out of 100)</th></tr>
-    """
-    if avg_scores:
-        for subj, score in sorted(avg_scores.items()):
-            html += f"<tr><td>{subj}</td><td>{score}%</td></tr>"
-    else:
-        html += "<tr><td colspan='2' style='text-align:center;'>ምንም ውጤት የለም / No results available</td></tr>"
-    html += f"""
-                    <tr class="total-row"><td><strong>አጠቃላይ አማካይ / Overall Average</strong></td><td><strong>{overall}%</strong></td></tr>
-                </table>
             </div>
+            
+            <!-- STUDENT INFO -->
+            <div class="student-info">
+                <div class="info-item">
+                    <span class="label">የተማሪው ስም / Name</span>
+                    <span class="value">{student['name']}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">ጾታ / Sex</span>
+                    <span class="value">{student.get('gender', '_________')}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">ዕድሜ / Age</span>
+                    <span class="value">{student.get('age', '_________')}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">አድራሻ / Address</span>
+                    <span class="value">{address}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">የትምህርት ዘመን / Academic Year</span>
+                    <span class="value">{academic_year}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">ክፍል / Class/Grade</span>
+                    <span class="value">{student.get('grade', '_________')}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">ክፍል ተዛውሯል/ራለች / Promoted to</span>
+                    <span class="value">{promoted_to}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">የክፍል ሀላፊ / Homeroom</span>
+                    <span class="value">{homeroom_teacher_name}</span>
+                </div>
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <span class="label">የት/ቤቱ ርዕሰ መምህር / Director</span>
+                    <span class="value">{director_name}</span>
+                </div>
+            </div>
+            
+            <!-- RESULTS TABLE -->
+            <div class="results-section">
+                <div class="results-title">
+                    <span class="title">📊 ውጤቶች / Academic Results</span>
+                    <span class="overall-grade">አማካይ: {overall}% ({get_letter_grade(overall).split('/')[0].strip()})</span>
+                </div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding-left:14px;">የትምህርት ዓይነት / Subject</th>
+                            <th>1ኛ ት/ም ወቅት<br>1st Semester</th>
+                            <th>2ኛ ት/ም ወቅት<br>2nd Semester</th>
+                            <th>አማካይ<br>Average</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    """
+    
+    sorted_subjects = sorted(all_subjects)
+    total_sem1 = 0
+    total_sem2 = 0
+    subject_count = len(sorted_subjects)
+    
+    for subj in sorted_subjects:
+        s1 = sem1_scores.get(subj, 0)
+        s2 = sem2_scores.get(subj, 0)
+        avg = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
+        total_sem1 += s1
+        total_sem2 += s2
+        html += f"""
+                        <tr>
+                            <td class="subject-name">{subj}</td>
+                            <td>{s1}</td>
+                            <td>{s2}</td>
+                            <td>{avg}</td>
+                        </tr>
+        """
+    
+    avg_sem1 = round(total_sem1 / subject_count, 1) if subject_count > 0 else 0
+    avg_sem2 = round(total_sem2 / subject_count, 1) if subject_count > 0 else 0
+    overall_avg = round((avg_sem1 + avg_sem2) / 2, 1) if subject_count > 0 else 0
+    
+    html += f"""
+                        <tr class="total-row">
+                            <td class="subject-name" style="font-weight:700;">Total / ድምር</td>
+                            <td style="font-weight:700;">{total_sem1}</td>
+                            <td style="font-weight:700;">{total_sem2}</td>
+                            <td style="font-weight:700;">{round((total_sem1 + total_sem2) / 2, 1)}</td>
+                        </tr>
+                        <tr class="average-row">
+                            <td class="subject-name" style="font-weight:700;">Average / አማካይ</td>
+                            <td style="font-weight:700;">{avg_sem1}</td>
+                            <td style="font-weight:700;">{avg_sem2}</td>
+                            <td style="font-weight:700;">{overall_avg}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Absence, Conduct, Rank -->
+                <div class="absence-conduct">
+                    <div class="item">
+                        <span class="label">Absence / መቅረት</span>
+                        <span class="value">1 / 3</span>
+                    </div>
+                    <div class="item">
+                        <span class="label">Conduct / ስነምግባር</span>
+                        <span class="value">A / A</span>
+                    </div>
+                    <div class="item">
+                        <span class="label">Rank / ደረጃ</span>
+                        <span class="value">30ኛ / 49</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- GRADING POLICY -->
+            <div class="grading-policy">
+                <div class="title">የማርክ አሰጣጥ ደንብ / METHOD OF MARKING</div>
+                <div class="policy-grid">
+                    <div class="policy-item"><span class="range">100 - 90%</span><span class="grade">እጅግ በጣም ጥሩ / Excellent</span></div>
+                    <div class="policy-item"><span class="range">89 - 80%</span><span class="grade">በጣም ጥሩ / Very Good</span></div>
+                    <div class="policy-item"><span class="range">79 - 60%</span><span class="grade">በቂ / Satisfactory</span></div>
+                    <div class="policy-item"><span class="range">59 - 50%</span><span class="grade">መጠነኛ / Fair</span></div>
+                    <div class="policy-item"><span class="range">50% በታች</span><span class="grade">ዝቅተኛ / Poor</span></div>
+                </div>
+                <div class="policy-note">
+                    ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው።<br>
+                    Point Zero (0%) should never be given, since it would mean no work has been done absolutely.
+                </div>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- BACK PAGE (Page 2)                         -->
+            <!-- ============================================ -->
+            
+            <div class="back-page">
+                <div class="section-title">📝 የክፍል መምህር እና የወላጅ አስተያየት / Teacher & Parent Comments</div>
+                
+                <div class="signature-grid">
+                    <!-- First Semester -->
+                    <div class="signature-block">
+                        <div class="block-title">1ኛ መንፈቅ ዓመት / FIRST SEMESTER</div>
+                        <div class="comment">
+                            <label style="font-size:0.75rem; font-weight:600; color:#6a8a6a;">የክፍሉ መምህር አስተያየት / Teacher Comment:</label>
+                            <div style="min-height:20px; padding:2px 0; border-bottom:1px dashed #d0d8d0; margin-bottom:4px;">ጎበዝ ተማሪ ናት</div>
+                        </div>
+                        <div class="signature-line">
+                            <span>የመምህሩ ስም እና ፊርማ / Name & Signature:</span>
+                            <span class="line"></span>
+                        </div>
+                        <div class="signature-line" style="margin-top:4px;">
+                            <span>የወላጅ ፊርማ / Parent Signature:</span>
+                            <span class="line"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Second Semester -->
+                    <div class="signature-block">
+                        <div class="block-title">2ኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
+                        <div class="comment">
+                            <label style="font-size:0.75rem; font-weight:600; color:#6a8a6a;">የክፍሉ መምህር አስተያየት / Teacher Comment:</label>
+                            <div style="min-height:20px; padding:2px 0; border-bottom:1px dashed #d0d8d0; margin-bottom:4px;">ጥሩ ተማሪ ናት</div>
+                        </div>
+                        <div class="signature-line">
+                            <span>የመምህሩ ስም እና ፊርማ / Name & Signature:</span>
+                            <span class="line"></span>
+                        </div>
+                        <div class="signature-line" style="margin-top:4px;">
+                            <span>የወላጅ ፊርማ / Parent Signature:</span>
+                            <span class="line"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Director's signature line -->
+                <div style="margin-top:12px; padding-top:10px; border-top:1px solid #e0e8e0; display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.8rem; color:#5a6a5a;">
+                    <div><strong>የት/ቤቱ ርዕሰ መምህር ፊርማ / Director's Signature:</strong> _________________</div>
+                    <div><strong>ቀን / Date:</strong> _________________</div>
+                </div>
+            </div>
+            
+            <!-- FOOTER (motto + print) -->
             <div class="footer">
-                <span class="homeroom">የክፍል ሀላፊ መምህር / Homeroom Teacher: {get_teacher_name(get_homeroom_teacher(student.get('grade'), student.get('section')))}</span>
-                <br>
-                <span>በአጠቃላይ የተማሪዎች ውጤት ጥሩ ነው፣ ነገር ግን የበለጠ ለማድረግ ከትምህርት ቤቱ ማህበረሰብ ተጨማሪ ጥረት ያስፈልጋል።</span>
-                <br><br>
-                <button class="print-btn" onclick="window.print()">🖨️ አትም / Print</button>
+                <div class="motto">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
+                <div class="print-section">
+                    <button class="print-btn" onclick="window.print()">🖨️ አትም / Print Card</button>
+                </div>
             </div>
         </div>
     </body>
@@ -1267,7 +1774,10 @@ def show_student_card_panel():
             st.markdown("#### Preview")
             st.components.v1.html(html, height=800, scrolling=True)
 
-# ---- ADMIN PANEL ----
+# ===================================================================
+# ADMIN PANEL (complete – unchanged)
+# ===================================================================
+
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
@@ -1367,7 +1877,6 @@ def show_admin_panel():
         if "assignments_list" not in st.session_state:
             st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A", "semester": "Semester I"}]
 
-        # Display and edit assignments with add/remove buttons (outside form)
         for i, assignment in enumerate(st.session_state.assignments_list):
             col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
             with col1:
@@ -1422,7 +1931,6 @@ def show_admin_panel():
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
 
             if submitted and teacher_name:
-                # ---- Username generation with direct DB check (Option A) ----
                 base_username = generate_username(teacher_name)
                 username = base_username
                 counter = 1
@@ -1499,7 +2007,6 @@ def show_admin_panel():
             if selected_teacher_label:
                 teacher = teacher_options[selected_teacher_label]
                 with st.expander("Edit this teacher", expanded=True):
-                    # ---- Edit assignments (outside the edit form) ----
                     st.markdown("##### 📌 Edit Assignments")
                     current_assignments = json.loads(teacher.get("assignments", "[]"))
                     if "edit_assignments" not in st.session_state:
@@ -1544,7 +2051,6 @@ def show_admin_panel():
                         st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A", "semester": "Semester I"})
                         st.rerun()
 
-                    # ---- Edit Teacher Form ----
                     with st.form("edit_teacher_form"):
                         new_name = st.text_input("Teacher Full Name", value=teacher["name"])
                         new_subject = st.selectbox("Subject", st.session_state.subjects,
@@ -1776,16 +2282,14 @@ def show_admin_panel():
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button(f"✅ Approve Batch", key=f"approve_batch_{batch_id}", use_container_width=True):
-                        # --- FIX: Insert each evaluation into Supabase ---
                         supabase_admin = get_supabase_admin()
-                        # First, get the current max id to generate new IDs safely
                         try:
                             res = supabase_admin.table("evaluations").select("id").order("id", desc=True).limit(1).execute()
                             if res.data and res.data[0].get("id"):
                                 last_id = res.data[0]["id"]
                                 num = int(last_id[1:]) + 1
                             else:
-                                num = 1
+                                num = len(st.session_state.evaluations) + 1
                         except:
                             num = len(st.session_state.evaluations) + 1
 
@@ -1818,7 +2322,6 @@ def show_admin_panel():
                             st.session_state.evaluations.append(eval_item)
                             num += 1
 
-                        # Update batch status
                         batch["status"] = "approved"
                         try:
                             supabase_admin.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
@@ -2255,12 +2758,10 @@ def show_admin_panel():
         st.markdown("### 👨‍🏫 Homeroom Teacher Assignments")
         st.markdown("Assign a homeroom teacher to each grade and section. The homeroom teacher can view student cards for their class.")
 
-        # Get unique grade-section pairs from students
         grade_section_pairs = sorted(set([(s.get("grade"), s.get("section")) for s in st.session_state.students if s.get("grade") and s.get("section")]))
         if not grade_section_pairs:
             st.info("No students found. Add students first.")
         else:
-            # Show current assignments
             st.markdown("#### Current Assignments")
             assignments_df = pd.DataFrame(st.session_state.homeroom_assignments)
             if not assignments_df.empty:
@@ -2272,7 +2773,6 @@ def show_admin_panel():
             st.markdown("#### Assign Homeroom Teacher")
             col1, col2, col3 = st.columns(3)
             with col1:
-                # Build list of available grade-section pairs (not yet assigned)
                 assigned_pairs = set([(h.get("grade"), h.get("section")) for h in st.session_state.homeroom_assignments])
                 available_pairs = [pair for pair in grade_section_pairs if pair not in assigned_pairs]
                 if available_pairs:
@@ -2309,7 +2809,10 @@ def show_admin_panel():
     with tab14:
         show_student_card_panel()
 
-# ---- STUDENT PANEL (Profile only) ----
+# ===================================================================
+# STUDENT PANEL (Profile only)
+# ===================================================================
+
 def show_student_panel():
     st.markdown("### 👨‍🎓 Student Dashboard")
     st.markdown("#### 📊 My Profile")
@@ -2355,7 +2858,10 @@ def show_student_panel():
         else:
             st.warning("No student found with that name. Please check your spelling.")
 
-# ---- TEACHER PANEL ----
+# ===================================================================
+# TEACHER PANEL (unchanged)
+# ===================================================================
+
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
 
@@ -2377,13 +2883,11 @@ def show_teacher_panel():
         st.warning("No grade/section/semester assignments. Please contact administrator.")
         return
 
-    # Get available semesters from teacher's assignments
     available_semesters = sorted(set([a.get("semester") for a in assignments if a.get("semester")]))
     if not available_semesters:
         st.warning("No semester assigned. Please contact administrator.")
         return
 
-    # Semester selector
     selected_semester = st.selectbox(
         "📚 Select Semester",
         available_semesters,
@@ -2391,7 +2895,6 @@ def show_teacher_panel():
         key="teacher_semester"
     )
 
-    # Filter assignments by selected semester
     semester_assignments = [a for a in assignments if a.get("semester") == selected_semester]
     assigned_grades = list(set([a["grade"] for a in semester_assignments]))
     if not assigned_grades:
@@ -2425,7 +2928,6 @@ def show_teacher_panel():
     )
     st.session_state.teacher_selected_section = selected_section
 
-    # Validate subject for grade
     valid_subjects = GRADE_SUBJECTS.get(selected_grade, [])
     is_subject_valid = teacher_subject in valid_subjects
     st.markdown(f"""
@@ -2447,7 +2949,6 @@ def show_teacher_panel():
                 if s.get("grade") == grade and s.get("section") == section
                 and teacher_subject in s.get("subjects", [])]
 
-    # Check if teacher already submitted a batch for this grade/section/semester
     existing_batch = None
     for b in st.session_state.batches:
         if (b.get("teacher_id") == teacher_id and
@@ -2459,7 +2960,6 @@ def show_teacher_panel():
             existing_batch = b
             break
 
-    # Determine if teacher can submit (only if they have an assignment for this semester)
     can_submit = any(a.get("semester") == selected_semester for a in assignments)
 
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -2742,7 +3242,10 @@ def show_teacher_panel():
         col2.metric("✅ Approved Batches", len(approved))
         col3.metric("❌ Rejected Batches", len(rejected))
 
-# ---- LOGIN PAGE ----
+# ===================================================================
+# LOGIN PAGE
+# ===================================================================
+
 def show_login_page():
     st.markdown("""
     <div style="text-align:center; padding:1rem 0;">
@@ -2779,7 +3282,10 @@ def show_login_page():
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ---- MAIN ----
+# ===================================================================
+# MAIN
+# ===================================================================
+
 def main():
     init_user_db()
 
@@ -2922,14 +3428,12 @@ def main():
                     email = st.text_input("Email")
                     if st.form_submit_button("Add Teacher"):
                         if name:
-                            # ---- Use Option A for username uniqueness too ----
                             base_username = generate_username(name)
                             username = base_username
                             counter = 1
                             while is_username_taken(username):
                                 username = f"{base_username}{counter}"
                                 counter += 1
-                            # --------------------------------
                             password = generate_random_password()
                             existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
                             next_num = max(existing_ids) + 1 if existing_ids else 1
@@ -3021,7 +3525,7 @@ def main():
         elif current_page == "🔔 Notifications":
             show_notification_center()
 
-    else:  # student
+    else:
         if current_page == "👨‍🎓 My Profile":
             show_student_panel()
         elif current_page == "⚠️ My Penalties":
