@@ -213,6 +213,7 @@ def get_all_subjects():
 
 ALL_SUBJECTS = get_all_subjects()
 
+# ---- Modified init_user_db to use admin client ----
 def init_user_db():
     if 'students' not in st.session_state:
         load_all_data()
@@ -222,9 +223,9 @@ def init_user_db():
             "role": "admin",
             "name": "School Administrator"
         }
-        supabase = get_supabase()
+        supabase_admin = get_supabase_admin()
         try:
-            supabase.table("users").insert({
+            supabase_admin.table("users").insert({
                 "username": "admin",
                 "password": hash_password("admin123"),
                 "role": "admin",
@@ -274,8 +275,9 @@ def logout_user():
     st.session_state.current_user = None
     st.session_state.current_role = None
 
+# ---- Modified add_notification to use admin client ----
 def add_notification(message, notification_type="info", user=None):
-    supabase = get_supabase()
+    supabase_admin = get_supabase_admin()
     new_notif = {
         "message": message,
         "type": notification_type,
@@ -284,14 +286,15 @@ def add_notification(message, notification_type="info", user=None):
         "target_user": user
     }
     try:
-        res = supabase.table("notifications").insert(new_notif).execute()
+        res = supabase_admin.table("notifications").insert(new_notif).execute()
         if res.data:
             st.session_state.notifications.insert(0, res.data[0])
     except Exception as e:
         st.error(f"Error adding notification: {e}")
 
+# ---- Modified log_penalty to use admin client ----
 def log_penalty(user, action, reason):
-    supabase = get_supabase()
+    supabase_admin = get_supabase_admin()
     new_entry = {
         "user": user,
         "action": action,
@@ -300,7 +303,7 @@ def log_penalty(user, action, reason):
         "penalty_type": "warning"
     }
     try:
-        res = supabase.table("penalty_log").insert(new_entry).execute()
+        res = supabase_admin.table("penalty_log").insert(new_entry).execute()
         if res.data:
             st.session_state.penalty_log.insert(0, res.data[0])
         add_notification(f"⚠️ PENALTY: {user} attempted {action} outside allowed time", "warning")
@@ -995,11 +998,11 @@ def show_notification_center():
             st.warning(f"📌 {unread} new notification(s)")
     with col2:
         if st.button("Mark All Read"):
-            supabase = get_supabase()
+            supabase_admin = get_supabase_admin()   # ← Changed to admin client
             for n in st.session_state.notifications:
                 n['read'] = True
                 try:
-                    supabase.table("notifications").update({"read": True}).eq("id", n["id"]).execute()
+                    supabase_admin.table("notifications").update({"read": True}).eq("id", n["id"]).execute()
                 except:
                     pass
             load_all_data()
@@ -1422,7 +1425,8 @@ def show_admin_panel():
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 assignments_json = json.dumps(st.session_state.assignments_list)
 
-                supabase = get_supabase()
+                # --- Use admin client for teacher creation ---
+                supabase_admin = get_supabase_admin()
                 try:
                     user_data = {
                         "username": username,
@@ -1430,7 +1434,7 @@ def show_admin_panel():
                         "role": "teacher",
                         "name": teacher_name
                     }
-                    supabase.table("users").insert(user_data).execute()
+                    supabase_admin.table("users").insert(user_data).execute()
                     teacher_data = {
                         "id": teacher_id,
                         "name": teacher_name,
@@ -1441,7 +1445,7 @@ def show_admin_panel():
                         "added": added_time,
                         "assignments": assignments_json
                     }
-                    supabase.table("teachers").insert(teacher_data).execute()
+                    supabase_admin.table("teachers").insert(teacher_data).execute()
                     load_all_data()
                     add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
                     st.success(f"""
@@ -1539,12 +1543,13 @@ def show_admin_panel():
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
                             teacher["assignments"] = json.dumps(st.session_state.edit_assignments)
-                            supabase = get_supabase()
+                            # Use admin client for updates
+                            supabase_admin = get_supabase_admin()
                             try:
-                                supabase.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
+                                supabase_admin.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
                                 if teacher.get("username") in st.session_state.user_db:
                                     st.session_state.user_db[teacher["username"]]["name"] = new_name
-                                    supabase.table("users").update({"name": new_name}).eq("username", teacher["username"]).execute()
+                                    supabase_admin.table("users").update({"name": new_name}).eq("username", teacher["username"]).execute()
                                 load_all_data()
                                 add_notification(f"✏️ Teacher {new_name} updated", "info")
                                 st.success(f"✅ Teacher {new_name} updated successfully!")
@@ -1784,9 +1789,10 @@ def show_admin_panel():
                             }
                             st.session_state.evaluations.append(eval_item)
                         batch["status"] = "approved"
-                        supabase = get_supabase()
+                        # Use admin client for batch update
+                        supabase_admin = get_supabase_admin()
                         try:
-                            supabase.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
+                            supabase_admin.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
                             load_all_data()
                             add_notification(f"✅ Batch from {teacher_name} approved ({student_count} students)", "success")
                             st.success(f"✅ Batch approved! {student_count} student evaluations created.")
@@ -1796,9 +1802,9 @@ def show_admin_panel():
                 with col2:
                     if st.button(f"❌ Reject Batch", key=f"reject_batch_{batch_id}", use_container_width=True):
                         batch["status"] = "rejected"
-                        supabase = get_supabase()
+                        supabase_admin = get_supabase_admin()
                         try:
-                            supabase.table("batches").update({"status": "rejected"}).eq("id", batch_id).execute()
+                            supabase_admin.table("batches").update({"status": "rejected"}).eq("id", batch_id).execute()
                             load_all_data()
                             add_notification(f"❌ Batch from {teacher_name} rejected", "warning")
                             st.warning("❌ Batch rejected!")
@@ -1899,9 +1905,10 @@ def show_admin_panel():
                             "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "evaluations_count": 0
                         }
-                        supabase = get_supabase()
+                        # Use admin client for student insertion
+                        supabase_admin = get_supabase_admin()
                         try:
-                            supabase.table("students").insert(new_student).execute()
+                            supabase_admin.table("students").insert(new_student).execute()
                             load_all_data()
                             add_notification(f"👨‍🎓 Student {name} added manually", "success")
                             st.success(f"✅ Student {name} added!")
@@ -1954,9 +1961,9 @@ def show_admin_panel():
                             student["parent_name"] = new_parent
                             student["contact"] = new_contact
                             student["subjects"] = new_subjects
-                            supabase = get_supabase()
+                            supabase_admin = get_supabase_admin()
                             try:
-                                supabase.table("students").update(student).eq("id", student["id"]).execute()
+                                supabase_admin.table("students").update(student).eq("id", student["id"]).execute()
                                 load_all_data()
                                 add_notification(f"✏️ Student {new_name} updated", "info")
                                 st.success(f"✅ Student {new_name} updated successfully!")
@@ -2254,7 +2261,7 @@ def show_admin_panel():
             with col3:
                 if selected_grade and selected_teacher_id:
                     if st.button("Assign Homeroom Teacher"):
-                        supabase = get_supabase()
+                        supabase_admin = get_supabase_admin()
                         try:
                             new_assignment = {
                                 "grade": selected_grade,
@@ -2262,7 +2269,7 @@ def show_admin_panel():
                                 "teacher_id": selected_teacher_id,
                                 "assigned_at": datetime.now().isoformat()
                             }
-                            supabase.table("homeroom_assignments").insert(new_assignment).execute()
+                            supabase_admin.table("homeroom_assignments").insert(new_assignment).execute()
                             load_all_data()
                             add_notification(f"👨‍🏫 Homeroom teacher assigned: {selected_grade} - {selected_section} → {get_teacher_name(selected_teacher_id)}", "success")
                             st.success("✅ Homeroom teacher assigned successfully!")
@@ -2574,9 +2581,9 @@ def show_teacher_panel():
                     existing_batch["max_scores"] = new_max_scores
                     existing_batch["remarks"] = remarks
                     existing_batch["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    supabase = get_supabase()
+                    supabase_admin = get_supabase_admin()
                     try:
-                        supabase.table("batches").update(existing_batch).eq("id", existing_batch["id"]).execute()
+                        supabase_admin.table("batches").update(existing_batch).eq("id", existing_batch["id"]).execute()
                         load_all_data()
                         add_notification(f"📝 Batch updated for {teacher_name} ({selected_grade} {selected_section} {selected_semester} {teacher_subject})", "info")
                         st.success("✅ Batch updated successfully! Awaiting approval.")
@@ -2599,9 +2606,9 @@ def show_teacher_panel():
                         "status": "pending",
                         "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                     }
-                    supabase = get_supabase()
+                    supabase_admin = get_supabase_admin()
                     try:
-                        supabase.table("batches").insert(batch).execute()
+                        supabase_admin.table("batches").insert(batch).execute()
                         load_all_data()
                         add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {selected_section} {selected_semester} {teacher_subject})", "info")
                         st.success("✅ Batch submitted successfully! Waiting for admin approval.")
