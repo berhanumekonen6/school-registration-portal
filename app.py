@@ -1053,6 +1053,8 @@ def generate_student_card(student, semester="Semester III"):
     grade = student.get('grade', 'Grade 1')
     section = student.get('section', 'A')
     academic_year = "2018"  # as per PDF
+    
+    # *** DYNAMIC ADMIN SETTINGS ***
     director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ')
     school_name = st.session_state.school_name
 
@@ -1116,11 +1118,14 @@ def generate_student_card(student, semester="Semester III"):
             border-radius: 8px;
             overflow: hidden;
             border: 1px solid #ccc;
+            /* Added horizontal overflow handling */
+            overflow-x: auto !important; 
         }}
         .page {{
             display: flex;
             flex-wrap: wrap;
             width: 100%;
+            min-width: 800px; /* Ensures card forces horizontal scroll on small screens */
             min-height: 500px;
         }}
         .page-break {{
@@ -1998,7 +2003,7 @@ def show_admin_panel():
                 st.session_state.batches = []
                 st.session_state.penalty_log = []
                 sync_all()
-                add_notification("🗑️ All data cleared by admin", "warning")
+                add_notification(f"🗑️ All data cleared by admin", "warning")
                 st.warning("All data has been cleared.")
                 st.rerun()
 
@@ -2525,6 +2530,7 @@ def show_admin_panel():
             st.session_state.school_city = new_city
             st.session_state.director_name = new_director
             st.success("✅ School settings updated!")
+            st.info("📌 **Note:** The School Name and Director's Name you just set will be dynamically applied to every Student Report Card generated.")
 
     # --- Tab 13: Homeroom Assignments ---
     with tab13:
