@@ -1776,10 +1776,22 @@ def show_admin_panel():
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button(f"✅ Approve Batch", key=f"approve_batch_{batch_id}", use_container_width=True):
-                        batch["status"] = "approved"
+                        # --- FIX: Insert each evaluation into Supabase ---
+                        supabase_admin = get_supabase_admin()
+                        # First, get the current max id to generate new IDs safely
+                        try:
+                            res = supabase_admin.table("evaluations").select("id").order("id", desc=True).limit(1).execute()
+                            if res.data and res.data[0].get("id"):
+                                last_id = res.data[0]["id"]
+                                num = int(last_id[1:]) + 1
+                            else:
+                                num = 1
+                        except:
+                            num = len(st.session_state.evaluations) + 1
+
                         for student_entry in batch["students"]:
                             eval_item = {
-                                "id": f"E{len(st.session_state.evaluations)+1:04d}",
+                                "id": f"E{num:04d}",
                                 "student_id": student_entry["student_id"],
                                 "student_name": student_entry["student_name"],
                                 "teacher_id": batch["teacher_id"],
@@ -1799,9 +1811,15 @@ def show_admin_panel():
                                 "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
                                 "batch_id": batch_id
                             }
+                            try:
+                                supabase_admin.table("evaluations").insert(eval_item).execute()
+                            except Exception as e:
+                                st.error(f"Failed to save evaluation for {student_entry['student_name']}: {e}")
                             st.session_state.evaluations.append(eval_item)
+                            num += 1
+
+                        # Update batch status
                         batch["status"] = "approved"
-                        supabase_admin = get_supabase_admin()
                         try:
                             supabase_admin.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
                             load_all_data()
