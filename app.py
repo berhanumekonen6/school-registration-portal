@@ -213,6 +213,18 @@ def get_all_subjects():
 
 ALL_SUBJECTS = get_all_subjects()
 
+# ---- Username uniqueness check (Option A) ----
+def is_username_taken(username):
+    """Check if a username already exists in the users table (direct Supabase query)."""
+    supabase = get_supabase()
+    try:
+        res = supabase.table("users").select("username").eq("username", username).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        st.warning(f"Could not check username uniqueness: {e}")
+        # Assume it's free if we can't query (fallback)
+        return False
+
 # ---- Modified init_user_db to use admin client ----
 def init_user_db():
     if 'students' not in st.session_state:
@@ -998,7 +1010,7 @@ def show_notification_center():
             st.warning(f"📌 {unread} new notification(s)")
     with col2:
         if st.button("Mark All Read"):
-            supabase_admin = get_supabase_admin()   # ← Changed to admin client
+            supabase_admin = get_supabase_admin()
             for n in st.session_state.notifications:
                 n['read'] = True
                 try:
@@ -1036,12 +1048,12 @@ def generate_student_card(student, semester="Semester III"):
             avg_scores[subj] = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
     else:
         avg_scores = get_student_subject_scores(student["id"], semester)
-    
+
     overall = round(sum(avg_scores.values()) / len(avg_scores), 2) if avg_scores else 0
-    
+
     school_name = st.session_state.school_name
     school_city = st.session_state.school_city
-    
+
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -1211,7 +1223,7 @@ def generate_student_card(student, semester="Semester III"):
 def show_student_card_panel():
     st.markdown("### 🎓 Student Report Cards")
     st.markdown("Generate attractive, school-branded report cards for each student.")
-    
+
     col1, col2, col3 = st.columns(3)
     with col1:
         grade_options = ["All"] + [f"Grade {i}" for i in range(1, 13)]
@@ -1229,19 +1241,19 @@ def show_student_card_panel():
     with col3:
         semester_options = ["Semester I", "Semester II", "Semester III"]
         selected_semester = st.selectbox("Semester", semester_options, index=2)
-    
+
     filtered_students = st.session_state.students
     if selected_grade != "All":
         filtered_students = [s for s in filtered_students if s.get("grade") == selected_grade]
     if selected_section != "All":
         filtered_students = [s for s in filtered_students if s.get("section") == selected_section]
-    
+
     if not filtered_students:
         st.info("No students match the selection.")
         return
-    
+
     st.markdown(f"**{len(filtered_students)} students found**")
-    
+
     for student in filtered_students:
         with st.expander(f"📄 {student['name']} - {student.get('grade', '')} {student.get('section', '')}"):
             html = generate_student_card(student, selected_semester)
@@ -1410,12 +1422,14 @@ def show_admin_panel():
                 submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
 
             if submitted and teacher_name:
-                username = generate_username(teacher_name)
-                if username in st.session_state.user_db:
-                    counter = 1
-                    while f"{username}{counter}" in st.session_state.user_db:
-                        counter += 1
-                    username = f"{username}{counter}"
+                # ---- Username generation with direct DB check (Option A) ----
+                base_username = generate_username(teacher_name)
+                username = base_username
+                counter = 1
+                while is_username_taken(username):
+                    username = f"{base_username}{counter}"
+                    counter += 1
+
                 password = generate_random_password()
                 hashed_pw = hash_password(password)
 
@@ -1425,7 +1439,6 @@ def show_admin_panel():
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 assignments_json = json.dumps(st.session_state.assignments_list)
 
-                # --- Use admin client for teacher creation ---
                 supabase_admin = get_supabase_admin()
                 try:
                     user_data = {
@@ -1543,7 +1556,6 @@ def show_admin_panel():
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
                             teacher["assignments"] = json.dumps(st.session_state.edit_assignments)
-                            # Use admin client for updates
                             supabase_admin = get_supabase_admin()
                             try:
                                 supabase_admin.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
@@ -1789,7 +1801,6 @@ def show_admin_panel():
                             }
                             st.session_state.evaluations.append(eval_item)
                         batch["status"] = "approved"
-                        # Use admin client for batch update
                         supabase_admin = get_supabase_admin()
                         try:
                             supabase_admin.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
@@ -1905,7 +1916,6 @@ def show_admin_panel():
                             "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                             "evaluations_count": 0
                         }
-                        # Use admin client for student insertion
                         supabase_admin = get_supabase_admin()
                         try:
                             supabase_admin.table("students").insert(new_student).execute()
@@ -2226,7 +2236,7 @@ def show_admin_panel():
     with tab13:
         st.markdown("### 👨‍🏫 Homeroom Teacher Assignments")
         st.markdown("Assign a homeroom teacher to each grade and section. The homeroom teacher can view student cards for their class.")
-        
+
         # Get unique grade-section pairs from students
         grade_section_pairs = sorted(set([(s.get("grade"), s.get("section")) for s in st.session_state.students if s.get("grade") and s.get("section")]))
         if not grade_section_pairs:
@@ -2240,7 +2250,7 @@ def show_admin_panel():
                 st.dataframe(assignments_df[["grade", "section", "Teacher Name"]], use_container_width=True)
             else:
                 st.info("No homeroom assignments yet.")
-            
+
             st.markdown("#### Assign Homeroom Teacher")
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -2894,12 +2904,14 @@ def main():
                     email = st.text_input("Email")
                     if st.form_submit_button("Add Teacher"):
                         if name:
-                            username = generate_username(name)
-                            if username in st.session_state.user_db:
-                                counter = 1
-                                while f"{username}{counter}" in st.session_state.user_db:
-                                    counter += 1
-                                username = f"{username}{counter}"
+                            # ---- Use Option A for username uniqueness too ----
+                            base_username = generate_username(name)
+                            username = base_username
+                            counter = 1
+                            while is_username_taken(username):
+                                username = f"{base_username}{counter}"
+                                counter += 1
+                            # --------------------------------
                             password = generate_random_password()
                             existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
                             next_num = max(existing_ids) + 1 if existing_ids else 1
