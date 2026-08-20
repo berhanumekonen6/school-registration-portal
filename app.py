@@ -1036,12 +1036,14 @@ def show_notification_center():
         st.info("No notifications")
 
 # ===================================================================
-# GENERATE STUDENT REPORT CARD IN LATEX (exact template match)
+# GENERATE STUDENT REPORT CARD (HTML matching PDF template)
 # ===================================================================
-def generate_student_card_latex(student):
+
+def generate_student_card(student, semester="Semester III"):
     """
-    Returns a LaTeX document (string) that reproduces the two‑page
-    landscape report card format from the provided template.
+    Generate a two‑page landscape HTML report card that matches the PDF exactly.
+    Page 1: left = grading policy, right = cover page.
+    Page 2: left = marks table, right = teacher/parent comments + director signature.
     """
     # ---- Get student data ----
     name = student.get('name', '_________')
@@ -1050,212 +1052,455 @@ def generate_student_card_latex(student):
     address = student.get('address', '_________')
     grade = student.get('grade', 'Grade 1')
     section = student.get('section', 'A')
-    academic_year = "2018"  # or fetch from settings
+    academic_year = "2018"  # as per PDF
     director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ')
     school_name = st.session_state.school_name
 
-    # ---- Subjects and scores ----
-    subjects = GRADE_SUBJECTS.get(grade, [])
+    # ---- Get scores ----
     sem1_scores = get_student_subject_scores(student['id'], "Semester I")
     sem2_scores = get_student_subject_scores(student['id'], "Semester II")
+    all_subjects = set(sem1_scores.keys()) | set(sem2_scores.keys())
+    sorted_subjects = sorted(all_subjects)
 
-    # Build table rows
+    # Build table rows and totals
     table_rows = []
     total_sem1 = 0
     total_sem2 = 0
-    for subj in subjects:
+    for subj in sorted_subjects:
         s1 = sem1_scores.get(subj, 0)
         s2 = sem2_scores.get(subj, 0)
         avg = round((s1 + s2) / 2, 2) if (s1 or s2) else 0
         total_sem1 += s1
         total_sem2 += s2
-        # Escape underscores and backslashes for LaTeX
-        subj_esc = subj.replace('_', '\\_')
-        table_rows.append(f"{subj_esc} & {s1} & {s2} & {avg} \\\\")
-    subject_count = len(subjects)
+        table_rows.append(f"<tr><td class='subject-name'>{subj}</td><td>{s1}</td><td>{s2}</td><td>{avg}</td></tr>")
+
+    subject_count = len(sorted_subjects)
     avg_sem1 = round(total_sem1 / subject_count, 1) if subject_count > 0 else 0
     avg_sem2 = round(total_sem2 / subject_count, 1) if subject_count > 0 else 0
     overall_avg = round((avg_sem1 + avg_sem2) / 2, 1) if subject_count > 0 else 0
 
-    # ---- Rank, absence, conduct (placeholders) ----
+    # ---- Placeholders for absence, conduct, rank ----
     absence = "3"
     conduct = "A"
     rank = "30/49"
 
-    # ---- Promote to next grade (if avg > 50) ----
+    # ---- Promoted to next grade if overall >= 50 ----
     promoted = str(int(grade.replace("Grade ", "")) + 1) + "ኛ" if overall_avg >= 50 else "_________"
 
-    # ---- Build LaTeX document ----
-    latex = r"""\documentclass[10pt,a4paper,landscape]{article}
-\usepackage[margin=1cm]{geometry}
-\usepackage{fontspec}
-\usepackage{tabularx}
-\usepackage{array}
-\usepackage{multirow}
-\usepackage{multicol}
+    # ---- Build HTML ----
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Student Report Card - {name}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        @page {{
+            size: landscape;
+            margin: 1.2cm 1.5cm;
+        }}
+        body {{
+            font-family: 'Noto Sans Ethiopic', 'Segoe UI', Tahoma, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }}
+        .card-container {{
+            max-width: 1100px;
+            width: 100%;
+            background: #ffffff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #ccc;
+        }}
+        .page {{
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            min-height: 500px;
+        }}
+        .page-break {{
+            page-break-before: always;
+            border-top: 3px double #1a472a;
+            margin-top: 10px;
+            padding-top: 10px;
+        }}
+        .column {{
+            flex: 1 1 50%;
+            padding: 20px 25px;
+            min-width: 280px;
+        }}
+        /* ---- Page 1 left (grading policy) ---- */
+        .grading-policy {{
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }}
+        .grading-policy h2 {{
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #1a472a;
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #1a472a;
+            padding-bottom: 6px;
+        }}
+        .grading-policy .policy-text {{
+            border: 1px solid #1a472a;
+            padding: 12px 15px;
+            border-radius: 4px;
+            background: #f9fbf9;
+            margin-bottom: 20px;
+        }}
+        .grading-policy .policy-text p {{
+            margin: 8px 0;
+        }}
+        .grading-policy .policy-text .range {{
+            font-weight: 700;
+            color: #1a472a;
+        }}
+        .grading-policy .policy-text .note {{
+            font-style: italic;
+            margin-top: 12px;
+            border-top: 1px dashed #aaa;
+            padding-top: 10px;
+        }}
+        /* ---- Page 1 right (cover) ---- */
+        .cover-page {{
+            text-align: center;
+        }}
+        .cover-page .school-name {{
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a472a;
+            letter-spacing: 1px;
+        }}
+        .cover-page .card-title {{
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1a472a;
+            margin: 6px 0 15px 0;
+            border-bottom: 2px solid #1a472a;
+            padding-bottom: 6px;
+        }}
+        .cover-page .info-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 0.95rem;
+        }}
+        .cover-page .info-table td {{
+            padding: 6px 4px;
+            vertical-align: top;
+        }}
+        .cover-page .info-table .label {{
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+        .cover-page .info-table .value {{
+            border-bottom: 1px solid #aaa;
+            min-width: 120px;
+            text-align: left;
+            padding-left: 8px;
+        }}
+        .cover-page .motto {{
+            font-style: italic;
+            margin-top: 25px;
+            font-size: 1rem;
+            color: #1a472a;
+            font-weight: 600;
+        }}
+        /* ---- Page 2 left (marks table) ---- */
+        .marks-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }}
+        .marks-table th {{
+            background: #e8f0e8;
+            color: #1a3a1a;
+            padding: 6px 8px;
+            border: 1px solid #b0c0b0;
+            text-align: center;
+            font-weight: 700;
+        }}
+        .marks-table td {{
+            padding: 5px 8px;
+            border: 1px solid #c0d0c0;
+            text-align: center;
+        }}
+        .marks-table .subject-name {{
+            text-align: left;
+            font-weight: 500;
+            padding-left: 12px;
+        }}
+        .marks-table .total-row {{
+            background: #e8f5e9 !important;
+            font-weight: 700;
+        }}
+        .marks-table .average-row {{
+            background: #f0f8f0 !important;
+            font-weight: 600;
+        }}
+        .marks-table .stat-row td {{
+            padding: 4px 8px;
+        }}
+        .marks-table .stat-label {{
+            font-weight: 600;
+            text-align: left;
+            padding-left: 12px;
+        }}
+        /* ---- Page 2 right (comments) ---- */
+        .comments-section {{
+            font-size: 0.9rem;
+        }}
+        .comments-section .section-title {{
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1a472a;
+            text-align: center;
+            border-bottom: 2px solid #1a472a;
+            padding-bottom: 6px;
+            margin-bottom: 15px;
+        }}
+        .comments-section .semester-block {{
+            border: 1px solid #d0d8d0;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-bottom: 15px;
+            background: #fafcfa;
+        }}
+        .comments-section .semester-title {{
+            font-weight: 700;
+            color: #1a472a;
+            border-bottom: 1px solid #1a472a;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+            text-align: center;
+        }}
+        .comments-section .comment-line {{
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+        }}
+        .comments-section .comment-line .line {{
+            flex: 1;
+            border-bottom: 1px solid #8a9a8a;
+            margin-left: 8px;
+            height: 18px;
+        }}
+        .comments-section .director-sign {{
+            margin-top: 15px;
+            border-top: 1px solid #d0d8d0;
+            padding-top: 12px;
+            display: flex;
+            justify-content: space-between;
+        }}
+        .comments-section .director-sign .line {{
+            flex: 1;
+            border-bottom: 1px solid #8a9a8a;
+            margin-left: 8px;
+            height: 18px;
+        }}
+        /* ---- Print styling ---- */
+        @media print {{
+            body {{
+                background: white;
+                padding: 0;
+            }}
+            .card-container {{
+                box-shadow: none;
+                border: none;
+                border-radius: 0;
+                max-width: 100%;
+            }}
+            .page {{
+                min-height: 0;
+            }}
+            .page-break {{
+                border-top: none;
+                margin-top: 0;
+                padding-top: 0;
+            }}
+            .column {{
+                padding: 10px 15px;
+            }}
+        }}
+        /* ---- Responsive ---- */
+        @media (max-width: 768px) {{
+            .column {{
+                flex: 1 1 100%;
+            }}
+            .page-break {{
+                border-top: 2px solid #1a472a;
+                margin-top: 20px;
+                padding-top: 20px;
+            }}
+        }}
+    </style>
+</head>
+<body>
+<div class="card-container">
+    <!-- ============================================================ -->
+    <!-- PAGE 1                                                       -->
+    <!-- ============================================================ -->
+    <div class="page">
+        <!-- LEFT COLUMN: Grading Policy -->
+        <div class="column grading-policy">
+            <h2>የማርክ አሰጣጥ ደንብ / METHOD OF MARKING</h2>
+            <div class="policy-text">
+                <p><strong>የማርክ አሰጣጥ ደንብ</strong></p>
+                <p>ትምህርት ቤቶች በመዝገብ ውስጥ የሚጽፏቸው የትማሪዎች የትምህርት ደረጃ በሚከተለው ዓይነት ይመደባል፡</p>
+                <p><span class="range">100 - 90%</span> ያገኘ፡ እጅግ በጣም ጥሩ</p>
+                <p><span class="range">89 - 80%</span> ያገኘ፡ በጣም ጥሩ</p>
+                <p><span class="range">79 - 60%</span> ያገኘ፡ በቂ</p>
+                <p><span class="range">59 - 50%</span> ያገኘ፡ መጠነኛ</p>
+                <p><span class="range">50% በታች</span> ያገኘ፡ ዝቅተኛ</p>
+                <p class="note">ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡</p>
+            </div>
+            <div class="policy-text">
+                <p><strong>METHOD OF MARKING</strong></p>
+                <p>Student’s achievement in each class will be assigned the following values:</p>
+                <p><span class="range">100 - 90%</span> Excellent</p>
+                <p><span class="range">89 - 80%</span> Very good</p>
+                <p><span class="range">79 - 60%</span> Satisfactory</p>
+                <p><span class="range">59 - 50%</span> Fair</p>
+                <p><span class="range">50% - Below</span> Poor</p>
+                <p class="note">Point Zero (0%) should never be given, since it would mean no work has been done absolutely. If a student has been absent from class for the whole period covered, and has not made up of the work, he (she) should be marked "AB" for 'Absent'.</p>
+            </div>
+        </div>
 
-% Ethiopic font setup (Requires XeLaTeX / LuaLaTeX and a font like Abyssinica SIL installed)
-\setmainfont{Abyssinica SIL} 
+        <!-- RIGHT COLUMN: Cover Page -->
+        <div class="column cover-page">
+            <div class="school-name">{school_name}</div>
+            <div class="card-title">የተማሪ ውጤት መግለጫ / Student Report Card</div>
+            <table class="info-table">
+                <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value"></td></tr>
+                <tr><td class="label">ክልል / Region:</td><td class="value"></td><td class="label">ዞን / Zone:</td><td class="value"></td></tr>
+                <tr><td class="label">ወረዳ / Wereda:</td><td class="value"></td><td class="label">ክፍለ ከተማ / Kebele:</td><td class="value"></td></tr>
+                <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
+                <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
+                <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
+                <tr><td class="label">የትምህርት ዘመን / Academic Year:</td><td class="value">{academic_year}</td></tr>
+                <tr><td class="label">ክፍሉ / Grade:</td><td class="value">{grade}</td></tr>
+                <tr><td class="label">ክፍል ተዛውሯል/ራለች / Promoted to grade:</td><td class="value">{promoted}</td></tr>
+                <tr><td class="label">የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:</td><td class="value">{director_name}</td></tr>
+                <tr><td class="label">ፊርማ / Signature:</td><td class="value"></td></tr>
+            </table>
+            <div class="motto">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
+        </div>
+    </div>
 
-\pagestyle{empty}
-\setlength{\parindent}{0pt}
+    <!-- ============================================================ -->
+    <!-- PAGE 2                                                       -->
+    <!-- ============================================================ -->
+    <div class="page page-break">
+        <!-- LEFT COLUMN: Marks Table -->
+        <div class="column">
+            <table class="marks-table">
+                <thead>
+                    <tr>
+                        <th>የትምህርት ዓይነት<br>Subject</th>
+                        <th>1ኛ ት/ም ወቅት<br>1st Semester</th>
+                        <th>2ኛ ት/ም ወቅት<br>2nd Semester</th>
+                        <th>አማካይ<br>Average</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                    <tr class="total-row">
+                        <td class="subject-name">ድምር / Total</td>
+                        <td>{total_sem1}</td>
+                        <td>{total_sem2}</td>
+                        <td>{round((total_sem1 + total_sem2) / 2, 1)}</td>
+                    </tr>
+                    <tr class="average-row">
+                        <td class="subject-name">አማካይ / Average</td>
+                        <td>{avg_sem1}</td>
+                        <td>{avg_sem2}</td>
+                        <td>{overall_avg}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">የቀረበት ቀን / Absence</td>
+                        <td>-</td>
+                        <td>{absence}</td>
+                        <td>{absence}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">ጠባይ / Conduct</td>
+                        <td>{conduct}</td>
+                        <td>{conduct}</td>
+                        <td>{conduct}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">ደረጃ / Rank</td>
+                        <td>{rank}</td>
+                        <td>{rank}</td>
+                        <td>{rank}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
-\begin{document}
+        <!-- RIGHT COLUMN: Teacher & Parent Comments -->
+        <div class="column comments-section">
+            <div class="section-title">የክፍል መምህሩ አስተያየት / Remarks from Home Room Teacher</div>
 
-% ==========================================
-% PAGE 1
-% ==========================================
+            <!-- Semester 1 -->
+            <div class="semester-block">
+                <div class="semester-title">1ኛ መንፈቅ ዓመት / FIRST SEMESTER</div>
+                <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
+                <div style="min-height:30px; border-bottom:1px dashed #aaa; margin:6px 0 12px 0;"></div>
+                <div class="comment-line">
+                    <span>ስምና ፊርማ / Name and Signature of Home-Room Teacher:</span>
+                    <span class="line"></span>
+                </div>
+                <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
+                <div style="min-height:30px; border-bottom:1px dashed #aaa; margin:6px 0 12px 0;"></div>
+                <div class="comment-line">
+                    <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature of Parent or Guardian:</span>
+                    <span class="line"></span>
+                </div>
+            </div>
 
-% PAGE 1 - LEFT COLUMN (METHOD OF MARKING)
-\begin{minipage}[c][0.95\textheight][c]{0.48\textwidth}
-\centering
+            <!-- Semester 2 -->
+            <div class="semester-block">
+                <div class="semester-title">ሁለተኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
+                <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
+                <div style="min-height:30px; border-bottom:1px dashed #aaa; margin:6px 0 12px 0;"></div>
+                <div class="comment-line">
+                    <span>ስምና ፊርማ / Name and Signature of Home-Room Teacher:</span>
+                    <span class="line"></span>
+                </div>
+                <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
+                <div style="min-height:30px; border-bottom:1px dashed #aaa; margin:6px 0 12px 0;"></div>
+                <div class="comment-line">
+                    <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature of Parent or Guardian:</span>
+                    <span class="line"></span>
+                </div>
+            </div>
 
-\textbf{\Large የማርክ አሰጣጥ ደንብ / METHOD OF MARKING}\\[0.6cm]
-
-\begin{tabularx}{\textwidth}{|X|}
-\hline
-\textbf{የማርክ አሰጣጥ ደንብ} \\
-ትምህርት ቤቶች በመዝገብ ውስጥ የሚጽፏቸው የትማሪዎች የትምህርት ደረጃ በሚከተለው ዓይነት ይመደባል፡ \\
-\textbf{100 - 90\%} ያገኘ፡ እጅግ በጣም ጥሩ \\
-\textbf{89 - 80\%} ያገኘ፡ በጣም ጥሩ \\
-\textbf{79 - 60\%} ያገኘ፡ በቂ \\
-\textbf{59 - 50\%} ያገኘ፡ መጠነኛ \\
-\textbf{50\%} በታች ያገኘ፡ ዝቅተኛ \\[0.2cm]
-ከመቶ ዜሮ (0\%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡ \\
-\hline
-\end{tabularx}
-
-\vspace{0.6cm}
-
-\begin{tabularx}{\textwidth}{|X|}
-\hline
-\textbf{METHOD OF MARKING} \\
-Student's achievement in each class will be assigned the following values: \\
-\textbf{100 - 90\%} Excellent \\
-\textbf{89 - 80\%} Very good \\
-\textbf{79 - 60\%} Satisfactory \\
-\textbf{59 - 50\%} Fair \\
-\textbf{50\% - Below} Poor \\[0.2cm]
-Point Zero (0\%) should never be given, since it would mean no work has been done absolutely. If a student has been absent from class for the whole period covered, and has not made up of the work, he (she) should be marked "AB" for 'Absent'. \\
-\hline
-\end{tabularx}
-
-\end{minipage}%
-\hfill
-% PAGE 1 - RIGHT COLUMN (COVER PAGE)
-\begin{minipage}[c][0.95\textheight][c]{0.48\textwidth}
-\centering
-
-% Header only on First Page Right side
-{\Large \textbf{""" + school_name + r"""}}\\[0.2cm]
-{\large \textbf{የተማሪ ውጤት መግለጫ / Student Report Card}}\\[0.4cm]
-\hrule
-\vspace{0.6cm}
-
-\begin{tabularx}{\textwidth}{rX}
-\textbf{የት/ቤቱ ስም / Name of school:} & \hrulefill \\[0.3cm]
-\textbf{ክልል / Region:} \hrulefill & \textbf{ዞን / Zone:} \hrulefill \\[0.3cm]
-\textbf{ወረዳ / Wereda:} \hrulefill & \textbf{ክፍለ ከተማ / Kebele:} \hrulefill \\[0.3cm]
-\textbf{የተማሪው ስም / Name of student:} & """ + name + r""" \\[0.3cm]
-\textbf{ፆታ / Sex:} """ + gender + r""" & \textbf{ዕድሜ / Age:} """ + str(age) + r""" \\[0.3cm]
-\textbf{አድራሻ / Address:} & """ + address + r""" \\[0.3cm]
-\textbf{የትምህርት ዘመን / Academic Year:} & """ + academic_year + r""" \\[0.3cm]
-\textbf{ክፍሉ / Grade:} & """ + grade + r""" \\[0.3cm]
-\textbf{ክፍል ተዛውሯል/ራለች / Promoted to grade:} & """ + promoted + r""" \\[0.5cm]
-\textbf{የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:} & """ + director_name + r""" \\[0.3cm]
-\textbf{ፊርማ / Signature:} & \hrulefill \\
-\end{tabularx}
-
-\vspace{1.2cm}
-\textit{"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"}
-
-\end{minipage}
-
-\newpage
-
-% ==========================================
-% PAGE 2
-% ==========================================
-
-% PAGE 2 - LEFT COLUMN (SUBJECTS & GRADES)
-\begin{minipage}[c][0.95\textheight][c]{0.48\textwidth}
-\centering
-
-\begin{tabularx}{\textwidth}{|X|c|c|c|}
-\hline
-\textbf{የትምህርት ዓይነት} & \textbf{1ኛ ት/ም ወቅት} & \textbf{2ኛ ት/ም ወቅት} & \textbf{አማካይ} \\
-\textbf{Subject} & \textbf{1st Semester} & \textbf{2nd Semester} & \textbf{Average} \\
-\hline
+            <!-- Director's signature -->
+            <div class="director-sign">
+                <span><strong>የርዕሰ መምህሩ ፊርማ / Director's Signature:</strong></span>
+                <span class="line"></span>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
 """
+    return html
 
-    # Insert subject rows
-    for row in table_rows:
-        latex += row + "\n"
-
-    # Totals and averages
-    latex += r"""\hline
-\textbf{ድምር / Total} & """ + str(total_sem1) + r""" & """ + str(total_sem2) + r""" & """ + str(round((total_sem1+total_sem2)/2,1)) + r""" \\
-\hline
-\textbf{አማካይ / Average} & """ + str(avg_sem1) + r""" & """ + str(avg_sem2) + r""" & """ + str(overall_avg) + r""" \\
-\hline
-\textbf{የቀረበት ቀን / Absence} & - & """ + absence + r""" & """ + absence + r""" \\
-\hline
-\textbf{ጠባይ / Conduct} & """ + conduct + r""" & """ + conduct + r""" & """ + conduct + r""" \\
-\hline
-\textbf{ደረጃ / Rank} & """ + rank + r""" & """ + rank + r""" & """ + rank + r""" \\
-\hline
-\end{tabularx}
-
-\end{minipage}%
-\hfill
-% PAGE 2 - RIGHT COLUMN (TEACHER & PARENT COMMENTS)
-\begin{minipage}[c][0.95\textheight][c]{0.48\textwidth}
-\centering
-
-\textbf{\large የክፍል መምህሩ አስተያየት / Remarks from Home Room Teacher}\\[0.4cm]
-
-\begin{tabularx}{\textwidth}{|X|}
-\hline
-\textbf{1ኛ መንፈቅ ዓመት / FIRST SEMESTER} \\[0.2cm]
-\textbf{የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:} \\[0.2cm]
-\hrulefill \\[0.4cm]
-\hrulefill \\[0.4cm]
-\textbf{ስምና ፊርማ / Name and Signature of Home-Room Teacher:} \hrulefill \\[0.4cm]
-\textbf{የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:} \\[0.2cm]
-\hrulefill \\[0.4cm]
-\hrulefill \\[0.4cm]
-\textbf{የወላጅ ወይም አሳዳጊ ፊርማ / Signature of Parent or Guardian:} \hrulefill \\[0.3cm]
-\hline
-\textbf{ሁለተኛ መንፈቅ ዓመት / SECOND SEMESTER} \\[0.2cm]
-\textbf{የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:} \\[0.2cm]
-\hrulefill \\[0.4cm]
-\hrulefill \\[0.4cm]
-\textbf{ስምና ፊርማ / Name and Signature of Home-Room Teacher:} \hrulefill \\[0.4cm]
-\textbf{የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:} \\[0.2cm]
-\hrulefill \\[0.4cm]
-\hrulefill \\[0.4cm]
-\textbf{የወላጅ ወይም አሳዳጊ ፊርማ / Signature of Parent or Guardian:} \hrulefill \\[0.3cm]
-\hline
-\end{tabularx}
-
-\vspace{0.6cm}
-\begin{tabularx}{\textwidth}{rX}
-\textbf{የርዕሰ መምህሩ ፊርማ / Director's Signature:} & \hrulefill \\
-\end{tabularx}
-
-\end{minipage}
-
-\end{document}
-"""
-    return latex
-
-# ===================================================================
-# STUDENT CARD PANEL (LaTeX version)
-# ===================================================================
+# ---- show_student_card_panel ----
 def show_student_card_panel():
-    st.markdown("### 🎓 Student Report Cards (LaTeX Format)")
-    st.markdown("Generate a two‑page landscape report card in LaTeX, matching the Ethiopian school template.")
-    st.info("⬇️ Download the `.tex` file and compile with **XeLaTeX** (requires Abyssinica SIL font).")
+    st.markdown("### 🎓 Student Report Cards")
+    st.markdown("Generate a two‑page landscape report card matching the official Ethiopian school format.")
+    st.info("📄 Download the HTML file, open it in a browser, and use **Print → Save as PDF** to get a PDF card.")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -1272,8 +1517,8 @@ def show_student_card_panel():
         else:
             selected_section = "All"
     with col3:
-        # Semester selection is not used for LaTeX (it shows both semesters)
-        st.markdown("*(Both semesters are displayed)*")
+        semester_options = ["Semester I", "Semester II", "Semester III"]
+        selected_semester = st.selectbox("Semester", semester_options, index=2)
 
     filtered_students = st.session_state.students
     if selected_grade != "All":
@@ -1289,19 +1534,19 @@ def show_student_card_panel():
 
     for student in filtered_students:
         with st.expander(f"📄 {student['name']} - {student.get('grade', '')} {student.get('section', '')}"):
-            latex_code = generate_student_card_latex(student)
+            html = generate_student_card(student, selected_semester)
             st.download_button(
-                label=f"📥 Download LaTeX Card for {student['name']}",
-                data=latex_code.encode('utf-8'),
-                file_name=f"Student_Card_{student['name']}_{student.get('grade','')}.tex",
-                mime="text/plain",
-                key=f"download_latex_{student['id']}"
+                label=f"📥 Download HTML Card for {student['name']}",
+                data=html.encode('utf-8'),
+                file_name=f"Student_Card_{student['name']}_{selected_semester}.html",
+                mime="text/html",
+                key=f"download_{student['id']}"
             )
-            with st.expander("🔍 Preview LaTeX source"):
-                st.code(latex_code, language="latex")
+            st.markdown("#### Preview")
+            st.components.v1.html(html, height=800, scrolling=True)
 
 # ===================================================================
-# ADMIN PANEL (complete – unchanged except for the Student Cards tab)
+# ADMIN PANEL (complete)
 # ===================================================================
 
 def show_admin_panel():
@@ -1321,7 +1566,7 @@ def show_admin_panel():
         "⚠️ Penalty Log",
         "🏫 Settings",
         "👨‍🏫 Homeroom",
-        "🎓 Student Cards"  # <-- updated tab
+        "🎓 Student Cards"
     ])
 
     # --- Tab 1: Overview ---
@@ -2271,7 +2516,7 @@ def show_admin_panel():
     # --- Tab 12: Settings ---
     with tab12:
         st.markdown("### 🏫 School Settings")
-        st.markdown("Update school name and city that will appear on student report cards.")
+        st.markdown("Update school name, city, and director's name that will appear on student report cards.")
         new_name = st.text_input("School Name", value=st.session_state.school_name)
         new_city = st.text_input("City/Town", value=st.session_state.school_city)
         new_director = st.text_input("Director's Name", value=st.session_state.director_name)
@@ -2333,7 +2578,7 @@ def show_admin_panel():
                         except Exception as e:
                             st.error(f"❌ Failed to assign homeroom teacher: {e}")
 
-    # --- Tab 14: Student Cards (LaTeX) ---
+    # --- Tab 14: Student Cards ---
     with tab14:
         show_student_card_panel()
 
