@@ -964,6 +964,60 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
+# ===================================================================
+# NEW: Missing functions for Penalty Log and Notification Center
+# ===================================================================
+
+def show_penalty_log():
+    st.markdown("### ⚠️ Penalty Log")
+    if st.session_state.penalty_log:
+        user_penalties = [p for p in st.session_state.penalty_log if p.get("user") == st.session_state.current_user]
+        if user_penalties:
+            st.markdown(f"""
+            <div style="background:#FCE8E6;padding:1rem;border-radius:12px;border:2px solid #EA4335;margin-bottom:1rem;">
+                <p style="color:#EA4335;font-weight:700;">⚠️ You have {len(user_penalties)} penalty record(s).</p>
+                <p style="color:#EA4335;">Penalties are recorded when registration or evaluation is attempted outside the allowed time period.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            df = pd.DataFrame(user_penalties)
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.success("✅ You have no penalties recorded.")
+    else:
+        st.success("✅ No penalties recorded in the system.")
+
+def show_notification_center():
+    unread = len([n for n in st.session_state.notifications if not n.get('read', False)])
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("### 🔔 Notifications")
+        if unread > 0:
+            st.warning(f"📌 {unread} new notification(s)")
+    with col2:
+        if st.button("Mark All Read"):
+            supabase = get_supabase()
+            for n in st.session_state.notifications:
+                n['read'] = True
+                try:
+                    supabase.table("notifications").update({"read": True}).eq("id", n["id"]).execute()
+                except:
+                    pass
+            load_all_data()
+            st.rerun()
+    if st.session_state.notifications:
+        for note in st.session_state.notifications[:10]:
+            unread_class = "unread" if not note.get('read', False) else ""
+            warning_class = "warning" if note.get('type') == 'warning' else ""
+            success_class = "success" if note.get('type') == 'success' else ""
+            st.markdown(f"""
+            <div class="notification-item {unread_class} {warning_class} {success_class}">
+                <strong>{note['message']}</strong>
+                <div class="notification-time">⏱ {note['time']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No notifications")
+
 # ---- Student Card Generator ----
 def generate_student_card(student, semester="Semester III"):
     """Generate an attractive HTML student card with school details."""
