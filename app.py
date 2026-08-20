@@ -1077,7 +1077,7 @@ def generate_student_card(student, semester="Semester III"):
     
     # Placeholder data for fields not yet stored in the student object
     address = student.get('address', '_________')
-    academic_year = "2016 ዓ.ም."
+    academic_year = "2019 ዓ.ም."
     promoted_to = student.get('promoted_to', '_________')
     director_name = st.session_state.get('director_name', 'በረከት ስጦታዉ አለኸኝ (Bereket Setotaw Alehegn)')
     
