@@ -981,62 +981,52 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
-# ---- Get student rank (new helper) ----
+# ---- Get student rank ----
 def get_student_rank(student_id, grade, section):
     """
     Compute the student's rank within their grade and section based on overall average score.
     Returns: (rank_display_string, rank_number, total_students)
     """
-    # Get all students in the same grade and section
     students_in_class = [s for s in st.session_state.students 
                          if s.get("grade") == grade and s.get("section") == section]
-    
     if not students_in_class:
         return "1/1", 1, 1
-    
-    # Calculate overall average for each student
     student_scores = []
     for s in students_in_class:
         evals = get_approved_evaluations_for_student(s["id"])
-        if evals:
-            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-        else:
-            avg_score = 0
-        student_scores.append({
-            "id": s["id"], 
-            "name": s["name"], 
-            "avg": avg_score
-        })
-    
-    # Sort by average score descending (highest first)
+        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
+        student_scores.append({"id": s["id"], "avg": avg_score})
     sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
-    
-    # Find rank of the target student
     total = len(sorted_students)
     rank = 1
     for i, s in enumerate(sorted_students):
         if s["id"] == student_id:
             rank = i + 1
             break
-    
     return f"{rank}/{total}", rank, total
 
-# ---- Get grade comment based on overall average ----
-def get_grade_comment(avg_score):
+# ---- Get short homeroom comment based on grading scale ----
+def get_homeroom_comment(avg_score):
     """
-    Return a comment based on the overall average using the grading scale.
-    Returns: (amharic_comment, english_comment)
+    Return a short and precise Amharic+English comment based on the grading scale.
+    Includes a motivational message for each range.
     """
     if avg_score >= 90:
-        return "ውጤቱ እጅግ በጣም ጥሩ ነው", "Excellent"
+        amh = "እጅግ በጣም ጥሩ ከዚህ የተሻለ ለመስራት የተማሪዉና የወላጅ ጥረት ይታከልበት፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Excellent. To achieve even better, the student and parents should intensify their effort. «Education is the key to your future life; open every door with hard work!»"
     elif avg_score >= 80:
-        return "ውጤቱ በጣም ጥሩ ነው", "Very good"
+        amh = "በጣም ጥሩ ከዚህ የተሻለ ለመስራት ትንሽ ተጨማሪ ጥረት ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Very good. A little more effort will lead to excellent results. «Education is the key to your future life; open every door with hard work!»"
     elif avg_score >= 60:
-        return "ውጤቱ በቂ ነው", "Satisfactory"
+        amh = "በቂ ነው፤ የበለጠ ለማድረግ መማርን መለማመድ ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Satisfactory. More practice and study are needed to improve. «Education is the key to your future life; open every door with hard work!»"
     elif avg_score >= 50:
-        return "ውጤቱ መጠነኛ ነው", "Fair"
+        amh = "መጠነኛ ነው፤ ከወላጆች እና ከመምህራን ተጨማሪ ክትትል ይጠበቃል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Fair. More attention from parents and teachers is needed. «Education is the key to your future life; open every door with hard work!»"
     else:
-        return "ውጤቱ ዝቅተኛ ነው", "Poor"
+        amh = "ዝቅተኛ ነው፤ ወላጆችና መምህራን በጋራ ለማሻሻል ጥረት ማድረግ አለባቸው፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Poor. Parents and teachers must work together to help the student improve. «Education is the key to your future life; open every door with hard work!»"
+    return amh, eng
 
 # ===================================================================
 # Penalty Log and Notification Center
@@ -1093,38 +1083,37 @@ def show_notification_center():
         st.info("No notifications")
 
 # ===================================================================
-# GENERATE STUDENT REPORT CARD (PREMIUM VERSION WITH ALL FIXES)
+# GENERATE STUDENT REPORT CARD (PREMIUM VERSION, FIXED OVERFLOW)
 # ===================================================================
 
 def generate_student_card(student, semester="Semester III"):
     """
-    Generate a two‑page landscape HTML report card with premium styling.
-    Page 1: left = grading policy, right = cover page.
-    Page 2: left = marks table, right = teacher/parent comments + director signature.
-    Rank is computed dynamically from the student's grade and section.
-    Teacher comment is auto-generated based on the overall average using the grading scale (Amharic+English).
-    Additional remarks from evaluations are also included.
+    Generate a two‑page landscape HTML report card with:
+    - Premium gold‑accented design.
+    - Rank computed from student's grade and section.
+    - Homeroom comment based on the grading scale (short + motivational).
+    - Director name from admin settings.
+    - Font sizes reduced to prevent margin overflow.
     """
-    # ---- Get student data ----
+    # ---- Student data ----
     name = student.get('name', '_________')
     gender = student.get('gender', '_________')
     age = student.get('age', '_________')
     address = student.get('address', '_________')
     grade = student.get('grade', 'Grade 1')
     section = student.get('section', 'A')
-    academic_year = "2018"  # as per PDF, you can make this dynamic if needed
+    academic_year = "2018"
 
-    # ---- School settings from session state ----
+    # ---- School settings ----
     director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ')
     school_name = st.session_state.school_name
 
-    # ---- Get scores ----
+    # ---- Scores ----
     sem1_scores = get_student_subject_scores(student['id'], "Semester I")
     sem2_scores = get_student_subject_scores(student['id'], "Semester II")
     all_subjects = set(sem1_scores.keys()) | set(sem2_scores.keys())
     sorted_subjects = sorted(all_subjects)
 
-    # Build table rows and totals
     table_rows = []
     total_sem1 = 0
     total_sem2 = 0
@@ -1141,35 +1130,19 @@ def generate_student_card(student, semester="Semester III"):
     avg_sem2 = round(total_sem2 / subject_count, 1) if subject_count > 0 else 0
     overall_avg = round((avg_sem1 + avg_sem2) / 2, 1) if subject_count > 0 else 0
 
-    # ---- Compute rank dynamically ----
-    rank_display, rank_number, total_students = get_student_rank(student['id'], grade, section)
-    rank = rank_display  # e.g., "3/49"
+    # ---- Rank ----
+    rank_display, _, _ = get_student_rank(student['id'], grade, section)
+    rank = rank_display
 
-    # ---- Generate teacher comment based on overall average ----
-    amharic_comment, english_comment = get_grade_comment(overall_avg)
-    # Get additional remarks from the student's evaluations (if any)
-    student_evals = get_approved_evaluations_for_student(student['id'])
-    additional_remarks = ""
-    if student_evals:
-        # Use the first evaluation's remarks (or combine all unique remarks)
-        remarks_set = set()
-        for e in student_evals:
-            if e.get('remarks'):
-                remarks_set.add(e['remarks'])
-        if remarks_set:
-            additional_remarks = " (" + "; ".join(remarks_set) + ")"
-    # Combine into full comment
-    full_comment_amharic = f"በአጠቃላይ {amharic_comment}.{additional_remarks}"
-    full_comment_english = f"Overall {english_comment}.{additional_remarks}"
+    # ---- Homeroom comment ----
+    amh_comment, eng_comment = get_homeroom_comment(overall_avg)
 
-    # ---- Placeholders for absence, conduct ----
+    # ---- Other fields ----
     absence = "3"
     conduct = "A"
-
-    # ---- Promoted to next grade if overall >= 50 ----
     promoted = str(int(grade.replace("Grade ", "")) + 1) + "ኛ" if overall_avg >= 50 else "_________"
 
-    # ---- Build HTML with premium design ----
+    # ---- Build HTML (compact, reduced font sizes) ----
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1179,26 +1152,24 @@ def generate_student_card(student, semester="Semester III"):
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        @page {{
-            size: landscape;
-            margin: 1.2cm 1.5cm;
-        }}
+        @page {{ size: landscape; margin: 1cm 1.2cm; }}
         body {{
             font-family: 'Noto Sans Ethiopic', 'Segoe UI', Tahoma, sans-serif;
             background: #f0f2f5;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 10px;
+            font-size: 0.8rem;
         }}
         .card-container {{
             max-width: 1100px;
             width: 100%;
             background: #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 20, 40, 0.20);
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 20, 40, 0.15);
             border: 2px solid #c9a84c;
-            padding: 28px 32px 24px 32px;
+            padding: 16px 18px;
             position: relative;
             overflow: visible !important;
         }}
@@ -1216,156 +1187,94 @@ def generate_student_card(student, semester="Semester III"):
             display: flex;
             flex-wrap: wrap;
             width: 100%;
-            min-height: 500px;
+            min-height: 400px;
         }}
         .page-break {{
             page-break-before: always;
             border-top: 3px double #c9a84c;
-            margin-top: 20px;
-            padding-top: 20px;
+            margin-top: 12px;
+            padding-top: 12px;
         }}
         .column {{
             flex: 1 1 50%;
-            padding: 10px 15px;
-            min-width: 280px;
+            padding: 6px 10px;
+            min-width: 250px;
             word-wrap: break-word;
             overflow-wrap: break-word;
         }}
-        /* ---- Page header (gold banner) ---- */
-        .page-header {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 3px double #d4b86a;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 12px 20px;
-        }}
-        .header-left {{
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }}
-        .header-logo {{
-            width: 56px;
-            height: 56px;
-            background: #1a365d;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #f5e7b0;
-            font-weight: 800;
-            font-size: 1.2rem;
-            border: 2px solid #c9a84c;
-            flex-shrink: 0;
-        }}
-        .header-title h1 {{
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #1a365d;
-            letter-spacing: 1px;
-            line-height: 1.2;
-        }}
-        .header-title .sub {{
-            font-size: 0.95rem;
-            font-weight: 400;
-            color: #4a5b7a;
-            letter-spacing: 2px;
-        }}
-        .header-right {{
-            background: #f6f2e7;
-            padding: 6px 20px;
-            border-radius: 40px;
-            border: 1px solid #d4b86a;
-            font-weight: 600;
-            color: #1a365d;
-            font-size: 0.95rem;
-            white-space: nowrap;
-        }}
-        /* ---- Grading policy (left column page 1) ---- */
+        /* ---- Grading policy ---- */
         .grading-policy {{
-            font-size: 0.95rem;
-            line-height: 1.7;
+            font-size: 0.75rem;
+            line-height: 1.5;
             color: #1f2a3e;
         }}
         .grading-policy h2 {{
-            font-size: 1.4rem;
+            font-size: 1.1rem;
             font-weight: 700;
             color: #1a365d;
             border-bottom: 3px solid #c9a84c;
-            padding-bottom: 6px;
-            margin-bottom: 18px;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }}
         .grading-policy h2 span {{
-            font-size: 0.9rem;
+            font-size: 0.75rem;
             font-weight: 400;
             color: #5a6f8e;
         }}
         .grade-scale {{
             background: #f1f5fb;
-            border-radius: 12px;
-            padding: 14px 18px;
-            margin: 14px 0 12px 0;
-            border-left: 4px solid #c9a84c;
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-left: 3px solid #c9a84c;
+            font-size: 0.75rem;
         }}
         .grade-scale div {{
             display: flex;
             justify-content: space-between;
             border-bottom: 1px dashed #dce3ed;
-            padding: 2px 0;
+            padding: 1px 0;
             flex-wrap: wrap;
         }}
-        .grade-scale div:last-child {{
-            border-bottom: none;
-        }}
-        .grade-scale .range {{
-            font-weight: 600;
-            color: #1a365d;
-            min-width: 110px;
-        }}
-        .grade-scale .desc {{
-            color: #2d4059;
-        }}
+        .grade-scale div:last-child {{ border-bottom: none; }}
+        .grade-scale .range {{ font-weight: 600; color: #1a365d; min-width: 80px; }}
+        .grade-scale .desc {{ color: #2d4059; }}
         .divider-light {{
             height: 1px;
             background: linear-gradient(90deg, #dce3ed, transparent);
-            margin: 18px 0;
+            margin: 10px 0;
         }}
-        /* ---- Cover page (right column page 1) ---- */
-        .cover-page {{
-            text-align: center;
-        }}
+        /* ---- Cover page ---- */
+        .cover-page {{ text-align: center; }}
         .cover-page .school-name {{
-            font-size: 1.6rem;
+            font-size: 1.3rem;
             font-weight: 700;
             color: #1a365d;
             letter-spacing: 1px;
             word-wrap: break-word;
         }}
         .cover-page .card-title {{
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: #1a365d;
-            margin: 6px 0 15px 0;
+            margin: 4px 0 10px 0;
             border-bottom: 2px solid #c9a84c;
-            padding-bottom: 6px;
+            padding-bottom: 4px;
             word-wrap: break-word;
-            line-height: 1.4;
+            line-height: 1.3;
         }}
         .info-table {{
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
-            font-size: 0.9rem;
+            margin: 6px 0;
+            font-size: 0.75rem;
         }}
         .info-table td {{
-            padding: 6px 4px;
+            padding: 4px 3px;
             vertical-align: top;
             word-wrap: break-word;
         }}
@@ -1376,65 +1285,60 @@ def generate_student_card(student, semester="Semester III"):
         }}
         .info-table .value {{
             border-bottom: 1px dashed #c9d6e8;
-            padding-left: 8px;
-            min-width: 80px;
+            padding-left: 6px;
+            min-width: 60px;
             text-align: left;
             word-break: break-word;
         }}
         .motto-box {{
-            margin-top: 18px;
-            padding: 12px 16px;
+            margin-top: 12px;
+            padding: 8px 12px;
             background: linear-gradient(135deg, #f6f2e7, #faf8f2);
-            border-radius: 40px;
+            border-radius: 30px;
             border: 1px solid #e1d5b8;
             text-align: center;
             font-style: italic;
             font-weight: 500;
             color: #2d4059;
-            font-size: 1rem;
-            letter-spacing: 0.5px;
+            font-size: 0.8rem;
+            letter-spacing: 0.3px;
             word-wrap: break-word;
         }}
-        /* ---- Marks table (left column page 2) ---- */
+        /* ---- Marks table ---- */
         .marks-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.82rem;
-            border-radius: 12px;
+            font-size: 0.7rem;
+            border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         }}
         .marks-table th {{
             background: #1a365d;
             color: #fff;
             font-weight: 600;
-            padding: 8px 4px;
+            padding: 5px 3px;
             text-align: center;
             border: none;
-            font-size: 0.75rem;
-            letter-spacing: 0.5px;
+            font-size: 0.65rem;
+            letter-spacing: 0.3px;
         }}
-        .marks-table th:first-child {{
-            text-align: left;
-            padding-left: 10px;
-        }}
+        .marks-table th:first-child {{ text-align: left; padding-left: 8px; }}
         .marks-table td {{
-            padding: 5px 4px;
+            padding: 4px 3px;
             text-align: center;
             border: 1px solid #e2e8f0;
             background: #fff;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
         }}
-        .marks-table tr:nth-child(even) td {{
-            background: #f8faff;
-        }}
+        .marks-table tr:nth-child(even) td {{ background: #f8faff; }}
         .marks-table .subject-name {{
             font-weight: 600;
             text-align: left;
-            padding-left: 10px;
+            padding-left: 8px;
             background: #f0f4fb !important;
             color: #1a365d;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
         }}
         .marks-table .total-row td {{
             font-weight: 700;
@@ -1448,48 +1352,48 @@ def generate_student_card(student, semester="Semester III"):
             border-top: 2px solid #1a365d;
         }}
         .marks-table .stat-row td {{
-            padding: 4px 6px;
+            padding: 3px 4px;
             background: #f5f8fa;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
         }}
         .marks-table .stat-label {{
             font-weight: 600;
             text-align: left;
-            padding-left: 10px;
+            padding-left: 8px;
             color: #1a365d;
         }}
-        /* ---- Comments section (right column page 2) ---- */
+        /* ---- Comments ---- */
         .comments-section {{
-            font-size: 0.88rem;
+            font-size: 0.75rem;
         }}
         .comments-section .section-title {{
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: #1a365d;
             text-align: center;
             border-bottom: 2px solid #c9a84c;
-            padding-bottom: 6px;
-            margin-bottom: 15px;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
             word-wrap: break-word;
         }}
         .comments-section .semester-block {{
             border: 1px solid #d4dce8;
-            border-radius: 12px;
-            padding: 10px 12px;
-            margin-bottom: 15px;
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
             background: #fafcff;
         }}
         .comments-section .semester-title {{
             font-weight: 700;
             color: #1a365d;
             border-bottom: 1px solid #c9a84c;
-            padding-bottom: 4px;
-            margin-bottom: 10px;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
             text-align: center;
-            font-size: 0.95rem;
+            font-size: 0.8rem;
         }}
         .comments-section .comment-line {{
-            margin: 4px 0;
+            margin: 3px 0;
             display: flex;
             align-items: center;
             flex-wrap: wrap;
@@ -1497,14 +1401,14 @@ def generate_student_card(student, semester="Semester III"):
         .comments-section .comment-line .line {{
             flex: 1;
             border-bottom: 1px solid #8a9a8a;
-            margin-left: 8px;
-            height: 18px;
-            min-width: 60px;
+            margin-left: 6px;
+            height: 14px;
+            min-width: 40px;
         }}
         .director-sign {{
-            margin-top: 15px;
+            margin-top: 10px;
             border-top: 1px solid #d4dce8;
-            padding-top: 12px;
+            padding-top: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -1513,9 +1417,19 @@ def generate_student_card(student, semester="Semester III"):
         .director-sign .line {{
             flex: 1;
             border-bottom: 1px solid #8a9a8a;
-            margin-left: 10px;
-            height: 18px;
-            min-width: 60px;
+            margin-left: 8px;
+            height: 14px;
+            min-width: 40px;
+        }}
+        .teacher-comment-box {{
+            min-height: 24px;
+            border-bottom: 1px dashed #aaa;
+            margin: 4px 0 8px 0;
+            padding: 4px 6px;
+            background: #f9fafb;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            line-height: 1.4;
         }}
         /* ---- Print ---- */
         @media print {{
@@ -1524,7 +1438,7 @@ def generate_student_card(student, semester="Semester III"):
                 box-shadow: none;
                 border: 2px solid #c9a84c;
                 border-radius: 16px;
-                padding: 20px 18px;
+                padding: 12px 14px;
                 max-width: 100%;
                 overflow: visible !important;
             }}
@@ -1535,40 +1449,32 @@ def generate_student_card(student, semester="Semester III"):
                 margin-top: 0;
                 padding-top: 0;
             }}
-            .column {{ padding: 6px 10px; }}
+            .column {{ padding: 4px 8px; }}
         }}
         /* ---- Responsive ---- */
         @media (max-width: 768px) {{
-            .column {{
-                flex: 1 1 100%;
-                padding: 8px 10px;
-                min-width: 0;
-            }}
-            .page-break {{
-                border-top: 2px solid #c9a84c;
-                margin-top: 16px;
-                padding-top: 16px;
-            }}
-            .header-title h1 {{ font-size: 1.2rem; }}
-            .cover-page .card-title {{ font-size: 0.95rem; }}
-            .cover-page .school-name {{ font-size: 1.2rem; }}
-            .info-table {{ font-size: 0.8rem; }}
-            .info-table td {{ display: block; width: 100%; padding: 3px 0; }}
+            .column {{ flex: 1 1 100%; padding: 4px 6px; min-width: 0; }}
+            .page-break {{ border-top: 2px solid #c9a84c; margin-top: 10px; padding-top: 10px; }}
+            .header-title h1 {{ font-size: 1rem; }}
+            .cover-page .card-title {{ font-size: 0.8rem; }}
+            .cover-page .school-name {{ font-size: 1rem; }}
+            .info-table {{ font-size: 0.7rem; }}
+            .info-table td {{ display: block; width: 100%; padding: 2px 0; }}
             .info-table .label {{ white-space: normal; }}
-            .grading-policy h2 {{ font-size: 1.1rem; }}
-            .grading-policy .grade-scale {{ font-size: 0.85rem; padding: 10px 12px; }}
-            .marks-table {{ font-size: 0.7rem; }}
-            .marks-table th {{ font-size: 0.65rem; padding: 4px 2px; }}
-            .marks-table td {{ font-size: 0.7rem; padding: 3px 2px; }}
-            .comments-section {{ font-size: 0.8rem; }}
-            .comments-section .section-title {{ font-size: 0.95rem; }}
+            .grading-policy h2 {{ font-size: 0.95rem; }}
+            .grading-policy .grade-scale {{ font-size: 0.7rem; padding: 6px 8px; }}
+            .marks-table {{ font-size: 0.6rem; }}
+            .marks-table th {{ font-size: 0.55rem; padding: 3px 2px; }}
+            .marks-table td {{ font-size: 0.6rem; padding: 2px 2px; }}
+            .comments-section {{ font-size: 0.7rem; }}
+            .comments-section .section-title {{ font-size: 0.8rem; }}
         }}
         @media (max-width: 480px) {{
-            .card-container {{ padding: 12px 10px; }}
-            .cover-page .card-title {{ font-size: 0.8rem; }}
-            .header-title h1 {{ font-size: 1rem; }}
-            .header-logo {{ width: 40px; height: 40px; font-size: 0.9rem; }}
-            .header-right {{ font-size: 0.7rem; padding: 4px 12px; }}
+            .card-container {{ padding: 8px 6px; }}
+            .cover-page .card-title {{ font-size: 0.7rem; }}
+            .header-title h1 {{ font-size: 0.8rem; }}
+            .header-logo {{ width: 30px; height: 30px; font-size: 0.7rem; }}
+            .header-right {{ font-size: 0.6rem; padding: 2px 8px; }}
         }}
     </style>
 </head>
@@ -1581,7 +1487,7 @@ def generate_student_card(student, semester="Semester III"):
         <!-- LEFT COLUMN: Grading Policy -->
         <div class="column grading-policy">
             <h2>የማርክ አሰጣጥ ደንብ <span>METHOD OF MARKING</span></h2>
-            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:12px; padding:14px 16px; margin-bottom:16px;">
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:10px; padding:10px 12px; margin-bottom:10px;">
                 <p><strong>የማርክ አሰጣጥ ደንብ</strong></p>
                 <p>ትምህርት ቤቶች በመዝገብ ውስጥ የሚጽፏቸው የትማሪዎች የትምህርት ደረጃ በሚከተለው ዓይነት ይመደባል፡</p>
                 <div class="grade-scale">
@@ -1593,7 +1499,7 @@ def generate_student_card(student, semester="Semester III"):
                 </div>
                 <p>ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡</p>
             </div>
-            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:12px; padding:14px 16px;">
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:10px; padding:10px 12px;">
                 <p><strong>METHOD OF MARKING</strong></p>
                 <p>Student's achievement in each class will be assigned the following values:</p>
                 <div class="grade-scale" style="border-left-color:#1a365d;">
@@ -1637,7 +1543,7 @@ def generate_student_card(student, semester="Semester III"):
             <table class="marks-table">
                 <thead>
                     <tr>
-                        <th style="text-align:left;padding-left:10px;">የትምህርት ዓይነት<br>Subject</th>
+                        <th style="text-align:left;padding-left:8px;">የትምህርት ዓይነት<br>Subject</th>
                         <th>1ኛ ወሰነ-ት/ም<br>1st Sem.</th>
                         <th>2ኛ ወሰነ-ት/ም<br>2nd Sem.</th>
                         <th>አማካይ<br>Avg.</th>
@@ -1687,15 +1593,15 @@ def generate_student_card(student, semester="Semester III"):
             <div class="semester-block">
                 <div class="semester-title">1ኛ ወሰነ-ት/ም / FIRST SEMESTER</div>
                 <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
-                <div style="min-height:28px; border-bottom:1px dashed #aaa; margin:6px 0 10px 0; padding:4px 6px; background:#f9fafb; border-radius:4px;">
-                    {full_comment_amharic}<br><span style="font-size:0.85rem; color:#555;">{full_comment_english}</span>
+                <div class="teacher-comment-box">
+                    {amh_comment}<br><span style="font-size:0.65rem; color:#555;">{eng_comment}</span>
                 </div>
                 <div class="comment-line">
                     <span>ስምና ፊርማ / Name &amp; Signature:</span>
                     <span class="line"></span>
                 </div>
                 <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
-                <div style="min-height:28px; border-bottom:1px dashed #aaa; margin:6px 0 10px 0;"></div>
+                <div style="min-height:20px; border-bottom:1px dashed #aaa; margin:4px 0 6px 0;"></div>
                 <div class="comment-line">
                     <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature:</span>
                     <span class="line"></span>
@@ -1706,15 +1612,15 @@ def generate_student_card(student, semester="Semester III"):
             <div class="semester-block">
                 <div class="semester-title">ሁለተኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
                 <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
-                <div style="min-height:28px; border-bottom:1px dashed #aaa; margin:6px 0 10px 0; padding:4px 6px; background:#f9fafb; border-radius:4px;">
-                    {full_comment_amharic}<br><span style="font-size:0.85rem; color:#555;">{full_comment_english}</span>
+                <div class="teacher-comment-box">
+                    {amh_comment}<br><span style="font-size:0.65rem; color:#555;">{eng_comment}</span>
                 </div>
                 <div class="comment-line">
                     <span>ስምና ፊርማ / Name &amp; Signature:</span>
                     <span class="line"></span>
                 </div>
                 <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
-                <div style="min-height:28px; border-bottom:1px dashed #aaa; margin:6px 0 10px 0;"></div>
+                <div style="min-height:20px; border-bottom:1px dashed #aaa; margin:4px 0 6px 0;"></div>
                 <div class="comment-line">
                     <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature:</span>
                     <span class="line"></span>
@@ -1781,7 +1687,7 @@ def show_student_card_panel():
                 key=f"download_{student['id']}"
             )
             st.markdown("#### Preview")
-            st.components.v1.html(html, height=900, scrolling=True)
+            st.components.v1.html(html, height=800, scrolling=True)
 
 # ===================================================================
 # ADMIN PANEL (complete)
@@ -2871,7 +2777,7 @@ def show_student_panel():
             st.warning("No student found with that name. Please check your spelling.")
 
 # ===================================================================
-# TEACHER PANEL (unchanged)
+# TEACHER PANEL
 # ===================================================================
 
 def show_teacher_panel():
