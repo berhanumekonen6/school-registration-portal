@@ -65,7 +65,7 @@ DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
     "Test 3": 10,
-    "Test 4": 10,
+    "Test 4": 30,
     "Final Exam": 40
 }
 
@@ -78,7 +78,7 @@ if 'school_name' not in st.session_state:
 if 'school_city' not in st.session_state:
     st.session_state.school_city = "አርባ ምንጭ"
 if 'director_name' not in st.session_state:
-    st.session_state.director_name = "አቦዬ አባይነህ ዳባ"
+    st.session_state.director_name = "__________________________"
 
 # ---- Supabase Client (anon) ----
 def init_supabase():
