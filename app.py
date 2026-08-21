@@ -78,7 +78,7 @@ if 'school_name' not in st.session_state:
 if 'school_city' not in st.session_state:
     st.session_state.school_city = "አርባ ምንጭ"
 if 'director_name' not in st.session_state:
-    st.session_state.director_name = "አቦዬ አባይነህ ዳባ"
+    st.session_state.director_name = "____________________________"
 
 # ---- Supabase Client (anon) ----
 def init_supabase():
