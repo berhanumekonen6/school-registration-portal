@@ -65,7 +65,7 @@ DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
     "Test 3": 10,
-    "Test 4": 30,
+    "Test 4": 10,
     "Final Exam": 40
 }
 
@@ -78,7 +78,7 @@ if 'school_name' not in st.session_state:
 if 'school_city' not in st.session_state:
     st.session_state.school_city = "አርባ ምንጭ"
 if 'director_name' not in st.session_state:
-    st.session_state.director_name = "__________________________"
+    st.session_state.director_name = "አቦዬ አባይነህ ዳባ"
 
 # ---- Supabase Client (anon) ----
 def init_supabase():
@@ -671,6 +671,16 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
+    .badge-subject-approved {
+        background: #FFF3CD !important;
+        color: #856404 !important;
+        border: 1px solid #FFEEBA;
+        padding: 4px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem !important;
+        font-weight: 600 !important;
+    }
+
     .stButton > button {
         font-size: 1.2rem !important;
         font-weight: 600 !important;
@@ -828,6 +838,10 @@ st.markdown("""
         border-left: 6px solid #FBBC04;
     }
 
+    .approval-card.subject-approved {
+        border-left: 6px solid #FFC107;
+    }
+
     .approval-card.approved {
         border-left: 6px solid #34A853;
     }
@@ -945,25 +959,19 @@ def get_teacher_by_username(username):
             return t
     return None
 
-# ---- NEW: Get batches awaiting final approval (School Admin) ----
+def get_pending_batches():
+    """Deprecated: kept for backward compatibility – use get_batches_for_subject_admin or get_batches_awaiting_final_approval."""
+    return [b for b in st.session_state.batches if b.get("status") == "pending"]
+
+def get_batches_for_subject_admin(admin_id):
+    """Get all batches pending for a specific subject admin (status='pending' and subject_admin_id matches)."""
+    return [b for b in st.session_state.batches if b.get("subject_admin_id") == admin_id and b.get("status") == "pending"]
+
 def get_batches_awaiting_final_approval():
-    """Return batches that are either subject-approved or pending with no subject admin assigned."""
+    """Get batches that need School Admin final approval (subject_approved) OR (pending with no subject_admin assigned)."""
     return [b for b in st.session_state.batches 
             if (b.get("status") == "subject_approved") or 
                (b.get("status") == "pending" and b.get("subject_admin_id") is None)]
-
-# ---- NEW: Get subject admin for a given subject ----
-def get_subject_admin(subject):
-    """Return the teacher_id of the first teacher who administers the given subject."""
-    for t in st.session_state.teachers:
-        admin_subjects = json.loads(t.get("admin_subjects", "[]"))
-        if subject in admin_subjects:
-            return t["id"]
-    return None
-
-# ---- Legacy pending batches (used for teacher view) ----
-def get_pending_batches():
-    return [b for b in st.session_state.batches if b.get("status") == "pending"]
 
 def get_approved_evaluations_for_student(student_id):
     return [e for e in st.session_state.evaluations if e.get("student_id") == student_id and e.get("status") == "approved"]
@@ -1046,6 +1054,112 @@ def get_homeroom_comment(avg_score):
         eng = "Poor. Parents and teachers must work together to help the student improve. «Education is the key to your future life; open every door with hard work!»"
     return amh, eng
 
+# ---- Get subject admin for a given subject ----
+def get_subject_admin(subject):
+    """Return teacher_id of the first teacher who administers the given subject."""
+    for t in st.session_state.teachers:
+        admin_subjects = json.loads(t.get("admin_subjects", "[]"))
+        if subject in admin_subjects:
+            return t["id"]
+    return None
+
+# ===================================================================
+# SUBJECT ADMIN PANEL
+# ===================================================================
+
+def show_subject_admin_panel():
+    st.markdown("### 📋 Subject Admin Dashboard")
+
+    teacher = get_teacher_by_username(st.session_state.current_user)
+    if not teacher:
+        st.error("Subject admin profile not found.")
+        return
+
+    teacher_id = teacher["id"]
+    my_pending_batches = get_batches_for_subject_admin(teacher_id)
+
+    if not my_pending_batches:
+        st.success("🎉 No pending batches for your subjects.")
+        return
+
+    st.markdown(f"**{len(my_pending_batches)} batches awaiting your review**")
+
+    for batch in my_pending_batches:
+        batch_id = batch["id"]
+        teacher_name = batch.get("teacher_name", "Unknown")
+        subject = batch.get("subject", "N/A")
+        grade = batch.get("grade", "N/A")
+        section = batch.get("section", "N/A")
+        semester = batch.get("semester", "N/A")
+        student_count = len(batch.get("students", []))
+        submitted_date = batch.get("submitted_at", "N/A")
+        batch_remarks = batch.get("remarks", "")
+
+        st.markdown(f"""
+        <div class="approval-card pending">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                <div>
+                    <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">📦 Batch from {teacher_name} · {subject}</h4>
+                    <p><b>📚 Subject:</b> {subject}</p>
+                    <p><b>📋 Grade:</b> {grade}</p>
+                    <p><b>📌 Section:</b> {section}</p>
+                    <p><b>📌 Semester:</b> {semester}</p>
+                    <p><b>👥 Students:</b> {student_count}</p>
+                    <p><b>📅 Submitted:</b> {submitted_date}</p>
+                    <p><b>Batch Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
+                </div>
+                <div style="text-align:right;">
+                    <span class="badge-pending">⏳ Pending</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        df_batch = pd.DataFrame(batch["students"])
+        display_cols = ["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
+        available_cols = [col for col in display_cols if col in df_batch.columns]
+        st.dataframe(df_batch[available_cols], use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(f"✅ Approve", key=f"subj_approve_{batch['id']}"):
+                supabase_admin = get_supabase_admin()
+                try:
+                    supabase_admin.table("batches").update({"status": "subject_approved"}).eq("id", batch["id"]).execute()
+                    load_all_data()
+                    add_notification(f"Batch {batch['id']} approved by subject admin {teacher['name']}", "success")
+                    # Celebration
+                    st.balloons()
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+                                padding: 2rem;
+                                border-radius: 16px;
+                                text-align: center;
+                                border: 3px solid #43a047;">
+                        <div style="font-size: 4rem;">📋✅👏📚</div>
+                        <h2 style="color: #1a365d;">✅ Batch Approved by Subject Admin!</h2>
+                        <p style="font-size: 1.2rem; color: #2d4059;">
+                            🎈 Forwarded to School Admin for final approval. 🎈
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to approve: {e}")
+        with col2:
+            if st.button(f"❌ Reject", key=f"subj_reject_{batch['id']}"):
+                supabase_admin = get_supabase_admin()
+                try:
+                    supabase_admin.table("batches").update({"status": "rejected"}).eq("id", batch["id"]).execute()
+                    load_all_data()
+                    add_notification(f"Batch {batch['id']} rejected by subject admin {teacher['name']}", "warning")
+                    st.warning("❌ Batch rejected!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to reject: {e}")
+        st.markdown("---")
+
 # ===================================================================
 # Penalty Log and Notification Center
 # ===================================================================
@@ -1101,7 +1215,7 @@ def show_notification_center():
         st.info("No notifications")
 
 # ===================================================================
-# GENERATE STUDENT REPORT CARD (PREMIUM VERSION, FIXED OVERFLOW)
+# GENERATE STUDENT REPORT CARD (PREMIUM VERSION – FIXED OVERFLOW & BLANK LINES)
 # ===================================================================
 
 def generate_student_card(student, semester="Semester III"):
@@ -1110,7 +1224,7 @@ def generate_student_card(student, semester="Semester III"):
     - Premium gold‑accented design.
     - Rank computed from student's grade and section.
     - Homeroom comment based on the grading scale (short + motivational).
-    - Director name from admin settings.
+    - Director's Name and Signature as blank dashed lines (manual fill).
     - Font sizes reduced to prevent margin overflow.
     """
     # ---- Student data ----
@@ -1122,8 +1236,7 @@ def generate_student_card(student, semester="Semester III"):
     section = student.get('section', 'A')
     academic_year = "2018"
 
-    # ---- School settings ----
-    director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ')
+    # ---- School settings (only school name is used now) ----
     school_name = st.session_state.school_name
 
     # ---- Scores ----
@@ -1538,14 +1651,14 @@ def generate_student_card(student, semester="Semester III"):
             <table class="info-table">
                 <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value">{school_name}</td></tr>
                 <tr><td class="label">ክልል / Region:</td><td class="value">_________</td><td class="label">ዞን / Zone:</td><td class="value">_________</td></tr>
-                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍለ ከተማ / Kebele:</td><td class="value">_________</td></tr>
+                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍል ከተማ / Kebele:</td><td class="value">_________</td></tr>
                 <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
                 <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
                 <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
                 <tr><td class="label">የትምህርት ዘመን / Academic Year:</td><td class="value">{academic_year}</td></tr>
                 <tr><td class="label">ክፍሉ / Grade:</td><td class="value">{grade}</td></tr>
                 <tr><td class="label">ክፍል ተዛውሯል/ራለች / Promoted to grade:</td><td class="value">{promoted}</td></tr>
-                <tr><td class="label">የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:</td><td class="value">{director_name}</td></tr>
+                <tr><td class="label">የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:</td><td class="value">____________________</td></tr>
                 <tr><td class="label">ፊርማ / Signature:</td><td class="value">____________________</td></tr>
             </table>
             <div class="motto-box">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
@@ -1706,106 +1819,6 @@ def show_student_card_panel():
             )
             st.markdown("#### Preview")
             st.components.v1.html(html, height=800, scrolling=True)
-
-# ===================================================================
-# SUBJECT ADMIN PANEL
-# ===================================================================
-
-def show_subject_admin_panel():
-    st.markdown("### 📋 Subject Admin Dashboard")
-
-    teacher = get_teacher_by_username(st.session_state.current_user)
-    if not teacher:
-        st.error("Subject admin profile not found.")
-        return
-
-    teacher_id = teacher["id"]
-    # Get batches pending for this subject admin (status = pending and assigned to this admin)
-    my_pending_batches = [b for b in st.session_state.batches 
-                          if b.get("subject_admin_id") == teacher_id and b.get("status") == "pending"]
-
-    if not my_pending_batches:
-        st.success("🎉 No pending batches for your subjects.")
-        return
-
-    st.markdown(f"**{len(my_pending_batches)} batches awaiting your review**")
-
-    for batch in my_pending_batches:
-        batch_id = batch["id"]
-        teacher_name = batch.get("teacher_name", "Unknown")
-        subject = batch.get("subject", "N/A")
-        grade = batch.get("grade", "N/A")
-        section = batch.get("section", "N/A")
-        semester = batch.get("semester", "N/A")
-        student_count = len(batch.get("students", []))
-        submitted_date = batch.get("submitted_at", "N/A")
-        batch_remarks = batch.get("remarks", "")
-
-        st.markdown(f"""
-        <div class="approval-card pending">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
-                <div>
-                    <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">📦 Batch from {teacher_name} · {subject}</h4>
-                    <p><b>📚 Subject:</b> {subject}</p>
-                    <p><b>📋 Grade:</b> {grade}</p>
-                    <p><b>📌 Section:</b> {section}</p>
-                    <p><b>📌 Semester:</b> {semester}</p>
-                    <p><b>👥 Students:</b> {student_count}</p>
-                    <p><b>📅 Submitted:</b> {submitted_date}</p>
-                    <p><b>Batch Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
-                </div>
-                <div style="text-align:right;">
-                    <span class="badge-pending">⏳ Pending</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Show student scores preview
-        df_batch = pd.DataFrame(batch["students"])
-        display_cols = ["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
-        available_cols = [col for col in display_cols if col in df_batch.columns]
-        st.dataframe(df_batch[available_cols], use_container_width=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(f"✅ Approve", key=f"subj_approve_{batch['id']}"):
-                supabase_admin = get_supabase_admin()
-                try:
-                    supabase_admin.table("batches").update({"status": "subject_approved"}).eq("id", batch["id"]).execute()
-                    load_all_data()
-                    add_notification(f"Batch {batch['id']} approved by subject admin {teacher['name']}", "success")
-                    # Celebration
-                    st.balloons()
-                    st.markdown("""
-                    <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-                                padding: 2rem;
-                                border-radius: 16px;
-                                text-align: center;
-                                border: 3px solid #43a047;">
-                        <div style="font-size: 4rem;">📋✅👏📚</div>
-                        <h2 style="color: #1a365d;">✅ Batch Approved by Subject Admin!</h2>
-                        <p style="font-size: 1.2rem; color: #2d4059;">
-                            🎈 Forwarded to School Admin for final approval. 🎈
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    time.sleep(1.5)
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to approve: {e}")
-        with col2:
-            if st.button(f"❌ Reject", key=f"subj_reject_{batch['id']}"):
-                supabase_admin = get_supabase_admin()
-                try:
-                    supabase_admin.table("batches").update({"status": "rejected"}).eq("id", batch["id"]).execute()
-                    load_all_data()
-                    add_notification(f"Batch {batch['id']} rejected by subject admin {teacher['name']}", "warning")
-                    st.warning("❌ Batch rejected!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to reject: {e}")
-        st.markdown("---")
 
 # ===================================================================
 # ADMIN PANEL (complete)
