@@ -1651,7 +1651,7 @@ def generate_student_card(student, semester="Semester III"):
             <table class="info-table">
                 <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value">{school_name}</td></tr>
                 <tr><td class="label">ክልል / Region:</td><td class="value">_________</td><td class="label">ዞን / Zone:</td><td class="value">_________</td></tr>
-                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍል ከተማ / Kebele:</td><td class="value">_________</td></tr>
+                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍለ ከተማ / Kebele:</td><td class="value">_________</td></tr>
                 <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
                 <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
                 <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
