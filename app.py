@@ -1036,12 +1036,12 @@ def show_notification_center():
         st.info("No notifications")
 
 # ===================================================================
-# GENERATE STUDENT REPORT CARD (HTML matching PDF template)
+# GENERATE STUDENT REPORT CARD (PREMIUM VERSION)
 # ===================================================================
 
 def generate_student_card(student, semester="Semester III"):
     """
-    Generate a two‑page landscape HTML report card that matches the PDF exactly.
+    Generate a two‑page landscape HTML report card with premium styling.
     Page 1: left = grading policy, right = cover page.
     Page 2: left = marks table, right = teacher/parent comments + director signature.
     """
@@ -1052,9 +1052,9 @@ def generate_student_card(student, semester="Semester III"):
     address = student.get('address', '_________')
     grade = student.get('grade', 'Grade 1')
     section = student.get('section', 'A')
-    academic_year = "2018"  # as per PDF
-    
-    # *** DYNAMIC ADMIN SETTINGS ***
+    academic_year = "2018"  # as per PDF, you can make this dynamic if needed
+
+    # ---- School settings from session state ----
     director_name = st.session_state.get('director_name', 'አቦዬ አባይነህ ዳባ')
     school_name = st.session_state.school_name
 
@@ -1089,12 +1089,13 @@ def generate_student_card(student, semester="Semester III"):
     # ---- Promoted to next grade if overall >= 50 ----
     promoted = str(int(grade.replace("Grade ", "")) + 1) + "ኛ" if overall_avg >= 50 else "_________"
 
-    # ---- Build HTML ----
+    # ---- Build HTML with premium design ----
     html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Student Report Card - {name}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Report Card – {name}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1114,176 +1115,282 @@ def generate_student_card(student, semester="Semester III"):
             max-width: 1100px;
             width: 100%;
             background: #ffffff;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            border-radius: 8px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 20, 40, 0.20);
+            border: 2px solid #c9a84c;
+            padding: 28px 32px 24px 32px;
+            position: relative;
             overflow: hidden;
-            border: 1px solid #ccc;
-            /* Added horizontal overflow handling */
-            overflow-x: auto !important; 
+        }}
+        .card-container::before {{
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 30px;
+            right: 30px;
+            height: 6px;
+            background: linear-gradient(90deg, #c9a84c, #f5e7b0, #c9a84c);
+            border-radius: 12px 12px 0 0;
         }}
         .page {{
             display: flex;
             flex-wrap: wrap;
             width: 100%;
-            min-width: 800px; /* Ensures card forces horizontal scroll on small screens */
             min-height: 500px;
         }}
         .page-break {{
             page-break-before: always;
-            border-top: 3px double #1a472a;
-            margin-top: 10px;
-            padding-top: 10px;
+            border-top: 3px double #c9a84c;
+            margin-top: 20px;
+            padding-top: 20px;
         }}
         .column {{
             flex: 1 1 50%;
-            padding: 20px 25px;
+            padding: 10px 15px;
             min-width: 280px;
         }}
-        /* ---- Page 1 left (grading policy) ---- */
+        /* ---- Page header (gold banner) ---- */
+        .page-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 3px double #d4b86a;
+            padding-bottom: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+        }}
+        .header-left {{
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }}
+        .header-logo {{
+            width: 56px;
+            height: 56px;
+            background: #1a365d;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f5e7b0;
+            font-weight: 800;
+            font-size: 1.2rem;
+            border: 2px solid #c9a84c;
+            flex-shrink: 0;
+        }}
+        .header-title h1 {{
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a365d;
+            letter-spacing: 1px;
+            line-height: 1.2;
+        }}
+        .header-title .sub {{
+            font-size: 0.95rem;
+            font-weight: 400;
+            color: #4a5b7a;
+            letter-spacing: 2px;
+        }}
+        .header-right {{
+            background: #f6f2e7;
+            padding: 6px 20px;
+            border-radius: 40px;
+            border: 1px solid #d4b86a;
+            font-weight: 600;
+            color: #1a365d;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }}
+        /* ---- Grading policy (left column page 1) ---- */
         .grading-policy {{
             font-size: 0.95rem;
             line-height: 1.7;
+            color: #1f2a3e;
         }}
         .grading-policy h2 {{
             font-size: 1.4rem;
             font-weight: 700;
-            color: #1a472a;
-            text-align: center;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #1a472a;
+            color: #1a365d;
+            border-bottom: 3px solid #c9a84c;
             padding-bottom: 6px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }}
-        .grading-policy .policy-text {{
-            border: 1px solid #1a472a;
-            padding: 12px 15px;
-            border-radius: 4px;
-            background: #f9fbf9;
-            margin-bottom: 20px;
+        .grading-policy h2 span {{
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: #5a6f8e;
         }}
-        .grading-policy .policy-text p {{
-            margin: 8px 0;
+        .grade-scale {{
+            background: #f1f5fb;
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin: 14px 0 12px 0;
+            border-left: 4px solid #c9a84c;
         }}
-        .grading-policy .policy-text .range {{
-            font-weight: 700;
-            color: #1a472a;
+        .grade-scale div {{
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #dce3ed;
+            padding: 2px 0;
         }}
-        .grading-policy .policy-text .note {{
-            font-style: italic;
-            margin-top: 12px;
-            border-top: 1px dashed #aaa;
-            padding-top: 10px;
+        .grade-scale div:last-child {{
+            border-bottom: none;
         }}
-        /* ---- Page 1 right (cover) ---- */
+        .grade-scale .range {{
+            font-weight: 600;
+            color: #1a365d;
+            min-width: 110px;
+        }}
+        .grade-scale .desc {{
+            color: #2d4059;
+        }}
+        .divider-light {{
+            height: 1px;
+            background: linear-gradient(90deg, #dce3ed, transparent);
+            margin: 18px 0;
+        }}
+        /* ---- Cover page (right column page 1) ---- */
         .cover-page {{
             text-align: center;
         }}
         .cover-page .school-name {{
             font-size: 1.8rem;
             font-weight: 700;
-            color: #1a472a;
+            color: #1a365d;
             letter-spacing: 1px;
         }}
         .cover-page .card-title {{
             font-size: 1.3rem;
             font-weight: 600;
-            color: #1a472a;
+            color: #1a365d;
             margin: 6px 0 15px 0;
-            border-bottom: 2px solid #1a472a;
+            border-bottom: 2px solid #c9a84c;
             padding-bottom: 6px;
         }}
-        .cover-page .info-table {{
+        .info-table {{
             width: 100%;
             border-collapse: collapse;
             margin: 10px 0;
             font-size: 0.95rem;
         }}
-        .cover-page .info-table td {{
+        .info-table td {{
             padding: 6px 4px;
             vertical-align: top;
         }}
-        .cover-page .info-table .label {{
+        .info-table .label {{
             font-weight: 600;
+            color: #1a365d;
             white-space: nowrap;
         }}
-        .cover-page .info-table .value {{
-            border-bottom: 1px solid #aaa;
+        .info-table .value {{
+            border-bottom: 1px dashed #c9d6e8;
+            padding-left: 8px;
             min-width: 120px;
             text-align: left;
-            padding-left: 8px;
         }}
-        .cover-page .motto {{
+        .motto-box {{
+            margin-top: 18px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f6f2e7, #faf8f2);
+            border-radius: 40px;
+            border: 1px solid #e1d5b8;
+            text-align: center;
             font-style: italic;
-            margin-top: 25px;
+            font-weight: 500;
+            color: #2d4059;
             font-size: 1rem;
-            color: #1a472a;
-            font-weight: 600;
+            letter-spacing: 0.5px;
         }}
-        /* ---- Page 2 left (marks table) ---- */
+        /* ---- Marks table (left column page 2) ---- */
         .marks-table {{
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }}
         .marks-table th {{
-            background: #e8f0e8;
-            color: #1a3a1a;
-            padding: 6px 8px;
-            border: 1px solid #b0c0b0;
+            background: #1a365d;
+            color: #fff;
+            font-weight: 600;
+            padding: 10px 6px;
             text-align: center;
-            font-weight: 700;
+            border: none;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }}
+        .marks-table th:first-child {{
+            text-align: left;
+            padding-left: 14px;
         }}
         .marks-table td {{
-            padding: 5px 8px;
-            border: 1px solid #c0d0c0;
+            padding: 7px 5px;
             text-align: center;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+        }}
+        .marks-table tr:nth-child(even) td {{
+            background: #f8faff;
         }}
         .marks-table .subject-name {{
-            text-align: left;
-            font-weight: 500;
-            padding-left: 12px;
-        }}
-        .marks-table .total-row {{
-            background: #e8f5e9 !important;
-            font-weight: 700;
-        }}
-        .marks-table .average-row {{
-            background: #f0f8f0 !important;
             font-weight: 600;
+            text-align: left;
+            padding-left: 14px;
+            background: #f0f4fb !important;
+            color: #1a365d;
+        }}
+        .marks-table .total-row td {{
+            font-weight: 700;
+            background: #e8eff9 !important;
+            border-top: 2px solid #1a365d;
+            border-bottom: 2px solid #1a365d;
+        }}
+        .marks-table .avg-row td {{
+            font-weight: 700;
+            background: #dce6f2 !important;
+            border-top: 2px solid #1a365d;
         }}
         .marks-table .stat-row td {{
             padding: 4px 8px;
+            background: #f5f8fa;
         }}
         .marks-table .stat-label {{
             font-weight: 600;
             text-align: left;
             padding-left: 12px;
+            color: #1a365d;
         }}
-        /* ---- Page 2 right (comments) ---- */
+        /* ---- Comments section (right column page 2) ---- */
         .comments-section {{
             font-size: 0.9rem;
         }}
         .comments-section .section-title {{
             font-size: 1.2rem;
             font-weight: 700;
-            color: #1a472a;
+            color: #1a365d;
             text-align: center;
-            border-bottom: 2px solid #1a472a;
+            border-bottom: 2px solid #c9a84c;
             padding-bottom: 6px;
             margin-bottom: 15px;
         }}
         .comments-section .semester-block {{
-            border: 1px solid #d0d8d0;
-            border-radius: 4px;
-            padding: 10px 12px;
+            border: 1px solid #d4dce8;
+            border-radius: 12px;
+            padding: 12px 14px;
             margin-bottom: 15px;
-            background: #fafcfa;
+            background: #fafcff;
         }}
         .comments-section .semester-title {{
             font-weight: 700;
-            color: #1a472a;
-            border-bottom: 1px solid #1a472a;
+            color: #1a365d;
+            border-bottom: 1px solid #c9a84c;
             padding-bottom: 4px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             text-align: center;
         }}
         .comments-section .comment-line {{
@@ -1297,53 +1404,49 @@ def generate_student_card(student, semester="Semester III"):
             margin-left: 8px;
             height: 18px;
         }}
-        .comments-section .director-sign {{
+        .director-sign {{
             margin-top: 15px;
-            border-top: 1px solid #d0d8d0;
+            border-top: 1px solid #d4dce8;
             padding-top: 12px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }}
-        .comments-section .director-sign .line {{
+        .director-sign .line {{
             flex: 1;
             border-bottom: 1px solid #8a9a8a;
-            margin-left: 8px;
+            margin-left: 10px;
             height: 18px;
         }}
-        /* ---- Print styling ---- */
+        /* ---- Print ---- */
         @media print {{
-            body {{
-                background: white;
-                padding: 0;
-            }}
+            body {{ background: white; padding: 0; }}
             .card-container {{
                 box-shadow: none;
-                border: none;
-                border-radius: 0;
+                border: 2px solid #c9a84c;
+                border-radius: 16px;
+                padding: 20px 18px;
                 max-width: 100%;
             }}
-            .page {{
-                min-height: 0;
-            }}
+            .card-container::before {{ display: none; }}
+            .page {{ min-height: 0; }}
             .page-break {{
                 border-top: none;
                 margin-top: 0;
                 padding-top: 0;
             }}
-            .column {{
-                padding: 10px 15px;
-            }}
+            .column {{ padding: 8px 12px; }}
         }}
         /* ---- Responsive ---- */
         @media (max-width: 768px) {{
-            .column {{
-                flex: 1 1 100%;
-            }}
+            .column {{ flex: 1 1 100%; }}
             .page-break {{
-                border-top: 2px solid #1a472a;
+                border-top: 2px solid #c9a84c;
                 margin-top: 20px;
                 padding-top: 20px;
             }}
+            .header-title h1 {{ font-size: 1.3rem; }}
+            .info-table td {{ display: block; width: 100%; }}
         }}
     </style>
 </head>
@@ -1355,26 +1458,30 @@ def generate_student_card(student, semester="Semester III"):
     <div class="page">
         <!-- LEFT COLUMN: Grading Policy -->
         <div class="column grading-policy">
-            <h2>የማርክ አሰጣጥ ደንብ / METHOD OF MARKING</h2>
-            <div class="policy-text">
+            <h2>የማርክ አሰጣጥ ደንብ <span>METHOD OF MARKING</span></h2>
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:12px; padding:14px 16px; margin-bottom:16px;">
                 <p><strong>የማርክ አሰጣጥ ደንብ</strong></p>
                 <p>ትምህርት ቤቶች በመዝገብ ውስጥ የሚጽፏቸው የትማሪዎች የትምህርት ደረጃ በሚከተለው ዓይነት ይመደባል፡</p>
-                <p><span class="range">100 - 90%</span> ያገኘ፡ እጅግ በጣም ጥሩ</p>
-                <p><span class="range">89 - 80%</span> ያገኘ፡ በጣም ጥሩ</p>
-                <p><span class="range">79 - 60%</span> ያገኘ፡ በቂ</p>
-                <p><span class="range">59 - 50%</span> ያገኘ፡ መጠነኛ</p>
-                <p><span class="range">50% በታች</span> ያገኘ፡ ዝቅተኛ</p>
-                <p class="note">ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡</p>
+                <div class="grade-scale">
+                    <div><span class="range">100 – 90%</span> <span class="desc">እጅግ በጣም ጥሩ</span></div>
+                    <div><span class="range">89 – 80%</span> <span class="desc">በጣም ጥሩ</span></div>
+                    <div><span class="range">79 – 60%</span> <span class="desc">በቂ</span></div>
+                    <div><span class="range">59 – 50%</span> <span class="desc">መጠነኛ</span></div>
+                    <div><span class="range">50% በታች</span> <span class="desc">ዝቅተኛ</span></div>
+                </div>
+                <p>ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡</p>
             </div>
-            <div class="policy-text">
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:12px; padding:14px 16px;">
                 <p><strong>METHOD OF MARKING</strong></p>
                 <p>Student’s achievement in each class will be assigned the following values:</p>
-                <p><span class="range">100 - 90%</span> Excellent</p>
-                <p><span class="range">89 - 80%</span> Very good</p>
-                <p><span class="range">79 - 60%</span> Satisfactory</p>
-                <p><span class="range">59 - 50%</span> Fair</p>
-                <p><span class="range">50% - Below</span> Poor</p>
-                <p class="note">Point Zero (0%) should never be given, since it would mean no work has been done absolutely. If a student has been absent from class for the whole period covered, and has not made up of the work, he (she) should be marked "AB" for 'Absent'.</p>
+                <div class="grade-scale" style="border-left-color:#1a365d;">
+                    <div><span class="range">100 – 90%</span> <span class="desc">Excellent</span></div>
+                    <div><span class="range">89 – 80%</span> <span class="desc">Very good</span></div>
+                    <div><span class="range">79 – 60%</span> <span class="desc">Satisfactory</span></div>
+                    <div><span class="range">59 – 50%</span> <span class="desc">Fair</span></div>
+                    <div><span class="range">50% – Below</span> <span class="desc">Poor</span></div>
+                </div>
+                <p>Point Zero (0%) should never be given, since it would mean no work has been done absolutely. If a student has been absent from class for the whole period covered, and has not made up of the work, he (she) should be marked "AB" for 'Absent'.</p>
             </div>
         </div>
 
@@ -1383,9 +1490,9 @@ def generate_student_card(student, semester="Semester III"):
             <div class="school-name">{school_name}</div>
             <div class="card-title">የተማሪ ውጤት መግለጫ / Student Report Card</div>
             <table class="info-table">
-                <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value"></td></tr>
-                <tr><td class="label">ክልል / Region:</td><td class="value"></td><td class="label">ዞን / Zone:</td><td class="value"></td></tr>
-                <tr><td class="label">ወረዳ / Wereda:</td><td class="value"></td><td class="label">ክፍለ ከተማ / Kebele:</td><td class="value"></td></tr>
+                <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value">{school_name}</td></tr>
+                <tr><td class="label">ክልል / Region:</td><td class="value">_________</td><td class="label">ዞን / Zone:</td><td class="value">_________</td></tr>
+                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍል ከተማ / Kebele:</td><td class="value">_________</td></tr>
                 <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
                 <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
                 <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
@@ -1393,9 +1500,9 @@ def generate_student_card(student, semester="Semester III"):
                 <tr><td class="label">ክፍሉ / Grade:</td><td class="value">{grade}</td></tr>
                 <tr><td class="label">ክፍል ተዛውሯል/ራለች / Promoted to grade:</td><td class="value">{promoted}</td></tr>
                 <tr><td class="label">የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:</td><td class="value">{director_name}</td></tr>
-                <tr><td class="label">ፊርማ / Signature:</td><td class="value"></td></tr>
+                <tr><td class="label">ፊርማ / Signature:</td><td class="value">____________________</td></tr>
             </table>
-            <div class="motto">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
+            <div class="motto-box">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
         </div>
     </div>
 
@@ -1408,9 +1515,9 @@ def generate_student_card(student, semester="Semester III"):
             <table class="marks-table">
                 <thead>
                     <tr>
-                        <th>የትምህርት ዓይነት<br>Subject</th>
-                        <th>1ኛ ት/ም ወቅት<br>1st Semester</th>
-                        <th>2ኛ ት/ም ወቅት<br>2nd Semester</th>
+                        <th style="text-align:left;padding-left:14px;">የትምህርት ዓይነት<br>Subject</th>
+                        <th>1ኛ ወሰነ-ት/ም<br>1st Semester</th>
+                        <th>2ኛ ወሰነ-ት/ም<br>2nd Semester</th>
                         <th>አማካይ<br>Average</th>
                     </tr>
                 </thead>
@@ -1422,7 +1529,7 @@ def generate_student_card(student, semester="Semester III"):
                         <td>{total_sem2}</td>
                         <td>{round((total_sem1 + total_sem2) / 2, 1)}</td>
                     </tr>
-                    <tr class="average-row">
+                    <tr class="avg-row">
                         <td class="subject-name">አማካይ / Average</td>
                         <td>{avg_sem1}</td>
                         <td>{avg_sem2}</td>
@@ -1435,7 +1542,7 @@ def generate_student_card(student, semester="Semester III"):
                         <td>{absence}</td>
                     </tr>
                     <tr class="stat-row">
-                        <td class="stat-label">ጠባይ / Conduct</td>
+                        <td class="stat-label">ፀባይ / Conduct</td>
                         <td>{conduct}</td>
                         <td>{conduct}</td>
                         <td>{conduct}</td>
@@ -1456,7 +1563,7 @@ def generate_student_card(student, semester="Semester III"):
 
             <!-- Semester 1 -->
             <div class="semester-block">
-                <div class="semester-title">1ኛ መንፈቅ ዓመት / FIRST SEMESTER</div>
+                <div class="semester-title">1ኛ ወሰነ-ት/ም / FIRST SEMESTER</div>
                 <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
                 <div style="min-height:30px; border-bottom:1px dashed #aaa; margin:6px 0 12px 0;"></div>
                 <div class="comment-line">
