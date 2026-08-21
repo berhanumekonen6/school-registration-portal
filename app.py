@@ -16,6 +16,7 @@ import string
 import io
 import uuid
 import math
+import time  # for celebration delays
 from supabase import create_client, Client
 
 # ===================================================================
@@ -944,6 +945,23 @@ def get_teacher_by_username(username):
             return t
     return None
 
+# ---- NEW: Get batches awaiting final approval (School Admin) ----
+def get_batches_awaiting_final_approval():
+    """Return batches that are either subject-approved or pending with no subject admin assigned."""
+    return [b for b in st.session_state.batches 
+            if (b.get("status") == "subject_approved") or 
+               (b.get("status") == "pending" and b.get("subject_admin_id") is None)]
+
+# ---- NEW: Get subject admin for a given subject ----
+def get_subject_admin(subject):
+    """Return the teacher_id of the first teacher who administers the given subject."""
+    for t in st.session_state.teachers:
+        admin_subjects = json.loads(t.get("admin_subjects", "[]"))
+        if subject in admin_subjects:
+            return t["id"]
+    return None
+
+# ---- Legacy pending batches (used for teacher view) ----
 def get_pending_batches():
     return [b for b in st.session_state.batches if b.get("status") == "pending"]
 
@@ -1690,6 +1708,106 @@ def show_student_card_panel():
             st.components.v1.html(html, height=800, scrolling=True)
 
 # ===================================================================
+# SUBJECT ADMIN PANEL
+# ===================================================================
+
+def show_subject_admin_panel():
+    st.markdown("### 📋 Subject Admin Dashboard")
+
+    teacher = get_teacher_by_username(st.session_state.current_user)
+    if not teacher:
+        st.error("Subject admin profile not found.")
+        return
+
+    teacher_id = teacher["id"]
+    # Get batches pending for this subject admin (status = pending and assigned to this admin)
+    my_pending_batches = [b for b in st.session_state.batches 
+                          if b.get("subject_admin_id") == teacher_id and b.get("status") == "pending"]
+
+    if not my_pending_batches:
+        st.success("🎉 No pending batches for your subjects.")
+        return
+
+    st.markdown(f"**{len(my_pending_batches)} batches awaiting your review**")
+
+    for batch in my_pending_batches:
+        batch_id = batch["id"]
+        teacher_name = batch.get("teacher_name", "Unknown")
+        subject = batch.get("subject", "N/A")
+        grade = batch.get("grade", "N/A")
+        section = batch.get("section", "N/A")
+        semester = batch.get("semester", "N/A")
+        student_count = len(batch.get("students", []))
+        submitted_date = batch.get("submitted_at", "N/A")
+        batch_remarks = batch.get("remarks", "")
+
+        st.markdown(f"""
+        <div class="approval-card pending">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                <div>
+                    <h4 style="color:#1A73E8;font-size:1.8rem;margin:0 0 0.5rem 0;">📦 Batch from {teacher_name} · {subject}</h4>
+                    <p><b>📚 Subject:</b> {subject}</p>
+                    <p><b>📋 Grade:</b> {grade}</p>
+                    <p><b>📌 Section:</b> {section}</p>
+                    <p><b>📌 Semester:</b> {semester}</p>
+                    <p><b>👥 Students:</b> {student_count}</p>
+                    <p><b>📅 Submitted:</b> {submitted_date}</p>
+                    <p><b>Batch Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
+                </div>
+                <div style="text-align:right;">
+                    <span class="badge-pending">⏳ Pending</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Show student scores preview
+        df_batch = pd.DataFrame(batch["students"])
+        display_cols = ["student_name", "Test 1", "Test 2", "Test 3", "Test 4", "Final Exam", "overall"]
+        available_cols = [col for col in display_cols if col in df_batch.columns]
+        st.dataframe(df_batch[available_cols], use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(f"✅ Approve", key=f"subj_approve_{batch['id']}"):
+                supabase_admin = get_supabase_admin()
+                try:
+                    supabase_admin.table("batches").update({"status": "subject_approved"}).eq("id", batch["id"]).execute()
+                    load_all_data()
+                    add_notification(f"Batch {batch['id']} approved by subject admin {teacher['name']}", "success")
+                    # Celebration
+                    st.balloons()
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+                                padding: 2rem;
+                                border-radius: 16px;
+                                text-align: center;
+                                border: 3px solid #43a047;">
+                        <div style="font-size: 4rem;">📋✅👏📚</div>
+                        <h2 style="color: #1a365d;">✅ Batch Approved by Subject Admin!</h2>
+                        <p style="font-size: 1.2rem; color: #2d4059;">
+                            🎈 Forwarded to School Admin for final approval. 🎈
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to approve: {e}")
+        with col2:
+            if st.button(f"❌ Reject", key=f"subj_reject_{batch['id']}"):
+                supabase_admin = get_supabase_admin()
+                try:
+                    supabase_admin.table("batches").update({"status": "rejected"}).eq("id", batch["id"]).execute()
+                    load_all_data()
+                    add_notification(f"Batch {batch['id']} rejected by subject admin {teacher['name']}", "warning")
+                    st.warning("❌ Batch rejected!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to reject: {e}")
+        st.markdown("---")
+
+# ===================================================================
 # ADMIN PANEL (complete)
 # ===================================================================
 
@@ -1716,7 +1834,7 @@ def show_admin_panel():
     # --- Tab 1: Overview ---
     with tab1:
         st.markdown("#### Dashboard Overview")
-        pending_batches = len(get_pending_batches())
+        pending_batches = len(get_batches_awaiting_final_approval())  # Use new function
         total_evals = len(st.session_state.evaluations)
 
         col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -1734,6 +1852,24 @@ def show_admin_panel():
                 st.metric("Registration", "🔴 Closed", delta="Inactive")
         with col5: st.metric("📝 Evaluations", total_evals)
         with col6: st.metric("⏳ Pending Batches", pending_batches, delta="Needs Approval" if pending_batches > 0 else "All Approved")
+
+        if pending_batches == 0:
+            st.balloons()
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+                        padding: 2rem;
+                        border-radius: 20px;
+                        text-align: center;
+                        border: 3px solid #FFD700;
+                        margin: 1rem 0;">
+                <div style="font-size: 4.5rem;">🏆🎓📚🌟👏</div>
+                <h2 style="color: #1a365d;">All Batches Approved!</h2>
+                <p style="font-size: 1.3rem; color: #2d4059;">
+                    Every evaluation has been reviewed and approved. <br>🎯 Outstanding work, Admin!
+                </p>
+                <p style="font-size: 1rem; color: #4a5b7a;">📖 You're shaping the future of education! 📖</p>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown("#### 📅 Registration Period")
         period = st.session_state.registration_period
@@ -1840,6 +1976,12 @@ def show_admin_panel():
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
             teacher_subject = st.selectbox("Subject Taught *", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
+            # NEW: Subject Admin assignment
+            teacher_admin_subjects = st.multiselect(
+                "Subjects this teacher administers (leave empty for regular teacher)",
+                options=ALL_SUBJECTS,
+                default=[]
+            )
 
             col1, col2 = st.columns([1, 3])
             with col1:
@@ -1861,13 +2003,17 @@ def show_admin_panel():
                 teacher_id = f"T{next_num:04d}"
                 added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
                 assignments_json = json.dumps(st.session_state.assignments_list)
+                admin_subjects_json = json.dumps(teacher_admin_subjects)
+
+                # Determine role: if admin_subjects non-empty, role = subject_admin else teacher
+                role = "subject_admin" if teacher_admin_subjects else "teacher"
 
                 supabase_admin = get_supabase_admin()
                 try:
                     user_data = {
                         "username": username,
                         "password": hashed_pw,
-                        "role": "teacher",
+                        "role": role,
                         "name": teacher_name
                     }
                     supabase_admin.table("users").insert(user_data).execute()
@@ -1879,16 +2025,18 @@ def show_admin_panel():
                         "username": username,
                         "password": password,
                         "added": added_time,
-                        "assignments": assignments_json
+                        "assignments": assignments_json,
+                        "admin_subjects": admin_subjects_json
                     }
                     supabase_admin.table("teachers").insert(teacher_data).execute()
                     load_all_data()
-                    add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
+                    add_notification(f"👨‍🏫 New teacher added: {teacher_name} (role: {role})", "success")
                     st.success(f"""
                     ✅ Teacher {teacher_name} added successfully!
                     **Login Credentials:**
                     - **Username:** `{username}`
                     - **Password:** `{password}`
+                    - **Role:** {role.title()}
                     """)
                     st.session_state.assignments_list = [{"grade": "Grade 1", "section": "A", "semester": "Semester I"}]
                     st.rerun()
@@ -1903,11 +2051,14 @@ def show_admin_panel():
             for teacher in st.session_state.teachers:
                 assignments = json.loads(teacher.get("assignments", "[]"))
                 assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
+                admin_subjects = json.loads(teacher.get("admin_subjects", "[]"))
+                admin_str = ", ".join(admin_subjects) if admin_subjects else "None"
                 st.markdown(f"""
                 <div class="teacher-card">
                     <h4>👨‍🏫 {teacher['name']}</h4>
                     <p><b>📚 Subject:</b> {teacher['subject']}</p>
                     <p><b>📌 Assignments:</b> {assign_str}</p>
+                    <p><b>🔐 Admin Subjects:</b> {admin_str}</p>
                     <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
                     <p><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></p>
                     <p><b>📅 Added:</b> {teacher.get('added', 'N/A')}</p>
@@ -1966,6 +2117,14 @@ def show_admin_panel():
                         st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A", "semester": "Semester I"})
                         st.rerun()
 
+                    # Admin Subjects
+                    current_admin_subjects = json.loads(teacher.get("admin_subjects", "[]"))
+                    new_admin_subjects = st.multiselect(
+                        "Subjects this teacher administers",
+                        options=ALL_SUBJECTS,
+                        default=current_admin_subjects
+                    )
+
                     with st.form("edit_teacher_form"):
                         new_name = st.text_input("Teacher Full Name", value=teacher["name"])
                         new_subject = st.selectbox("Subject", st.session_state.subjects,
@@ -1977,12 +2136,16 @@ def show_admin_panel():
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
                             teacher["assignments"] = json.dumps(st.session_state.edit_assignments)
+                            teacher["admin_subjects"] = json.dumps(new_admin_subjects)
+                            # Update user role
+                            new_role = "subject_admin" if new_admin_subjects else "teacher"
                             supabase_admin = get_supabase_admin()
                             try:
                                 supabase_admin.table("teachers").update(teacher).eq("id", teacher["id"]).execute()
                                 if teacher.get("username") in st.session_state.user_db:
                                     st.session_state.user_db[teacher["username"]]["name"] = new_name
-                                    supabase_admin.table("users").update({"name": new_name}).eq("username", teacher["username"]).execute()
+                                    st.session_state.user_db[teacher["username"]]["role"] = new_role
+                                    supabase_admin.table("users").update({"name": new_name, "role": new_role}).eq("username", teacher["username"]).execute()
                                 load_all_data()
                                 add_notification(f"✏️ Teacher {new_name} updated", "info")
                                 st.success(f"✅ Teacher {new_name} updated successfully!")
@@ -2148,12 +2311,12 @@ def show_admin_panel():
 
     # --- Tab 6: Approvals (Batches) ---
     with tab6:
-        st.markdown("#### ✅ Pending Batches")
-        pending_batches = get_pending_batches()
+        st.markdown("#### ✅ Pending Batches for Final Approval")
+        pending_batches = get_batches_awaiting_final_approval()  # subject-approved or no subject admin
         if not pending_batches:
-            st.success("🎉 No pending batches. All evaluations have been reviewed.")
+            st.success("🎉 No pending batches awaiting final approval.")
         else:
-            st.markdown(f"**{len(pending_batches)} batch(es) awaiting approval**")
+            st.markdown(f"**{len(pending_batches)} batch(es) awaiting your final review**")
             for batch in pending_batches:
                 batch_id = batch["id"]
                 teacher_name = batch.get("teacher_name", "Unknown")
@@ -2168,6 +2331,12 @@ def show_admin_panel():
                 max_scores = batch.get("max_scores", DEFAULT_MAX_SCORES)
                 weight_str = f"Test1={weights.get('Test 1',0)}, Test2={weights.get('Test 2',0)}, Test3={weights.get('Test 3',0)}, Test4={weights.get('Test 4',0)}, Final={weights.get('Final Exam',0)}"
                 max_str = f"Max: Test1={max_scores.get('Test 1',0)}, Test2={max_scores.get('Test 2',0)}, Test3={max_scores.get('Test 3',0)}, Test4={max_scores.get('Test 4',0)}, Final={max_scores.get('Final Exam',0)}"
+                # Indicate if subject-admin approved
+                if batch.get("status") == "subject_approved":
+                    approval_note = "✅ Approved by Subject Admin"
+                else:
+                    approval_note = "⏳ No Subject Admin assigned"
+
                 st.markdown(f"""
                 <div class="approval-card pending">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
@@ -2182,9 +2351,10 @@ def show_admin_panel():
                             <p><b>Weights:</b> {weight_str}</p>
                             <p><b>Max Scores:</b> {max_str}</p>
                             <p><b>Batch Remarks:</b> {batch_remarks if batch_remarks else 'None'}</p>
+                            <p><b>Status:</b> {approval_note}</p>
                         </div>
                         <div style="text-align:right;">
-                            <span class="badge-pending">⏳ Pending</span>
+                            <span class="badge-pending">⏳ Pending Final Approval</span>
                         </div>
                     </div>
                 </div>
@@ -2196,7 +2366,7 @@ def show_admin_panel():
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button(f"✅ Approve Batch", key=f"approve_batch_{batch_id}", use_container_width=True):
+                    if st.button(f"✅ Approve Final", key=f"final_approve_{batch_id}", use_container_width=True):
                         supabase_admin = get_supabase_admin()
                         try:
                             res = supabase_admin.table("evaluations").select("id").order("id", desc=True).limit(1).execute()
@@ -2241,13 +2411,33 @@ def show_admin_panel():
                         try:
                             supabase_admin.table("batches").update({"status": "approved"}).eq("id", batch_id).execute()
                             load_all_data()
-                            add_notification(f"✅ Batch from {teacher_name} approved ({student_count} students)", "success")
-                            st.success(f"✅ Batch approved! {student_count} student evaluations created.")
+                            add_notification(f"✅ Batch from {teacher_name} finally approved ({student_count} students)", "success")
+                            # Celebration
+                            st.balloons()
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+                                        padding: 2.5rem;
+                                        border-radius: 20px;
+                                        text-align: center;
+                                        border: 4px solid #FFD700;
+                                        margin: 1.5rem 0;
+                                        box-shadow: 0 12px 48px rgba(255, 215, 0, 0.35);">
+                                <div style="font-size: 5rem; line-height: 1.3;">🎓🏆🌟✨📜</div>
+                                <h2 style="color: #1a365d; font-size: 2.2rem; margin: 0.5rem 0;">✅ Batch Approved!</h2>
+                                <p style="font-size: 1.4rem; color: #2d4059; font-weight: 600;">
+                                    <strong>{student_count}</strong> student evaluations created successfully!
+                                </p>
+                                <p style="font-size: 1.1rem; color: #4a5b7a; margin-top: 0.5rem;">
+                                    📚 Every approved evaluation builds a brighter future! Keep leading the way! 🎓
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            time.sleep(2)
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Failed to approve batch: {e}")
                 with col2:
-                    if st.button(f"❌ Reject Batch", key=f"reject_batch_{batch_id}", use_container_width=True):
+                    if st.button(f"❌ Reject Final", key=f"final_reject_{batch_id}", use_container_width=True):
                         batch["status"] = "rejected"
                         supabase_admin = get_supabase_admin()
                         try:
@@ -2777,7 +2967,7 @@ def show_student_panel():
             st.warning("No student found with that name. Please check your spelling.")
 
 # ===================================================================
-# TEACHER PANEL
+# TEACHER PANEL (modified to assign subject admin)
 # ===================================================================
 
 def show_teacher_panel():
@@ -3021,11 +3211,15 @@ def show_teacher_panel():
                 for rec in students_list:
                     rec["overall"] = compute_overall_row(rec, new_weights, new_max_scores)
 
+                # ---- Assign subject admin ----
+                subject_admin_id = get_subject_admin(teacher_subject)
+
                 if existing_batch:
                     existing_batch["students"] = students_list
                     existing_batch["weights"] = new_weights
                     existing_batch["max_scores"] = new_max_scores
                     existing_batch["remarks"] = remarks
+                    existing_batch["subject_admin_id"] = subject_admin_id
                     existing_batch["submitted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                     supabase_admin = get_supabase_admin()
                     try:
@@ -3050,15 +3244,25 @@ def show_teacher_panel():
                         "max_scores": new_max_scores,
                         "remarks": remarks,
                         "status": "pending",
-                        "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                        "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "subject_admin_id": subject_admin_id  # NEW
                     }
                     supabase_admin = get_supabase_admin()
                     try:
                         supabase_admin.table("batches").insert(batch).execute()
                         load_all_data()
                         add_notification(f"📦 New batch submitted by {teacher_name} ({selected_grade} {selected_section} {selected_semester} {teacher_subject})", "info")
-                        st.success("✅ Batch submitted successfully! Waiting for admin approval.")
+                        # Celebration
                         st.balloons()
+                        st.markdown("""
+                        <div style="background: #E8F0FE; padding: 1.5rem; border-radius: 12px; text-align: center; border: 2px solid #1A73E8;">
+                            <div style="font-size: 3.5rem; line-height: 1.4;">📚✍️🚀✨</div>
+                            <h3 style="color: #1A73E8; margin: 0.5rem 0;">✅ Batch Submitted!</h3>
+                            <p style="font-size: 1.1rem;">Your evaluations are now pending approval. You'll be notified once reviewed.</p>
+                            <p style="font-size: 0.95rem; color: #5F6368;">🌟 Thank you for your dedication, Teacher! 🌟</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        time.sleep(2)
                         st.rerun()
                     except Exception as e:
                         st.error(f"❌ Failed to save batch: {e}")
@@ -3074,8 +3278,15 @@ def show_teacher_panel():
         else:
             for batch in reversed(my_batches):
                 status = batch.get("status", "pending")
-                status_label = "⏳ Pending" if status == "pending" else "✅ Approved" if status == "approved" else "❌ Rejected"
-                status_class = "badge-pending" if status == "pending" else "badge-approved" if status == "approved" else "badge-rejected"
+                if status == "approved":
+                    status_label = "🎉✅ Approved 🎉"
+                elif status == "subject_approved":
+                    status_label = "⏳ Approved by Subject Admin, pending final"
+                elif status == "pending":
+                    status_label = "⏳ Pending"
+                else:
+                    status_label = "❌ Rejected"
+                status_class = "badge-approved" if status == "approved" else "badge-subject-approved" if status == "subject_approved" else "badge-pending" if status == "pending" else "badge-rejected"
                 student_count = len(batch.get("students", []))
                 batch_remarks = batch.get("remarks", "")
                 semester = batch.get("semester", "N/A")
@@ -3097,6 +3308,19 @@ def show_teacher_panel():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # Celebration banner for approved batches
+                if status == "approved":
+                    st.markdown("""
+                    <div style="background: #E6F4EA; padding: 0.8rem 1.2rem; border-radius: 12px; 
+                                border-left: 6px solid #34A853; margin-bottom: 0.8rem;
+                                display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 2rem;">🏆📚</span>
+                        <span style="font-size: 1.1rem; font-weight: 600; color: #1e7e34;">
+                            🎉 Congratulations! Your batch has been fully approved! 🎉
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 if status == "approved":
                     if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}"):
@@ -3153,12 +3377,14 @@ def show_teacher_panel():
         st.markdown("#### ✅ Approval Status")
         my_batches = [b for b in st.session_state.batches if b.get("teacher_id") == teacher_id and b.get("semester") == selected_semester]
         pending = [b for b in my_batches if b.get("status") == "pending"]
+        subject_approved = [b for b in my_batches if b.get("status") == "subject_approved"]
         approved = [b for b in my_batches if b.get("status") == "approved"]
         rejected = [b for b in my_batches if b.get("status") == "rejected"]
-        col1, col2, col3 = st.columns(3)
-        col1.metric("⏳ Pending Batches", len(pending))
-        col2.metric("✅ Approved Batches", len(approved))
-        col3.metric("❌ Rejected Batches", len(rejected))
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("⏳ Pending", len(pending))
+        col2.metric("📋 Subject Approved", len(subject_approved))
+        col3.metric("✅ Fully Approved", len(approved))
+        col4.metric("❌ Rejected", len(rejected))
 
 # ===================================================================
 # LOGIN PAGE
@@ -3239,6 +3465,8 @@ def main():
                 "⚠️ Penalty Log",
                 "🔔 Notifications"
             ]
+        elif role == "subject_admin":
+            nav_options = ["📋 Subject Admin Dashboard", "⚠️ My Penalties", "🔔 Notifications"]
         elif role == "teacher":
             nav_options = ["👨‍🏫 My Dashboard", "📝 Submit Evaluation", "📊 My Students", "✅ Approval Status", "⚠️ My Penalties", "🔔 Notifications"]
         else:
@@ -3261,7 +3489,7 @@ def main():
     total_teachers = len(st.session_state.teachers)
     total_evaluations = len(st.session_state.evaluations)
     total_penalties = len(st.session_state.penalty_log)
-    pending_batches = len(get_pending_batches())
+    pending_batches = len(get_batches_awaiting_final_approval())  # School Admin pending count
 
     st.markdown(f"""
     <div class="main-header">
@@ -3324,59 +3552,24 @@ def main():
             show_admin_panel()
         elif current_page == "👨‍🏫 Teachers":
             st.markdown("### 👨‍🏫 Teacher Management")
-            tab1, tab2 = st.tabs(["📋 All Teachers", "➕ Add Teacher"])
-            with tab1:
-                if st.session_state.teachers:
-                    for t in st.session_state.teachers:
-                        st.markdown(f"""
-                        <div class="teacher-card">
-                            <h4>👨‍🏫 {t['name']}</h4>
-                            <p><b>📚 Subject:</b> {t['subject']}</p>
-                            <p><b>✉️ Email:</b> {t.get('email', 'N/A')}</p>
-                            <p><b>👤 Username:</b> <code>{t.get('username', 'N/A')}</code></p>
-                            <p><b>🔑 Password:</b> <code>{t.get('password', 'N/A')}</code></p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.info("No teachers yet.")
-            with tab2:
-                with st.form("add_teacher_simple"):
-                    name = st.text_input("Teacher Name")
-                    subject = st.selectbox("Subject", st.session_state.subjects if st.session_state.subjects else ALL_SUBJECTS)
-                    email = st.text_input("Email")
-                    if st.form_submit_button("Add Teacher"):
-                        if name:
-                            base_username = generate_username(name)
-                            username = base_username
-                            counter = 1
-                            while is_username_taken(username):
-                                username = f"{base_username}{counter}"
-                                counter += 1
-                            password = generate_random_password()
-                            existing_ids = [int(t['id'][1:]) for t in st.session_state.teachers if t['id'].startswith('T')]
-                            next_num = max(existing_ids) + 1 if existing_ids else 1
-                            teacher_id = f"T{next_num:04d}"
-                            st.session_state.user_db[username] = {
-                                "password": hash_password(password),
-                                "role": "teacher",
-                                "name": name
-                            }
-                            st.session_state.teachers.append({
-                                "id": teacher_id,
-                                "name": name,
-                                "subject": subject,
-                                "email": email,
-                                "username": username,
-                                "password": password,
-                                "added": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                "assignments": json.dumps([{"grade": "Grade 1", "section": "A", "semester": "Semester I"}])
-                            })
-                            add_notification(f"👨‍🏫 New teacher: {name}", "success")
-                            sync_all()
-                            st.success(f"✅ Teacher {name} added! Username: {username}, Password: {password}")
-                            st.rerun()
-                        else:
-                            st.error("Please enter teacher name.")
+            # Quick link to the Teachers tab in Admin panel
+            st.info("Please use the **Admin Dashboard → Teachers** tab for full teacher management with subject admin assignment.")
+            # Optionally, replicate the simple teacher list
+            if st.session_state.teachers:
+                for t in st.session_state.teachers:
+                    admin_subjects = json.loads(t.get("admin_subjects", "[]"))
+                    admin_str = ", ".join(admin_subjects) if admin_subjects else "None"
+                    st.markdown(f"""
+                    <div class="teacher-card">
+                        <h4>👨‍🏫 {t['name']}</h4>
+                        <p><b>📚 Subject:</b> {t['subject']}</p>
+                        <p><b>🔐 Admin Subjects:</b> {admin_str}</p>
+                        <p><b>✉️ Email:</b> {t.get('email', 'N/A')}</p>
+                        <p><b>👤 Username:</b> <code>{t.get('username', 'N/A')}</code></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No teachers yet.")
         elif current_page == "👨‍🎓 Students":
             st.markdown("### 👨‍🎓 Student Management")
             st.info("Use the **Admin Dashboard → Students** tab for full management.")
@@ -3391,6 +3584,7 @@ def main():
             st.info("Please use the **Admin Dashboard → Approvals (Batches)** tab.")
         elif current_page == "📊 Rankings":
             st.markdown("### 📊 Grade Rankings")
+            # Quick ranking view
             grade_options = [f"Grade {i}" for i in range(1, 13)]
             selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="rank_grade")
             students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
@@ -3417,13 +3611,7 @@ def main():
                 if not df.empty:
                     df_sorted = df.sort_values("Average Score", ascending=False).reset_index(drop=True)
                     df_sorted["Rank"] = df_sorted.index + 1
-                    df_sorted = df_sorted[["Rank", "Name", "Average Score", "Evaluations"]]
-                    st.dataframe(df_sorted, use_container_width=True, hide_index=True)
-                    st.metric("👥 Total Students", len(df_sorted))
-                    st.metric("🏆 Highest Average", f"{df_sorted['Average Score'].max()}%")
-                    st.metric("📉 Lowest Average", f"{df_sorted['Average Score'].min()}%")
-                else:
-                    st.info("No approved evaluations yet for this grade.")
+                    st.dataframe(df_sorted[["Rank", "Name", "Average Score", "Evaluations"]], use_container_width=True, hide_index=True)
         elif current_page == "📥 Import/Export":
             st.markdown("### 📥 Import / Export Data")
             st.info("Please use the **Admin Dashboard → Import/Export** tab for full functionality.")
@@ -3431,6 +3619,14 @@ def main():
             st.markdown("### 📄 Approval Report (Grade‑wise)")
             st.info("Please use the **Admin Dashboard → Approval Report** tab for the comprehensive grade report.")
         elif current_page == "⚠️ Penalty Log":
+            show_penalty_log()
+        elif current_page == "🔔 Notifications":
+            show_notification_center()
+
+    elif role == "subject_admin":
+        if current_page == "📋 Subject Admin Dashboard":
+            show_subject_admin_panel()
+        elif current_page == "⚠️ My Penalties":
             show_penalty_log()
         elif current_page == "🔔 Notifications":
             show_notification_center()
