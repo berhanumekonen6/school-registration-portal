@@ -2040,9 +2040,9 @@ def show_student_card_panel():
                 key=f"download_{student['id']}"
             )
             st.markdown("#### Preview")
-            # Replace deprecated st.components.v1.html with st.iframe
-            st.iframe(srcdoc=html, height=800, scrolling=True)
-
+            # ✅ Use st.components.v1.html (works reliably)
+            st.components.v1.html(html, height=800, scrolling=True)
+            
 # ===================================================================
 # ADMIN PANEL (complete)
 # ===================================================================
