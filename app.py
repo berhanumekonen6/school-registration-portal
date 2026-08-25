@@ -264,6 +264,8 @@ def init_user_db():
         }
     if 'registration_open' not in st.session_state:
         st.session_state.registration_open = True
+    if 'celebration_dismissed' not in st.session_state:
+        st.session_state.celebration_dismissed = False
 
 def login_user(username, password):
     if username == "admin" and password == "admin":
@@ -289,6 +291,7 @@ def logout_user():
     st.session_state.logged_in = False
     st.session_state.current_user = None
     st.session_state.current_role = None
+    st.session_state.celebration_dismissed = False   # reset so celebration shows again after logout
 
 # ---- Modified add_notification to use admin client ----
 def add_notification(message, notification_type="info", user=None):
@@ -1062,6 +1065,219 @@ def get_subject_admin(subject):
         if subject in admin_subjects:
             return t["id"]
     return None
+
+# ===================================================================
+# ETHIOPIAN NEW YEAR CELEBRATION DETECTION & PAGE
+# ===================================================================
+
+def is_celebration_period():
+    """
+    Approximate Ethiopian New Year celebration period:
+    Nehase 15 – Meskerem 20  (roughly Aug 21 – Sep 30 Gregorian).
+    Returns True if today is within that window.
+    """
+    today = datetime.now()
+    m, d = today.month, today.day
+    # Nehase 15 ~ Aug 21, Meskerem 20 ~ Sep 30
+    if m == 8 and d >= 21:
+        return True
+    if m == 9 and d <= 30:
+        return True
+    return False
+
+def show_celebration_page():
+    """Display a full‑screen Ethiopian New Year celebration with balloons, flags, and a portal entry button."""
+    st.markdown("""
+    <style>
+        .celebration-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(180deg, #006B3F 0%, #FCD116 50%, #EF3340 100%);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Noto Sans Ethiopic', 'Segoe UI', sans-serif;
+        }
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            width: 60px;
+            height: 80px;
+            border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+            animation: floatUp 8s linear infinite;
+            opacity: 0.8;
+        }
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 30px;
+            background: #333;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0.8; }
+            100% { transform: translateY(-120vh) scale(0.5) rotate(20deg); opacity: 0.2; }
+        }
+
+        /* ---- Ethiopian Flag ---- */
+        .flag-container {
+            position: absolute;
+            width: 20vw;
+            max-width: 250px;
+            aspect-ratio: 3 / 2;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            animation: flagFloat 10s ease-in-out infinite;
+            opacity: 0.85;
+            z-index: 2;
+        }
+        .flag-stripe {
+            width: 100%;
+            height: 33.333%;
+        }
+        .flag-stripe.green  { background: #006B3F; }
+        .flag-stripe.yellow { background: #FCD116; }
+        .flag-stripe.red    { background: #EF3340; }
+        .flag-left {
+            top: 15%;
+            left: 5%;
+            animation-delay: 0s;
+        }
+        .flag-right {
+            bottom: 20%;
+            right: 5%;
+            animation-delay: -5s;  /* opposite phase */
+        }
+        @keyframes flagFloat {
+            0%   { transform: rotate(-2deg) translate(0, 0); }
+            25%  { transform: rotate(2deg) translate(15px, -10px); }
+            50%  { transform: rotate(-1deg) translate(-10px, 5px); }
+            75%  { transform: rotate(3deg) translate(10px, -5px); }
+            100% { transform: rotate(-2deg) translate(0, 0); }
+        }
+
+        .celebration-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            color: white;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+            padding: 1rem;
+        }
+        .celebration-title {
+            font-size: 3.8rem;
+            font-weight: 800;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem 2rem;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255,215,0,0.5);
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+        .celebration-subtitle {
+            font-size: 2rem;
+            background: rgba(0,0,0,0.2);
+            padding: 0.5rem 2rem;
+            border-radius: 30px;
+            display: inline-block;
+        }
+        .flag-emojis {
+            font-size: 3.5rem;
+        }
+        .celebration-btn {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 1rem 3rem;
+            font-size: 1.8rem;
+            font-weight: 700;
+            border-radius: 50px;
+            background: #FCD116;
+            color: #006B3F;
+            border: 3px solid #EF3340;
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .celebration-btn:hover {
+            transform: scale(1.05);
+            background: #EF3340;
+            color: #FCD116;
+            border-color: #006B3F;
+        }
+        .boom-text {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: #FFD700;
+            text-shadow: 0 0 20px rgba(255,215,0,0.6);
+            margin-top: 0.5rem;
+        }
+        @media (max-width: 768px) {
+            .flag-container { width: 30vw; max-width: 150px; }
+            .celebration-title { font-size: 2.2rem; padding: 0.5rem 1rem; }
+            .celebration-subtitle { font-size: 1.4rem; }
+            .celebration-btn { font-size: 1.2rem; padding: 0.7rem 2rem; }
+            .boom-text { font-size: 1.4rem; }
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    import random
+    colors = ['#006B3F', '#FCD116', '#EF3340']
+    balloon_html = ""
+    for _ in range(40):
+        color = random.choice(colors)
+        left = random.randint(0, 95)
+        size = random.randint(40, 80)
+        delay = random.uniform(0, 8)
+        duration = random.uniform(6, 10)
+        balloon_html += f"""
+        <div class="balloon" style="left:{left}%; width:{size}px; height:{size*1.2}px; 
+             background:{color}; animation-duration:{duration}s; animation-delay:{delay}s;"></div>
+        """
+
+    st.markdown(f"""
+    <div class="celebration-wrapper">
+        {balloon_html}
+
+        <!-- Ethiopian Flags (slow movement) -->
+        <div class="flag-container flag-left">
+            <div class="flag-stripe green"></div>
+            <div class="flag-stripe yellow"></div>
+            <div class="flag-stripe red"></div>
+        </div>
+        <div class="flag-container flag-right">
+            <div class="flag-stripe green"></div>
+            <div class="flag-stripe yellow"></div>
+            <div class="flag-stripe red"></div>
+        </div>
+
+        <div style="position:absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.2); z-index:5;"></div>
+        <div class="celebration-content">
+            <div class="flag-emojis">🇪🇹 🎉 🎊</div>
+            <div class="celebration-title">እንኳን ለኢትዮጲያ ዘመን መለዎጫ በዓል አደረሳችሁ! 🎉</div>
+            <div class="celebration-subtitle">መልካም አዲስ ዓመት! Happy Ethiopian New Year!</div>
+            <div style="margin: 0.8rem 0; font-size: 2rem; background: rgba(0,0,0,0.3); 
+                        padding: 0.5rem 2rem; border-radius: 30px; display:inline-block;">
+                🟢 🟡 🔴
+            </div>
+            <div class="boom-text">💥 BOOOOOOOOM!!! 💥</div>
+            <br>
+            <a href="?celebration_dismissed=true" class="celebration-btn">🚪 Enter Portal</a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ===================================================================
 # SUBJECT ADMIN PANEL
@@ -3446,9 +3662,20 @@ def show_login_page():
 def main():
     init_user_db()
 
+    # ---- Handle celebration dismissal via query param ----
+    if st.query_params.get("celebration_dismissed"):
+        st.session_state.celebration_dismissed = True
+        st.query_params.clear()
+        st.rerun()
+
     if not st.session_state.logged_in:
-        show_login_page()
-        return
+        # Check for Ethiopian New Year celebration period
+        if is_celebration_period() and not st.session_state.get("celebration_dismissed", False):
+            show_celebration_page()
+            return   # stop further rendering; the page is fully occupied
+        else:
+            show_login_page()
+            return
 
     current_user = st.session_state.current_user
     role = st.session_state.current_role
