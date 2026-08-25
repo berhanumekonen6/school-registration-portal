@@ -1270,7 +1270,7 @@ def show_celebration_page():
                         padding: 0.5rem 2rem; border-radius: 30px; display:inline-block;">
                 🟢 🟡 🔴
             </div>
-            <div class="boom-text">ኢትዮጲያ💪📚✍️🌍2018 ዓ.ም🕊️ 🎓🔥🚀 ኢትዮጲያ</div>
+            <div class="boom-text">ኢትዮጲያ💪📚✍️🌍2019 ዓ.ም🕊️ 🎓🔥🚀 ኢትዮጲያ</div>
             <br>
             <a href="?celebration_dismissed=true" class="celebration-btn">🚪 Enter Portal</a>
         </div>
