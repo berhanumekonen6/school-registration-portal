@@ -1338,7 +1338,7 @@ def show_subject_admin_panel():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button(f"✅ Approve", key=f"subj_approve_{batch['id']}"):
+            if st.button(f"✅ Approve", key=f"subj_approve_{batch['id']}", width='stretch'):
                 supabase_admin = get_supabase_admin()
                 try:
                     supabase_admin.table("batches").update({"status": "subject_approved"}).eq("id", batch["id"]).execute()
@@ -1364,7 +1364,7 @@ def show_subject_admin_panel():
                 except Exception as e:
                     st.error(f"Failed to approve: {e}")
         with col2:
-            if st.button(f"❌ Reject", key=f"subj_reject_{batch['id']}"):
+            if st.button(f"❌ Reject", key=f"subj_reject_{batch['id']}", width='stretch'):
                 supabase_admin = get_supabase_admin()
                 try:
                     supabase_admin.table("batches").update({"status": "rejected"}).eq("id", batch["id"]).execute()
@@ -1406,7 +1406,7 @@ def show_notification_center():
         if unread > 0:
             st.warning(f"📌 {unread} new notification(s)")
     with col2:
-        if st.button("Mark All Read"):
+        if st.button("Mark All Read", width='stretch'):
             supabase_admin = get_supabase_admin()
             for n in st.session_state.notifications:
                 n['read'] = True
@@ -2034,7 +2034,8 @@ def show_student_card_panel():
                 key=f"download_{student['id']}"
             )
             st.markdown("#### Preview")
-            st.components.v1.html(html, height=800, scrolling=True)
+            # Replace deprecated st.components.v1.html with st.iframe
+            st.iframe(srcdoc=html, height=800, scrolling=True)
 
 # ===================================================================
 # ADMIN PANEL (complete)
@@ -2135,7 +2136,7 @@ def show_admin_panel():
         with col2:
             end_date = st.date_input("End Date", period["end"].date())
             end_time = st.time_input("End Time", period["end"].time())
-        if st.button("📅 Update Registration Period", use_container_width=True):
+        if st.button("📅 Update Registration Period", width='stretch'):
             new_start = datetime.combine(start_date, start_time)
             new_end = datetime.combine(end_date, end_time)
             if new_start >= new_end:
@@ -2192,11 +2193,11 @@ def show_admin_panel():
                     key=f"assign_semester_{i}"
                 )
             with col4:
-                if st.button("✖", key=f"remove_assign_{i}"):
+                if st.button("✖", key=f"remove_assign_{i}", width='stretch'):
                     if len(st.session_state.assignments_list) > 1:
                         st.session_state.assignments_list.pop(i)
                         st.rerun()
-        if st.button("➕ Add Assignment"):
+        if st.button("➕ Add Assignment", width='stretch'):
             st.session_state.assignments_list.append({"grade": "Grade 1", "section": "A", "semester": "Semester I"})
             st.rerun()
 
@@ -2214,7 +2215,7 @@ def show_admin_panel():
 
             col1, col2 = st.columns([1, 3])
             with col1:
-                submitted = st.form_submit_button("➕ Add Teacher", use_container_width=True)
+                submitted = st.form_submit_button("➕ Add Teacher", width='stretch')
 
             if submitted and teacher_name:
                 base_username = generate_username(teacher_name)
@@ -2338,11 +2339,11 @@ def show_admin_panel():
                                 key=f"edit_assign_semester_{i}"
                             )
                         with col4:
-                            if st.button("✖", key=f"edit_remove_assign_{i}"):
+                            if st.button("✖", key=f"edit_remove_assign_{i}", width='stretch'):
                                 if len(st.session_state.edit_assignments) > 1:
                                     st.session_state.edit_assignments.pop(i)
                                     st.rerun()
-                    if st.button("➕ Add Assignment", key="edit_add_assign"):
+                    if st.button("➕ Add Assignment", key="edit_add_assign", width='stretch'):
                         st.session_state.edit_assignments.append({"grade": "Grade 1", "section": "A", "semester": "Semester I"})
                         st.rerun()
 
@@ -2360,7 +2361,7 @@ def show_admin_panel():
                                                    index=st.session_state.subjects.index(teacher["subject"]) if teacher["subject"] in st.session_state.subjects else 0)
                         new_email = st.text_input("Email Address", value=teacher.get("email", ""))
 
-                        if st.form_submit_button("💾 Update Teacher"):
+                        if st.form_submit_button("💾 Update Teacher", width='stretch'):
                             teacher["name"] = new_name
                             teacher["subject"] = new_subject
                             teacher["email"] = new_email
@@ -2391,7 +2392,7 @@ def show_admin_panel():
             )
             if teacher_to_delete:
                 teacher_id = teacher_to_delete.split("(")[-1].replace(")", "")
-                if st.button("Delete this teacher", type="primary", use_container_width=True):
+                if st.button("Delete this teacher", type="primary", width='stretch'):
                     try:
                         supabase_admin = get_supabase_admin()
                         username_to_remove = None
@@ -2431,7 +2432,7 @@ def show_admin_panel():
             new_subject = st.text_input("New Subject Name")
             col1, col2 = st.columns([1, 3])
             with col1:
-                submitted = st.form_submit_button("➕ Add Subject", use_container_width=True)
+                submitted = st.form_submit_button("➕ Add Subject", width='stretch')
             if submitted and new_subject:
                 if new_subject not in current_subjects:
                     st.session_state.subjects.append(new_subject)
@@ -2503,7 +2504,7 @@ def show_admin_panel():
             st.info("No user accounts found.")
 
         st.markdown("##### 📤 Export Data")
-        if st.button("📥 Export All Data (JSON)", use_container_width=True):
+        if st.button("📥 Export All Data (JSON)", width='stretch'):
             data = {
                 "students": st.session_state.students,
                 "teachers": st.session_state.teachers,
@@ -2522,11 +2523,11 @@ def show_admin_panel():
                 data=json.dumps(data, indent=2),
                 file_name=f"school_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json",
-                use_container_width=True
+                width='stretch'
             )
 
         st.markdown("##### ⚠️ Danger Zone")
-        if st.button("🗑️ Clear All Data (Admin Only)", use_container_width=True):
+        if st.button("🗑️ Clear All Data (Admin Only)", width='stretch'):
             if st.checkbox("I confirm I want to delete ALL data (students, teachers, evaluations, batches, penalties)"):
                 st.session_state.students = []
                 st.session_state.teachers = []
@@ -2595,7 +2596,7 @@ def show_admin_panel():
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    if st.button(f"✅ Approve Final", key=f"final_approve_{batch_id}", use_container_width=True):
+                    if st.button(f"✅ Approve Final", key=f"final_approve_{batch_id}", width='stretch'):
                         supabase_admin = get_supabase_admin()
                         try:
                             res = supabase_admin.table("evaluations").select("id").order("id", desc=True).limit(1).execute()
@@ -2666,7 +2667,7 @@ def show_admin_panel():
                         except Exception as e:
                             st.error(f"❌ Failed to approve batch: {e}")
                 with col2:
-                    if st.button(f"❌ Reject Final", key=f"final_reject_{batch_id}", use_container_width=True):
+                    if st.button(f"❌ Reject Final", key=f"final_reject_{batch_id}", width='stretch'):
                         batch["status"] = "rejected"
                         supabase_admin = get_supabase_admin()
                         try:
@@ -2749,7 +2750,7 @@ def show_admin_panel():
                     section = st.text_input("Section (e.g., A, B, C)", value="A")
                     subjects = GRADE_SUBJECTS.get(grade, [])
                     st.info(f"📚 Subjects for {grade}: {', '.join(subjects)}")
-                submitted = st.form_submit_button("Add Student")
+                submitted = st.form_submit_button("Add Student", width='stretch')
                 if submitted:
                     if not name:
                         st.error("Name is required.")
@@ -2816,7 +2817,7 @@ def show_admin_panel():
                             new_section = st.text_input("Section", value=student.get("section","A"))
                             new_subjects = GRADE_SUBJECTS.get(new_grade, [])
                             st.info(f"📚 Subjects for {new_grade}: {', '.join(new_subjects)}")
-                        if st.form_submit_button("💾 Update Student"):
+                        if st.form_submit_button("💾 Update Student", width='stretch'):
                             student["name"] = new_name
                             student["age"] = new_age
                             student["grade"] = new_grade
@@ -2845,7 +2846,7 @@ def show_admin_panel():
             )
             if student_to_delete:
                 student_id = student_to_delete.split("(")[-1].replace(")", "")
-                if st.button("Delete Selected Student", type="primary", use_container_width=True):
+                if st.button("Delete Selected Student", type="primary", width='stretch'):
                     if st.checkbox(f"⚠️ Confirm delete of {student_to_delete}?"):
                         supabase_admin = get_supabase_admin()
                         try:
@@ -2936,7 +2937,7 @@ def show_admin_panel():
                 st.error(f"❌ Error reading file: {e}")
 
         st.markdown("#### 📤 Export All Data")
-        if st.button("📥 Export Students to Excel", use_container_width=True):
+        if st.button("📥 Export Students to Excel", width='stretch'):
             if st.session_state.students:
                 df_export = pd.DataFrame(st.session_state.students)
                 df_export["subjects"] = df_export["subjects"].apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
@@ -2948,7 +2949,7 @@ def show_admin_panel():
                     data=output.getvalue(),
                     file_name=f"students_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width='stretch'
                 )
             else:
                 st.warning("No students to export.")
@@ -3025,7 +3026,7 @@ def show_admin_panel():
                     data=output.getvalue(),
                     file_name=f"Grade_Report_{selected_grade}_{selected_section}_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width='stretch'
                 )
 
         st.markdown("---")
@@ -3033,7 +3034,7 @@ def show_admin_panel():
         if st.session_state.evaluations:
             approved_evals = [e for e in st.session_state.evaluations if e.get("status") == "approved"]
             if approved_evals:
-                if st.button("📥 Download All Approved Evaluations (Excel)", use_container_width=True):
+                if st.button("📥 Download All Approved Evaluations (Excel)", width='stretch'):
                     rows = []
                     for e in approved_evals:
                         student = get_student_by_id(e.get("student_id"))
@@ -3065,7 +3066,7 @@ def show_admin_panel():
                         data=output.getvalue(),
                         file_name=f"approved_evaluations_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                        width='stretch'
                     )
             else:
                 st.info("No approved evaluations yet.")
@@ -3083,7 +3084,7 @@ def show_admin_panel():
         new_name = st.text_input("School Name", value=st.session_state.school_name)
         new_city = st.text_input("City/Town", value=st.session_state.school_city)
         new_director = st.text_input("Director's Name", value=st.session_state.director_name)
-        if st.button("💾 Update School Settings"):
+        if st.button("💾 Update School Settings", width='stretch'):
             st.session_state.school_name = new_name
             st.session_state.school_city = new_city
             st.session_state.director_name = new_director
@@ -3125,7 +3126,7 @@ def show_admin_panel():
                 selected_teacher_id = teacher_options.get(selected_teacher_label) if selected_teacher_label else None
             with col3:
                 if selected_grade and selected_teacher_id:
-                    if st.button("Assign Homeroom Teacher"):
+                    if st.button("Assign Homeroom Teacher", width='stretch'):
                         supabase_admin = get_supabase_admin()
                         try:
                             new_assignment = {
@@ -3435,7 +3436,7 @@ def show_teacher_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-            if st.button("💾 Submit Batch for Approval", use_container_width=True):
+            if st.button("💾 Submit Batch for Approval", width='stretch'):
                 students_list = edited_df.to_dict(orient="records")
                 for rec in students_list:
                     rec["overall"] = compute_overall_row(rec, new_weights, new_max_scores)
@@ -3552,7 +3553,7 @@ def show_teacher_panel():
                     """, unsafe_allow_html=True)
 
                 if status == "approved":
-                    if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}"):
+                    if st.button(f"📥 Download Batch (Excel)", key=f"download_batch_{batch['id']}", width='stretch'):
                         df_batch = pd.DataFrame(batch["students"])
                         df_batch["Grade"] = batch["grade"]
                         df_batch["Section"] = batch.get("section", "")
@@ -3571,10 +3572,11 @@ def show_teacher_panel():
                             data=output.getvalue(),
                             file_name=f"batch_{batch['id']}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key=f"download_btn_{batch['id']}"
+                            key=f"download_btn_{batch['id']}",
+                            width='stretch'
                         )
                 if status == "pending" and can_submit:
-                    if st.button(f"✏️ Edit Batch", key=f"edit_batch_{batch['id']}"):
+                    if st.button(f"✏️ Edit Batch", key=f"edit_batch_{batch['id']}", width='stretch'):
                         st.session_state.edit_batch_id = batch["id"]
                         st.rerun()
 
@@ -3635,7 +3637,7 @@ def show_login_page():
             password = st.text_input("🔒 Password", type="password", placeholder="Enter password")
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                submitted = st.form_submit_button("🔐 Sign In", use_container_width=True)
+                submitted = st.form_submit_button("🔐 Sign In", width='stretch')
             if submitted:
                 if not username or not password:
                     st.error("❌ Please enter both username and password.")
@@ -3715,7 +3717,7 @@ def main():
         selected_page = st.radio("Navigation", nav_options, index=0)
         st.session_state.current_page = selected_page
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout", width='stretch'):
             logout_user()
             st.rerun()
 
