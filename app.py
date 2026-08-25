@@ -1264,13 +1264,13 @@ def show_celebration_page():
         <div style="position:absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.2); z-index:5;"></div>
         <div class="celebration-content">
             <div class="flag-emojis">🇪🇹 🎉 🎊</div>
-            <div class="celebration-title">እንኳን ለኢትዮጲያ ዘመን መለዎጫ በዓል አደረሳችሁ! 🎉</div>
+            <div class="celebration-title">እንኳን ለኢትዮጲያ ዘመን መለዎጫ በዓል አደረሳችሁ!🎉</div>
             <div class="celebration-subtitle">መልካም አዲስ ዓመት! Happy Ethiopian New Year!</div>
             <div style="margin: 0.8rem 0; font-size: 2rem; background: rgba(0,0,0,0.3); 
                         padding: 0.5rem 2rem; border-radius: 30px; display:inline-block;">
                 🟢 🟡 🔴
             </div>
-            <div class="boom-text">💥 BOOOOOOOOM!!! 💥</div>
+            <div class="boom-text">ኢትዮጲያ💪📚✍️🌍2018 ዓ.ም🕊️ 🎓🔥🚀 ኢትዮጲያ</div>
             <br>
             <a href="?celebration_dismissed=true" class="celebration-btn">🚪 Enter Portal</a>
         </div>
