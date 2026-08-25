@@ -1087,6 +1087,7 @@ def is_celebration_period():
 
 def show_celebration_page():
     """Display a full‑screen Ethiopian New Year celebration with balloons, flags, and a portal entry button."""
+    # CSS remains the same (using st.markdown with unsafe_allow_html=True is fine for styles)
     st.markdown("""
     <style>
         .celebration-wrapper {
@@ -1127,8 +1128,6 @@ def show_celebration_page():
             0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 0.8; }
             100% { transform: translateY(-120vh) scale(0.5) rotate(20deg); opacity: 0.2; }
         }
-
-        /* ---- Ethiopian Flag ---- */
         .flag-container {
             position: absolute;
             width: 20vw;
@@ -1155,7 +1154,7 @@ def show_celebration_page():
         .flag-right {
             bottom: 20%;
             right: 5%;
-            animation-delay: -5s;  /* opposite phase */
+            animation-delay: -5s;
         }
         @keyframes flagFloat {
             0%   { transform: rotate(-2deg) translate(0, 0); }
@@ -1164,7 +1163,6 @@ def show_celebration_page():
             75%  { transform: rotate(3deg) translate(10px, -5px); }
             100% { transform: rotate(-2deg) translate(0, 0); }
         }
-
         .celebration-content {
             position: relative;
             z-index: 10;
@@ -1247,7 +1245,7 @@ def show_celebration_page():
              background:{color}; animation-duration:{duration}s; animation-delay:{delay}s;"></div>
         """
 
-    st.markdown(f"""
+    html_content = f"""
     <div class="celebration-wrapper">
         {balloon_html}
 
@@ -1277,7 +1275,15 @@ def show_celebration_page():
             <a href="?celebration_dismissed=true" class="celebration-btn">🚪 Enter Portal</a>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """
+
+    # ---- The secure way to inject raw HTML ----
+    try:
+        # Streamlit >= 1.38 – direct HTML injection
+        st.html(html_content)
+    except AttributeError:
+        # Fallback to the deprecated but still working method
+        st.components.v1.html(html_content, height=800, scrolling=False)
 
 # ===================================================================
 # SUBJECT ADMIN PANEL
