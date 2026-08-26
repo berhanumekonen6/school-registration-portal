@@ -3640,7 +3640,7 @@ def show_login_page():
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
         with st.form("login_form"):
             username = st.text_input("👤 Username", placeholder="Enter username")
-            password = st.text_input("🔒 Password", type="password", placeholder="Enter password")
+            password = st.text_input("🔐🔑Password", type="password", placeholder="Enter password")
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
                 submitted = st.form_submit_button("🇪🇹🌍🎓 Sign In 🔐🔑", width='stretch')
