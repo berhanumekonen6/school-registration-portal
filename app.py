@@ -3633,7 +3633,7 @@ def show_login_page():
         <div style="font-size:4rem; margin-bottom:0.5rem;">📚✍️🌍SRP🏫@ET ኢትዮጲያ🕊️🎓🚀</div>
         <h1 style="font-size:3rem; margin:0;">School Registration Portal</h1>
         <p style="color:#5F6368; font-size:1.2rem; margin-top:0.5rem;">Admin-Controlled Student & Teacher Management System</p>
-        <p style="color:#5F6368; font-size:1rem;"> 🏫📚 Grades 1-12🎓 in Ethiopia🌍 📚✍️🌍ኢትዮጲያ🕊️🎓🔥🚀</p>
+        <p style="color:#5F6368; font-size:1rem;"> 🏫🇪🇹📚 Grades🎓1-12🎓🚀in Ethiopia📚✍️🌍ኢትዮጲያ🕊️🔥🚀</p>
     </div>
     """, unsafe_allow_html=True)
     with st.container():
