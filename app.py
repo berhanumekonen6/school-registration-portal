@@ -331,7 +331,7 @@ def log_penalty(user, action, reason):
 # ---- Page config ----
 st.set_page_config(
     page_title="School Registration Portal",
-    page_icon="🏫",
+    page_icon="SRP🏫@ET",
     layout="wide",
     initial_sidebar_state="expanded"
 )
