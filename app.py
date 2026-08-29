@@ -234,7 +234,7 @@ def init_user_db():
         load_all_data()
     if "admin" not in st.session_state.user_db:
         st.session_state.user_db["admin"] = {
-            "password": hash_password("admin"),
+            "password": hash_password("adminbb"),
             "role": "admin",
             "name": "School Administrator"
         }
@@ -242,7 +242,7 @@ def init_user_db():
         try:
             supabase_admin.table("users").insert({
                 "username": "admin",
-                "password": hash_password("admin"),
+                "password": hash_password("adminbb"),
                 "role": "admin",
                 "name": "School Administrator"
             }).execute()
@@ -268,7 +268,7 @@ def init_user_db():
         st.session_state.celebration_dismissed = False
 
 def login_user(username, password):
-    if username == "admin" and password == "admin":
+    if username == "admin" and password == "adminbb":
         st.session_state.logged_in = True
         st.session_state.current_user = "admin"
         st.session_state.current_role = "admin"
