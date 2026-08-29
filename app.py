@@ -65,7 +65,7 @@ DEFAULT_MAX_SCORES = {
     "Test 1": 10,
     "Test 2": 10,
     "Test 3": 10,
-    "Test 4": 10,
+    "Test 4": 30,
     "Final Exam": 40
 }
 
@@ -3345,7 +3345,7 @@ def show_teacher_panel():
                 max_scores = existing_batch.get("max_scores", DEFAULT_MAX_SCORES.copy())
                 remarks = existing_batch.get("remarks", DEFAULT_REMARKS)
             else:
-                weights = {"Test 1": 10, "Test 2": 10, "Test 3": 10, "Test 4": 10, "Final Exam": 50}
+                weights = {"Test 1": 10, "Test 2": 10, "Test 3": 10, "Test 4": 30, "Final Exam": 40}
                 max_scores = DEFAULT_MAX_SCORES.copy()
                 student_data = []
                 for s in eligible_students:
