@@ -451,12 +451,18 @@ def create_student_user(student_id, student_name):
             "profile_photo": ""
         }).execute()
         
-        # Store password in student record for admin reference
+        # ✅ Store password in student record for admin reference
         try:
             supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
         except Exception as e:
-            # Column might not exist yet
-            if "PGRST204" not in str(e):
+            if "PGRST204" in str(e):
+                # Column doesn't exist - try to add it
+                try:
+                    supabase_admin.execute("ALTER TABLE students ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '';")
+                    supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
+                except:
+                    pass
+            else:
                 st.warning(f"Could not store password in student record: {e}")
         
         # Store in session state for display
@@ -478,7 +484,7 @@ def reset_student_password(student_id):
         # Update users table
         supabase_admin.table("users").update({"password": hashed_pw}).eq("username", student_id).execute()
         
-        # Update students table
+        # ✅ Update students table
         try:
             supabase_admin.table("students").update({"password": new_password}).eq("id", student_id).execute()
         except Exception as e:
@@ -495,7 +501,7 @@ def reset_student_password(student_id):
         return None
 
 def get_student_password(student_id):
-    """Get student password from session or database."""
+    """Get student password from session or student record."""
     # Check session first
     if 'student_passwords' in st.session_state:
         if student_id in st.session_state.student_passwords:
@@ -506,10 +512,14 @@ def get_student_password(student_id):
         if s.get("id") == student_id:
             password = s.get("password", "")
             if password:
+                # Cache in session
+                if 'student_passwords' not in st.session_state:
+                    st.session_state.student_passwords = {}
+                st.session_state.student_passwords[student_id] = password
                 return password
             break
     
-    return "N/A"
+    return "Not set"
 
 def get_student_by_username(username):
     """Get student by username (student ID)."""
@@ -696,7 +706,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS ----
+# ===================================================================
+# CSS - ALL YOUR ORIGINAL STYLES WITH STUDENT TABLE STYLES
+# ===================================================================
+
 st.markdown("""
 <style>
     :root {
@@ -1287,6 +1300,19 @@ st.markdown("""
         font-weight: 700;
     }
 
+    .student-header {
+        display: grid;
+        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
+        gap: 10px;
+        padding: 10px;
+        background: #F1F3F4;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #5F6368;
+        margin-bottom: 8px;
+    }
+
     @media (max-width: 768px) {
         .student-row {
             grid-template-columns: 50px 1fr 1fr;
@@ -1294,9 +1320,31 @@ st.markdown("""
         }
         .student-row .photo { grid-row: span 2; }
         .student-row .reset-btn { grid-column: span 2; }
+        .student-header {
+            grid-template-columns: 50px 1fr 1fr;
+            grid-template-rows: auto auto;
+        }
+        .watermark-text {
+            font-size: 1.5rem;
+            transform: translate(-50%, -50%) rotate(-15deg);
+        }
+        .block-container { padding: 0.5rem 0.75rem !important; }
+        .main-header .logo-text h1 { font-size: 1.8rem !important; }
+        .main-header .logo-text .subtitle { font-size: 1rem !important; }
+        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 8px 12px !important; }
+        .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
+        .main-header .header-stats .stat-item .label { font-size: 0.7rem !important; }
     }
 
     @media (max-width: 480px) {
+        .student-row {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+            text-align: center;
+        }
+        .student-row .photo { grid-row: auto; }
+        .student-row .reset-btn { grid-column: auto; }
+        .student-header { display: none; }
         .watermark-text {
             font-size: 1rem;
             transform: translate(-50%, -50%) rotate(-10deg);
@@ -1309,13 +1357,6 @@ st.markdown("""
         .main-header .stat-item { min-width: auto !important; padding: 6px 10px !important; }
         .main-header .logo-icon { width: 50px !important; height: 50px !important; font-size: 1.8rem !important; }
         .login-container { padding: 1.5rem !important; margin: 1rem !important; }
-        .student-row {
-            grid-template-columns: 1fr;
-            grid-template-rows: auto;
-            text-align: center;
-        }
-        .student-row .photo { grid-row: auto; }
-        .student-row .reset-btn { grid-column: auto; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2460,7 +2501,7 @@ def show_login_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ===================================================================
-# ADMIN PANEL
+# ADMIN PANEL - COMPLETE WITH STUDENT PASSWORDS
 # ===================================================================
 
 def show_admin_panel():
@@ -2807,7 +2848,7 @@ def show_admin_panel():
             df["Rank"] = df.index + 1
             st.dataframe(df[["Rank", "Name", "Average", "Evaluations"]], use_container_width=True, hide_index=True)
 
-    # Tab 8: Students
+    # Tab 8: Students - WITH PASSWORDS DISPLAY
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
@@ -2860,7 +2901,7 @@ def show_admin_panel():
                             load_all_data()
                             add_notification(f"👨‍🎓 Student {name} added", "success")
                             
-                            # Create student user account
+                            # Create student user account with password
                             student_pw, msg = create_student_user(student_id, name)
                             if student_pw:
                                 st.markdown(f"""
@@ -2895,7 +2936,7 @@ def show_admin_panel():
             
             # Display header
             st.markdown("""
-            <div style="display:grid;grid-template-columns:60px 2fr 2fr 1.5fr 1fr;gap:10px;padding:10px;background:#F1F3F4;border-radius:8px;font-weight:600;font-size:0.85rem;color:#5F6368;margin-bottom:8px;">
+            <div class="student-header">
                 <div>📷</div>
                 <div>👤 Name</div>
                 <div>📚 Grade</div>
@@ -2909,8 +2950,11 @@ def show_admin_panel():
                 
                 # Get password from session or student record
                 student_password = get_student_password(student_id)
-                if student_password == "N/A":
-                    student_password = "Not set"
+                if student_password == "Not set":
+                    student_password = "🔑 Set Password"
+                    color = "#F9AB00"
+                else:
+                    color = "#EA4335"  # Red for set passwords
                 
                 col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 1.5, 1])
                 with col1:
@@ -2923,7 +2967,7 @@ def show_admin_panel():
                     st.markdown(f"""
                     <div>
                         <code style="font-size:0.85rem;">{student_id}</code><br>
-                        <span style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:600;font-size:0.9rem;">{student_password}</span>
+                        <span style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:{color};font-weight:600;font-size:0.9rem;">{student_password}</span>
                     </div>
                     """, unsafe_allow_html=True)
                 with col5:
