@@ -430,17 +430,19 @@ def display_student_photo(student_id, size=80):
 
 # ---- Student Login Functions ----
 def create_student_user(student_id, student_name):
-    """Create a user account for a student."""
+    """Create a user account for a student and store password."""
     username = student_id
     password = generate_random_password(8)
     hashed_pw = hash_password(password)
     
     supabase_admin = get_supabase_admin()
     try:
+        # Check if user already exists
         res = supabase_admin.table("users").select("username").eq("username", username).execute()
         if res.data:
             return None, "Student user already exists"
         
+        # Create user account
         supabase_admin.table("users").insert({
             "username": username,
             "password": hashed_pw,
@@ -448,21 +450,66 @@ def create_student_user(student_id, student_name):
             "name": student_name,
             "profile_photo": ""
         }).execute()
+        
+        # Store password in student record for admin reference
+        try:
+            supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
+        except Exception as e:
+            # Column might not exist yet
+            if "PGRST204" not in str(e):
+                st.warning(f"Could not store password in student record: {e}")
+        
+        # Store in session state for display
+        if 'student_passwords' not in st.session_state:
+            st.session_state.student_passwords = {}
+        st.session_state.student_passwords[student_id] = password
+        
         return password, "Student account created successfully"
     except Exception as e:
         return None, f"Error creating student account: {e}"
 
 def reset_student_password(student_id):
-    """Reset student password."""
+    """Reset student password and update both tables."""
     new_password = generate_random_password(8)
     hashed_pw = hash_password(new_password)
     
     supabase_admin = get_supabase_admin()
     try:
+        # Update users table
         supabase_admin.table("users").update({"password": hashed_pw}).eq("username", student_id).execute()
+        
+        # Update students table
+        try:
+            supabase_admin.table("students").update({"password": new_password}).eq("id", student_id).execute()
+        except Exception as e:
+            if "PGRST204" not in str(e):
+                st.warning(f"Could not update password in student record: {e}")
+        
+        # Update session state
+        if 'student_passwords' not in st.session_state:
+            st.session_state.student_passwords = {}
+        st.session_state.student_passwords[student_id] = new_password
+        
         return new_password
     except Exception as e:
         return None
+
+def get_student_password(student_id):
+    """Get student password from session or database."""
+    # Check session first
+    if 'student_passwords' in st.session_state:
+        if student_id in st.session_state.student_passwords:
+            return st.session_state.student_passwords[student_id]
+    
+    # Check student record
+    for s in st.session_state.students:
+        if s.get("id") == student_id:
+            password = s.get("password", "")
+            if password:
+                return password
+            break
+    
+    return "N/A"
 
 def get_student_by_username(username):
     """Get student by username (student ID)."""
@@ -511,6 +558,8 @@ def init_user_db():
         st.session_state.registration_open = True
     if 'celebration_dismissed' not in st.session_state:
         st.session_state.celebration_dismissed = False
+    if 'student_passwords' not in st.session_state:
+        st.session_state.student_passwords = {}
 
 def login_user(username, password):
     if username == "admin" and password == "adminbb":
@@ -1212,17 +1261,39 @@ st.markdown("""
         border-radius: 4px;
     }
 
+    .student-row {
+        display: grid;
+        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #E8EAED;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 5px;
+    }
+    .student-row:hover {
+        background: #F8F9FA;
+    }
+    .student-row .photo { text-align: center; }
+    .student-row .name { font-weight: 600; }
+    .student-row .id { font-family: monospace; }
+    .student-row .password { 
+        font-family: monospace;
+        background: #FCE8E6;
+        padding: 2px 10px;
+        border-radius: 4px;
+        color: #EA4335;
+        font-weight: 700;
+    }
+
     @media (max-width: 768px) {
-        .watermark-text {
-            font-size: 1.5rem;
-            transform: translate(-50%, -50%) rotate(-15deg);
+        .student-row {
+            grid-template-columns: 50px 1fr 1fr;
+            grid-template-rows: auto auto;
         }
-        .block-container { padding: 0.5rem 0.75rem !important; }
-        .main-header .logo-text h1 { font-size: 1.8rem !important; }
-        .main-header .logo-text .subtitle { font-size: 1rem !important; }
-        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 8px 12px !important; }
-        .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
-        .main-header .header-stats .stat-item .label { font-size: 0.7rem !important; }
+        .student-row .photo { grid-row: span 2; }
+        .student-row .reset-btn { grid-column: span 2; }
     }
 
     @media (max-width: 480px) {
@@ -1238,6 +1309,13 @@ st.markdown("""
         .main-header .stat-item { min-width: auto !important; padding: 6px 10px !important; }
         .main-header .logo-icon { width: 50px !important; height: 50px !important; font-size: 1.8rem !important; }
         .login-container { padding: 1.5rem !important; margin: 1rem !important; }
+        .student-row {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+            text-align: center;
+        }
+        .student-row .photo { grid-row: auto; }
+        .student-row .reset-btn { grid-column: auto; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -2802,7 +2880,7 @@ def show_admin_panel():
                     else:
                         st.error("Name is required.")
 
-        # List Students with Photos and Credentials
+        # List Students with Photos and Passwords
         if st.session_state.students:
             st.markdown("#### 📋 All Students")
             
@@ -2815,39 +2893,45 @@ def show_admin_panel():
                                    if search_lower in s.get('name', '').lower() or 
                                       search_lower in s.get('id', '').lower()]
             
+            # Display header
+            st.markdown("""
+            <div style="display:grid;grid-template-columns:60px 2fr 2fr 1.5fr 1fr;gap:10px;padding:10px;background:#F1F3F4;border-radius:8px;font-weight:600;font-size:0.85rem;color:#5F6368;margin-bottom:8px;">
+                <div>📷</div>
+                <div>👤 Name</div>
+                <div>📚 Grade</div>
+                <div>🆔 ID / Password</div>
+                <div style="text-align:center;">Action</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             for student in filtered_students:
-                col1, col2, col3, col4 = st.columns([1, 3, 1, 1])
+                student_id = student.get('id', 'N/A')
+                
+                # Get password from session or student record
+                student_password = get_student_password(student_id)
+                if student_password == "N/A":
+                    student_password = "Not set"
+                
+                col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 1.5, 1])
                 with col1:
-                    st.markdown(display_student_photo(student['id'], 80), unsafe_allow_html=True)
+                    st.markdown(display_student_photo(student_id, 50), unsafe_allow_html=True)
                 with col2:
-                    st.markdown(f"""
-                    <div style="padding:0.5rem 0;">
-                        <b>👤 {student['name']}</b><br>
-                        📚 {student.get('grade', 'N/A')} · 📌 {student.get('section', 'N/A')}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"**{student.get('name', 'Unknown')}**")
                 with col3:
-                    # Show student credentials
-                    student_username = student.get('id', 'N/A')
-                    # Get password from users table
-                    user_data = st.session_state.user_db.get(student_username, {})
-                    student_password = "N/A"
-                    if user_data:
-                        # We don't store plain text, but we can show a reset option
-                        pass
-                    
+                    st.markdown(f"{student.get('grade', 'N/A')} · {student.get('section', 'N/A')}")
+                with col4:
                     st.markdown(f"""
-                    <div style="padding:0.3rem 0;font-size:0.85rem;">
-                        <div><b>🆔 ID:</b> <code>{student_username}</code></div>
+                    <div>
+                        <code style="font-size:0.85rem;">{student_id}</code><br>
+                        <span style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:600;font-size:0.9rem;">{student_password}</span>
                     </div>
                     """, unsafe_allow_html=True)
-                with col4:
-                    # Reset student password
-                    if st.button(f"🔄 Reset PW", key=f"reset_student_pw_{student['id']}", width='stretch'):
-                        new_pw = reset_student_password(student['id'])
+                with col5:
+                    if st.button(f"🔄 Reset", key=f"reset_student_pw_{student_id}", width='stretch'):
+                        new_pw = reset_student_password(student_id)
                         if new_pw:
                             st.success(f"✅ New password: `{new_pw}`")
-                            add_notification(f"Password reset for student {student['name']}", "info")
+                            add_notification(f"Password reset for student {student.get('name', '')}", "info")
                             st.rerun()
                         else:
                             st.error("Failed to reset password")
