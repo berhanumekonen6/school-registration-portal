@@ -602,6 +602,49 @@ def logout_user():
     st.session_state.current_role = None
     st.session_state.celebration_dismissed = False
 
+# ---- Init User DB ----
+def init_user_db():
+    if 'students' not in st.session_state:
+        load_all_data()
+    if "admin" not in st.session_state.user_db:
+        st.session_state.user_db["admin"] = {
+            "password": hash_password("adminbb"),
+            "role": "admin",
+            "name": "School Administrator",
+            "profile_photo": ""
+        }
+        supabase_admin = get_supabase_admin()
+        try:
+            supabase_admin.table("users").insert({
+                "username": "admin",
+                "password": hash_password("adminbb"),
+                "role": "admin",
+                "name": "School Administrator",
+                "profile_photo": ""
+            }).execute()
+        except:
+            pass
+        load_all_data()
+    if 'subjects' not in st.session_state:
+        st.session_state.subjects = ALL_SUBJECTS
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'current_role' not in st.session_state:
+        st.session_state.current_role = None
+    if 'registration_period' not in st.session_state:
+        st.session_state.registration_period = {
+            "start": datetime.now(),
+            "end": datetime.now() + timedelta(days=30)
+        }
+    if 'registration_open' not in st.session_state:
+        st.session_state.registration_open = True
+    if 'celebration_dismissed' not in st.session_state:
+        st.session_state.celebration_dismissed = False
+    if 'student_passwords' not in st.session_state:
+        st.session_state.student_passwords = {}
+
 # ---- Notifications ----
 def add_notification(message, notification_type="info", user=None):
     supabase_admin = get_supabase_admin()
@@ -709,10 +752,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===================================================================
-# CSS - ALL YOUR ORIGINAL STYLES WITH STUDENT TABLE STYLES
-# ===================================================================
-
+# ---- CSS ----
 st.markdown("""
 <style>
     :root {
@@ -735,11 +775,6 @@ st.markdown("""
     .stApp, .main, .block-container {
         background: #FFFFFF !important;
         color: #202124 !important;
-    }
-
-    h1, h2, h3, h4, h5, h6, p, li, span, div, .stMarkdown, .stTextInput, .stSelectbox, .stButton {
-        color: #202124 !important;
-        font-weight: 500 !important;
     }
 
     h1 {
@@ -788,17 +823,6 @@ st.markdown("""
         box-shadow: 0 4px 30px rgba(0,0,0,0.1) !important;
         position: relative !important;
         overflow: hidden !important;
-    }
-
-    .main-header::before {
-        content: '' !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        background: linear-gradient(135deg, rgba(27, 94, 32, 0.3), rgba(13, 59, 13, 0.4)) !important;
-        z-index: 0 !important;
     }
 
     .main-header .header-content {
@@ -1229,29 +1253,6 @@ st.markdown("""
         border-left: 6px solid #EA4335;
     }
 
-    /* ---- Watermark ---- */
-    .watermark-container {
-        position: relative;
-        overflow: hidden;
-    }
-    .watermark-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(-20deg);
-        font-size: 3rem;
-        font-weight: bold;
-        color: rgba(0, 0, 0, 0.08);
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 10;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.02);
-        letter-spacing: 4px;
-        width: 100%;
-        text-align: center;
-        font-style: italic;
-    }
-
     .credential-box {
         background: #F8F9FA;
         border: 1px solid #E8EAED;
@@ -1653,10 +1654,7 @@ def generate_statistics_report():
 """
     return html
 
-# ===================================================================
-# PROFILE UPDATE
-# ===================================================================
-
+# ---- PROFILE UPDATE ----
 def show_profile_update():
     """Allow users to update their own username, password, and profile photo."""
     st.markdown("### 👤 My Profile Settings")
@@ -1752,10 +1750,7 @@ def show_profile_update():
                     except Exception as e:
                         st.error(f"Failed to update password: {e}")
 
-# ===================================================================
-# CELEBRATION PAGE
-# ===================================================================
-
+# ---- CELEBRATION PAGE ----
 def is_celebration_period():
     today = datetime.now()
     m, d = today.month, today.day
@@ -1959,10 +1954,7 @@ def show_celebration_page():
     except AttributeError:
         st.components.v1.html(html_content, height=800, scrolling=False)
 
-# ===================================================================
-# PENALTY LOG & NOTIFICATIONS
-# ===================================================================
-
+# ---- PENALTY LOG & NOTIFICATIONS ----
 def show_penalty_log():
     st.markdown("### ⚠️ Penalty Log")
     if st.session_state.penalty_log:
@@ -2013,10 +2005,7 @@ def show_notification_center():
     else:
         st.info("No notifications")
 
-# ===================================================================
-# STUDENT CARD GENERATION
-# ===================================================================
-
+# ---- STUDENT CARD GENERATION ----
 def generate_student_card(student, semester="Semester III"):
     name = student.get('name', '_________')
     gender = student.get('gender', '_________')
@@ -2059,83 +2048,454 @@ def generate_student_card(student, semester="Semester III"):
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Student Report Card</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Report Card – {name}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;600;700&family=Segoe+UI:wght@400;600;700&display=swap');
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        @page {{ size: landscape; margin: 1cm; }}
-        body {{ font-family: 'Segoe UI', 'Noto Sans Ethiopic', sans-serif; background: white; padding: 20px; }}
-        .card {{ max-width: 1100px; margin: 0 auto; border: 2px solid #c9a84c; border-radius: 16px; padding: 20px; }}
-        .header {{ text-align: center; border-bottom: 2px solid #c9a84c; padding-bottom: 10px; margin-bottom: 15px; }}
-        .header h1 {{ font-size: 1.8rem; color: #1a365d; }}
-        .header .school {{ font-size: 1.2rem; font-weight: 700; color: #1a365d; }}
-        .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
-        .info-table {{ width: 100%; border-collapse: collapse; font-size: 0.8rem; }}
-        .info-table td {{ padding: 4px 6px; border-bottom: 1px dashed #ddd; }}
-        .info-table .label {{ font-weight: 600; color: #1a365d; }}
-        .marks-table {{ width: 100%; border-collapse: collapse; font-size: 0.75rem; }}
-        .marks-table th {{ background: #1a365d; color: white; padding: 6px; text-align: center; }}
-        .marks-table td {{ padding: 4px 6px; border: 1px solid #ddd; text-align: center; }}
-        .marks-table .subject {{ font-weight: 600; text-align: left; background: #f0f4fb; }}
-        .total-row td {{ font-weight: 700; background: #e8eff9; }}
-        .comment-box {{ border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin: 8px 0; }}
-        .comment-box .title {{ font-weight: 700; color: #1a365d; border-bottom: 1px solid #c9a84c; padding-bottom: 4px; margin-bottom: 6px; }}
-        .sign-line {{ border-bottom: 1px solid #999; height: 20px; margin: 4px 0; }}
-        .footer {{ text-align: center; margin-top: 15px; border-top: 2px solid #c9a84c; padding-top: 10px; font-size: 0.8rem; color: #666; }}
-        @media print {{ body {{ padding: 0; }} .card {{ border: none; }} }}
+        @page {{ size: landscape; margin: 1cm 1.2cm; }}
+        body {{
+            font-family: 'Noto Sans Ethiopic', 'Segoe UI', Tahoma, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            font-size: 0.8rem;
+        }}
+        .card-container {{
+            max-width: 1100px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 20, 40, 0.15);
+            border: 2px solid #c9a84c;
+            padding: 16px 18px;
+            position: relative;
+            overflow: visible !important;
+        }}
+        .card-container::before {{
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 30px;
+            right: 30px;
+            height: 6px;
+            background: linear-gradient(90deg, #c9a84c, #f5e7b0, #c9a84c);
+            border-radius: 12px 12px 0 0;
+        }}
+        .page {{
+            display: flex;
+            flex-wrap: wrap;
+            width: 100%;
+            min-height: 400px;
+        }}
+        .page-break {{
+            page-break-before: always;
+            border-top: 3px double #c9a84c;
+            margin-top: 12px;
+            padding-top: 12px;
+        }}
+        .column {{
+            flex: 1 1 50%;
+            padding: 6px 10px;
+            min-width: 250px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }}
+        .grading-policy {{
+            font-size: 0.75rem;
+            line-height: 1.5;
+            color: #1f2a3e;
+        }}
+        .grading-policy h2 {{
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1a365d;
+            border-bottom: 3px solid #c9a84c;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }}
+        .grading-policy h2 span {{
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: #5a6f8e;
+        }}
+        .grade-scale {{
+            background: #f1f5fb;
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-left: 3px solid #c9a84c;
+            font-size: 0.75rem;
+        }}
+        .grade-scale div {{
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #dce3ed;
+            padding: 1px 0;
+            flex-wrap: wrap;
+        }}
+        .grade-scale div:last-child {{ border-bottom: none; }}
+        .grade-scale .range {{ font-weight: 600; color: #1a365d; min-width: 80px; }}
+        .grade-scale .desc {{ color: #2d4059; }}
+        .cover-page {{ text-align: center; }}
+        .cover-page .school-name {{
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #1a365d;
+            letter-spacing: 1px;
+            word-wrap: break-word;
+        }}
+        .cover-page .card-title {{
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1a365d;
+            margin: 4px 0 10px 0;
+            border-bottom: 2px solid #c9a84c;
+            padding-bottom: 4px;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }}
+        .info-table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin: 6px 0;
+            font-size: 0.75rem;
+        }}
+        .info-table td {{
+            padding: 4px 3px;
+            vertical-align: top;
+            word-wrap: break-word;
+        }}
+        .info-table .label {{
+            font-weight: 600;
+            color: #1a365d;
+            white-space: nowrap;
+        }}
+        .info-table .value {{
+            border-bottom: 1px dashed #c9d6e8;
+            padding-left: 6px;
+            min-width: 60px;
+            text-align: left;
+            word-break: break-word;
+        }}
+        .motto-box {{
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #f6f2e7, #faf8f2);
+            border-radius: 30px;
+            border: 1px solid #e1d5b8;
+            text-align: center;
+            font-style: italic;
+            font-weight: 500;
+            color: #2d4059;
+            font-size: 0.8rem;
+            letter-spacing: 0.3px;
+            word-wrap: break-word;
+        }}
+        .marks-table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.7rem;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }}
+        .marks-table th {{
+            background: #1a365d;
+            color: #fff;
+            font-weight: 600;
+            padding: 5px 3px;
+            text-align: center;
+            border: none;
+            font-size: 0.65rem;
+            letter-spacing: 0.3px;
+        }}
+        .marks-table th:first-child {{ text-align: left; padding-left: 8px; }}
+        .marks-table td {{
+            padding: 4px 3px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            font-size: 0.7rem;
+        }}
+        .marks-table tr:nth-child(even) td {{ background: #f8faff; }}
+        .marks-table .subject-name {{
+            font-weight: 600;
+            text-align: left;
+            padding-left: 8px;
+            background: #f0f4fb !important;
+            color: #1a365d;
+            font-size: 0.7rem;
+        }}
+        .marks-table .total-row td {{
+            font-weight: 700;
+            background: #e8eff9 !important;
+            border-top: 2px solid #1a365d;
+            border-bottom: 2px solid #1a365d;
+        }}
+        .marks-table .avg-row td {{
+            font-weight: 700;
+            background: #dce6f2 !important;
+            border-top: 2px solid #1a365d;
+        }}
+        .marks-table .stat-row td {{
+            padding: 3px 4px;
+            background: #f5f8fa;
+            font-size: 0.7rem;
+        }}
+        .marks-table .stat-label {{
+            font-weight: 600;
+            text-align: left;
+            padding-left: 8px;
+            color: #1a365d;
+        }}
+        .comments-section {{
+            font-size: 0.75rem;
+        }}
+        .comments-section .section-title {{
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1a365d;
+            text-align: center;
+            border-bottom: 2px solid #c9a84c;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }}
+        .comments-section .semester-block {{
+            border: 1px solid #d4dce8;
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            background: #fafcff;
+        }}
+        .comments-section .semester-title {{
+            font-weight: 700;
+            color: #1a365d;
+            border-bottom: 1px solid #c9a84c;
+            padding-bottom: 3px;
+            margin-bottom: 6px;
+            text-align: center;
+            font-size: 0.8rem;
+        }}
+        .comments-section .comment-line {{
+            margin: 3px 0;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+        .comments-section .comment-line .line {{
+            flex: 1;
+            border-bottom: 1px solid #8a9a8a;
+            margin-left: 6px;
+            height: 14px;
+            min-width: 40px;
+        }}
+        .teacher-comment-box {{
+            min-height: 24px;
+            border-bottom: 1px dashed #aaa;
+            margin: 4px 0 8px 0;
+            padding: 4px 6px;
+            background: #f9fafb;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            line-height: 1.4;
+        }}
+        .director-sign {{
+            margin-top: 10px;
+            border-top: 1px solid #d4dce8;
+            padding-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+        .director-sign .line {{
+            flex: 1;
+            border-bottom: 1px solid #8a9a8a;
+            margin-left: 8px;
+            height: 14px;
+            min-width: 40px;
+        }}
+        @media print {{
+            body {{ background: white; padding: 0; }}
+            .card-container {{
+                box-shadow: none;
+                border: 2px solid #c9a84c;
+                border-radius: 16px;
+                padding: 12px 14px;
+                max-width: 100%;
+                overflow: visible !important;
+            }}
+            .card-container::before {{ display: none; }}
+            .page {{ min-height: 0; }}
+            .page-break {{
+                border-top: none;
+                margin-top: 0;
+                padding-top: 0;
+            }}
+            .column {{ padding: 4px 8px; }}
+        }}
+        @media (max-width: 768px) {{
+            .column {{ flex: 1 1 100%; padding: 4px 6px; min-width: 0; }}
+            .page-break {{ border-top: 2px solid #c9a84c; margin-top: 10px; padding-top: 10px; }}
+            .info-table {{ font-size: 0.7rem; }}
+            .info-table td {{ display: block; width: 100%; padding: 2px 0; }}
+            .info-table .label {{ white-space: normal; }}
+            .marks-table {{ font-size: 0.6rem; }}
+            .marks-table th {{ font-size: 0.55rem; padding: 3px 2px; }}
+            .marks-table td {{ font-size: 0.6rem; padding: 2px 2px; }}
+        }}
+        @media (max-width: 480px) {{
+            .card-container {{ padding: 8px 6px; }}
+        }}
     </style>
 </head>
 <body>
-<div class="card">
-    <div class="header">
-        <div class="school">{school_name}</div>
-        <h1>የተማሪ ውጤት መግለጫ</h1>
-        <p>Student Report Card · {academic_year}</p>
-    </div>
-    <div class="grid">
-        <div>
-            <table class="info-table">
-                <tr><td class="label">ስም / Name:</td><td>{name}</td></tr>
-                <tr><td class="label">ፆታ / Gender:</td><td>{gender}</td></tr>
-                <tr><td class="label">ክፍል / Grade:</td><td>{grade}</td></tr>
-                <tr><td class="label">ክፍል / Section:</td><td>{section}</td></tr>
-            </table>
-        </div>
-        <div>
-            <table class="info-table">
-                <tr><td class="label">ዕድሜ / Age:</td><td>{age}</td></tr>
-                <tr><td class="label">ደረጃ / Rank:</td><td>{rank}</td></tr>
-                <tr><td class="label">አማካይ / Average:</td><td>{overall_avg}%</td></tr>
-                <tr><td class="label">ውጤት / Status:</td><td>{'✅ Passed' if overall_avg >= 50 else '❌ Failed'}</td></tr>
-            </table>
-        </div>
-    </div>
-    <h3 style="margin:10px 0 5px 0;color:#1a365d;">📊 የውጤት ሰንጠረዥ / Mark Sheet</h3>
-    <table class="marks-table">
-        <thead><tr><th>Subject</th><th>Sem I</th><th>Sem II</th><th>Avg</th></tr></thead>
-        <tbody>
-            {''.join(table_rows)}
-            <tr class="total-row"><td class="subject">Total</td><td>{total_sem1}</td><td>{total_sem2}</td><td>{round((total_sem1 + total_sem2) / 2, 1)}</td></tr>
-        </tbody>
-    </table>
-    <div style="margin-top:15px;">
-        <div class="comment-box">
-            <div class="title">👨‍🏫 የክፍል መምህር አስተያየት / Teacher's Comment</div>
-            <p>{amh_comment}</p>
-            <p style="font-size:0.8rem;color:#555;">{eng_comment}</p>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:10px;">
-            <div>
-                <div class="title" style="font-weight:700;">✍️ የወላጅ ፊርማ / Parent Signature</div>
-                <div class="sign-line"></div>
+<div class="card-container">
+    <!-- PAGE 1 -->
+    <div class="page">
+        <div class="column grading-policy">
+            <h2>የማርክ አሰጣጥ ደንብ <span>METHOD OF MARKING</span></h2>
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:10px; padding:10px 12px; margin-bottom:10px;">
+                <p><strong>የማርክ አሰጣጥ ደንብ</strong></p>
+                <p>ትምህርት ቤቶች በመዝገብ ውስጥ የሚጽፏቸው የትማሪዎች የትምህርት ደረጃ በሚከተለው ዓይነት ይመደባል፡</p>
+                <div class="grade-scale">
+                    <div><span class="range">100 – 90%</span> <span class="desc">እጅግ በጣም ጥሩ</span></div>
+                    <div><span class="range">89 – 80%</span> <span class="desc">በጣም ጥሩ</span></div>
+                    <div><span class="range">79 – 60%</span> <span class="desc">በቂ</span></div>
+                    <div><span class="range">59 – 50%</span> <span class="desc">መጠነኛ</span></div>
+                    <div><span class="range">50% በታች</span> <span class="desc">ዝቅተኛ</span></div>
+                </div>
+                <p>ከመቶ ዜሮ (0%) ምን ጊዜም ቢሆን ለተማሪ አይሰጥም፣ ዜሮ መስጠት ፈጽሞ አልተማረም ማለት ነው፡፡ ተማሪ ከክፍሉ ያልተገኘ እንደሆነ አልነበረም ተብሎ "AB" (Absent) ይጻፍበታል፡፡</p>
             </div>
-            <div>
-                <div class="title" style="font-weight:700;">✍️ የመምህር ፊርማ / Teacher Signature</div>
-                <div class="sign-line"></div>
+            <div style="background:#f9fbf9; border:1px solid #d4dce8; border-radius:10px; padding:10px 12px;">
+                <p><strong>METHOD OF MARKING</strong></p>
+                <p>Student's achievement in each class will be assigned the following values:</p>
+                <div class="grade-scale" style="border-left-color:#1a365d;">
+                    <div><span class="range">100 – 90%</span> <span class="desc">Excellent</span></div>
+                    <div><span class="range">89 – 80%</span> <span class="desc">Very good</span></div>
+                    <div><span class="range">79 – 60%</span> <span class="desc">Satisfactory</span></div>
+                    <div><span class="range">59 – 50%</span> <span class="desc">Fair</span></div>
+                    <div><span class="range">50% – Below</span> <span class="desc">Poor</span></div>
+                </div>
+                <p>Point Zero (0%) should never be given, since it would mean no work has been done absolutely. If a student has been absent from class for the whole period covered, and has not made up of the work, he (she) should be marked "AB" for 'Absent'.</p>
             </div>
         </div>
+        <div class="column cover-page">
+            <div class="school-name">{school_name}</div>
+            <div class="card-title">የተማሪ ውጤት መግለጫ<br>Student Report Card</div>
+            <table class="info-table">
+                <tr><td class="label">የት/ቤቱ ስም / Name of school:</td><td class="value">{school_name}</td></tr>
+                <tr><td class="label">ክልል / Region:</td><td class="value">_________</td><td class="label">ዞን / Zone:</td><td class="value">_________</td></tr>
+                <tr><td class="label">ወረዳ / Wereda:</td><td class="value">_________</td><td class="label">ክፍለ ከተማ / Kebele:</td><td class="value">_________</td></tr>
+                <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
+                <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
+                <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
+                <tr><td class="label">የትምህርት ዘመን / Academic Year:</td><td class="value">{academic_year}</td></tr>
+                <tr><td class="label">ክፍሉ / Grade:</td><td class="value">{grade}</td></tr>
+                <tr><td class="label">ክፍል ተዛውሯል/ራለች / Promoted to grade:</td><td class="value">{promoted}</td></tr>
+                <tr><td class="label">የት/ቤቱ ርዕሰ መምህር ስም / Director's Name:</td><td class="value">____________________</td></tr>
+                <tr><td class="label">ፊርማ / Signature:</td><td class="value">____________________</td></tr>
+            </table>
+            <div class="motto-box">"ትውልድን የሚተካ ትውልድ በተሻለ ጥራት እናፈራለን"</div>
+        </div>
     </div>
-    <div class="footer">
-        <p>© {datetime.now().year} {school_name} · All Rights Reserved</p>
+
+    <!-- PAGE 2 -->
+    <div class="page page-break">
+        <div class="column">
+            <table class="marks-table">
+                <thead>
+                    <tr>
+                        <th style="text-align:left;padding-left:8px;">የትምህርት ዓይነት<br>Subject</th>
+                        <th>1ኛ ወሰነ-ት/ም<br>1st Sem.</th>
+                        <th>2ኛ ወሰነ-ት/ም<br>2nd Sem.</th>
+                        <th>አማካይ<br>Avg.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(table_rows)}
+                    <tr class="total-row">
+                        <td class="subject-name">ድምር / Total</td>
+                        <td>{total_sem1}</td>
+                        <td>{total_sem2}</td>
+                        <td>{round((total_sem1 + total_sem2) / 2, 1)}</td>
+                    </tr>
+                    <tr class="avg-row">
+                        <td class="subject-name">አማካይ / Average</td>
+                        <td>{avg_sem1}</td>
+                        <td>{avg_sem2}</td>
+                        <td>{overall_avg}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">የቀረበት ቀን / Absence</td>
+                        <td>-</td>
+                        <td>{absence}</td>
+                        <td>{absence}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">ፀባይ / Conduct</td>
+                        <td>{conduct}</td>
+                        <td>{conduct}</td>
+                        <td>{conduct}</td>
+                    </tr>
+                    <tr class="stat-row">
+                        <td class="stat-label">ደረጃ / Rank</td>
+                        <td>{rank}</td>
+                        <td>{rank}</td>
+                        <td>{rank}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="column comments-section">
+            <div class="section-title">የክፍል መምህሩ አስተያየት / Remarks from Home Room Teacher</div>
+            <div class="semester-block">
+                <div class="semester-title">1ኛ ወሰነ-ት/ም / FIRST SEMESTER</div>
+                <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
+                <div class="teacher-comment-box">
+                    {amh_comment}<br><span style="font-size:0.65rem; color:#555;">{eng_comment}</span>
+                </div>
+                <div class="comment-line">
+                    <span>ስምና ፊርማ / Name &amp; Signature:</span>
+                    <span class="line"></span>
+                </div>
+                <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
+                <div style="min-height:20px; border-bottom:1px dashed #aaa; margin:4px 0 6px 0;"></div>
+                <div class="comment-line">
+                    <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature:</span>
+                    <span class="line"></span>
+                </div>
+            </div>
+            <div class="semester-block">
+                <div class="semester-title">ሁለተኛ መንፈቅ ዓመት / SECOND SEMESTER</div>
+                <div><strong>የክፍሉ መምህር አስተያየት / Home Room Teacher Comment:</strong></div>
+                <div class="teacher-comment-box">
+                    {amh_comment}<br><span style="font-size:0.65rem; color:#555;">{eng_comment}</span>
+                </div>
+                <div class="comment-line">
+                    <span>ስምና ፊርማ / Name &amp; Signature:</span>
+                    <span class="line"></span>
+                </div>
+                <div><strong>የወላጅ ወይም አሳዳጊ አስተያየት / Parent or Guardian Recommendation:</strong></div>
+                <div style="min-height:20px; border-bottom:1px dashed #aaa; margin:4px 0 6px 0;"></div>
+                <div class="comment-line">
+                    <span>የወላጅ ወይም አሳዳጊ ፊርማ / Signature:</span>
+                    <span class="line"></span>
+                </div>
+            </div>
+            <div class="director-sign">
+                <span><strong>የርዕሰ መምህሩ ፊርማ / Director's Signature:</strong></span>
+                <span class="line"></span>
+            </div>
+        </div>
     </div>
 </div>
 </body>
@@ -2175,10 +2535,7 @@ def show_student_card_panel():
             )
             st.components.v1.html(html, height=600, scrolling=True)
 
-# ===================================================================
-# SUBJECT ADMIN PANEL
-# ===================================================================
-
+# ---- SUBJECT ADMIN PANEL ----
 def show_subject_admin_panel():
     st.markdown("### 📋 Subject Admin Dashboard")
     teacher = get_teacher_by_username(st.session_state.current_user)
@@ -2219,10 +2576,7 @@ def show_subject_admin_panel():
                 st.warning("❌ Batch rejected!")
                 st.rerun()
 
-# ===================================================================
-# TEACHER PANEL
-# ===================================================================
-
+# ---- TEACHER PANEL ----
 def show_teacher_panel():
     st.markdown("### 👨‍🏫 Teacher Dashboard")
     teacher = get_teacher_by_username(st.session_state.current_user)
@@ -2377,10 +2731,7 @@ def show_teacher_panel():
             except Exception as e:
                 st.error(f"❌ Failed to submit: {e}")
 
-# ===================================================================
-# STUDENT PANEL
-# ===================================================================
-
+# ---- STUDENT PANEL ----
 def show_student_panel():
     st.markdown("### 👨‍🎓 Student Dashboard")
     
@@ -2463,10 +2814,7 @@ def show_student_panel():
     else:
         st.info("No evaluations yet.")
 
-# ===================================================================
-# LOGIN PAGE
-# ===================================================================
-
+# ---- LOGIN PAGE ----
 def show_login_page():
     st.markdown("""
     <div style="text-align:center; padding:1rem 0;">
@@ -2503,10 +2851,7 @@ def show_login_page():
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ===================================================================
-# ADMIN PANEL - COMPLETE WITH STUDENT PASSWORDS
-# ===================================================================
-
+# ---- ADMIN PANEL ----
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
@@ -2593,7 +2938,6 @@ def show_admin_panel():
     # Tab 3: Teachers
     with tab4:
         st.markdown("#### 👨‍🏫 Manage Teachers")
-
         st.markdown("##### 📌 Assignments (Grade, Section & Semester)")
         st.caption("Add the grade(s), section(s), and semester(s) this teacher is responsible for.")
         if "assignments_list" not in st.session_state:
@@ -2729,7 +3073,7 @@ def show_admin_panel():
                         </div>
                         <div style="text-align:right;">
                             <span style="background:#E8F0FE;padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
-                                {role.title() if teacher_admin_subjects else 'Teacher'}
+                                {'Subject Admin' if admin_subjects else 'Teacher'}
                             </span>
                         </div>
                     </div>
@@ -2851,7 +3195,7 @@ def show_admin_panel():
             df["Rank"] = df.index + 1
             st.dataframe(df[["Rank", "Name", "Average", "Evaluations"]], use_container_width=True, hide_index=True)
 
-    # Tab 8: Students - WITH PASSWORDS DISPLAY
+    # Tab 8: Students
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
@@ -3074,10 +3418,7 @@ def show_admin_panel():
     with tab15:
         show_student_card_panel()
 
-# ===================================================================
-# MAIN
-# ===================================================================
-
+# ---- MAIN ----
 def main():
     init_user_db()
     
