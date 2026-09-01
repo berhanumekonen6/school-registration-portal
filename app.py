@@ -424,6 +424,51 @@ def display_student_photo(student_id, size=80):
     else:
         return f'<div style="width:{size}px;height:{size}px;border-radius:50%;background:#E8F0FE;display:flex;align-items:center;justify-content:center;font-size:{size//2.5}px;color:#34A853;border:2px solid #34A853;">👤</div>'
 
+# ---- Student Login Functions ----
+def create_student_user(student_id, student_name):
+    """Create a user account for a student."""
+    username = student_id  # Student ID as username
+    password = generate_random_password(8)
+    hashed_pw = hash_password(password)
+    
+    supabase_admin = get_supabase_admin()
+    try:
+        # Check if user already exists
+        res = supabase_admin.table("users").select("username").eq("username", username).execute()
+        if res.data:
+            return None, "Student user already exists"
+        
+        # Create user account
+        supabase_admin.table("users").insert({
+            "username": username,
+            "password": hashed_pw,
+            "role": "student",
+            "name": student_name,
+            "profile_photo": ""
+        }).execute()
+        return password, "Student account created successfully"
+    except Exception as e:
+        return None, f"Error creating student account: {e}"
+
+def reset_student_password(student_id):
+    """Reset student password."""
+    new_password = generate_random_password(8)
+    hashed_pw = hash_password(new_password)
+    
+    supabase_admin = get_supabase_admin()
+    try:
+        supabase_admin.table("users").update({"password": hashed_pw}).eq("username", student_id).execute()
+        return new_password
+    except Exception as e:
+        return None
+
+def get_student_by_username(username):
+    """Get student by username (student ID)."""
+    for s in st.session_state.students:
+        if s.get("id") == username:
+            return s
+    return None
+
 # ---- Init User DB ----
 def init_user_db():
     if 'students' not in st.session_state:
@@ -466,15 +511,18 @@ def init_user_db():
         st.session_state.celebration_dismissed = False
 
 def login_user(username, password):
+    # Admin login
     if username == "admin" and password == "adminbb":
         st.session_state.logged_in = True
         st.session_state.current_user = "admin"
         st.session_state.current_role = "admin"
         add_notification("Welcome, School Administrator!", "success")
         return True, "✅ Login successful!"
+    
     init_user_db()
     if username not in st.session_state.user_db:
         return False, "❌ User not found."
+    
     stored_hash = st.session_state.user_db[username]["password"]
     if verify_password(password, stored_hash):
         st.session_state.logged_in = True
@@ -599,11 +647,11 @@ st.set_page_config(
 )
 
 # ===================================================================
-# STATISTICAL ANALYSIS FUNCTIONS
+# ENHANCED STATISTICAL ANALYSIS FUNCTIONS
 # ===================================================================
 
 def generate_school_statistics():
-    """Generate comprehensive school statistics report."""
+    """Generate comprehensive school statistics report with top/bottom performers."""
     total_students = len(st.session_state.students)
     total_teachers = len(st.session_state.teachers)
     total_evaluations = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
@@ -623,6 +671,8 @@ def generate_school_statistics():
         section_distribution[section] = section_distribution.get(section, 0) + 1
     
     subject_performance = {}
+    subject_max = {}
+    subject_min = {}
     for e in st.session_state.evaluations:
         if e.get("status") == "approved":
             subject = e.get("subject", "Unknown")
@@ -634,8 +684,12 @@ def generate_school_statistics():
     subject_averages = {}
     for subject, scores in subject_performance.items():
         subject_averages[subject] = round(sum(scores) / len(scores), 2) if scores else 0
+        subject_max[subject] = max(scores) if scores else 0
+        subject_min[subject] = min(scores) if scores else 0
     
     grade_performance = {}
+    grade_max = {}
+    grade_min = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
         evals = get_approved_evaluations_for_student(s["id"])
@@ -648,6 +702,8 @@ def generate_school_statistics():
     grade_averages = {}
     for grade, scores in grade_performance.items():
         grade_averages[grade] = round(sum(scores) / len(scores), 2) if scores else 0
+        grade_max[grade] = max(scores) if scores else 0
+        grade_min[grade] = min(scores) if scores else 0
     
     teacher_workload = {}
     for t in st.session_state.teachers:
@@ -663,14 +719,25 @@ def generate_school_statistics():
     
     passed = 0
     failed = 0
+    student_performance_summary = []
     for s in st.session_state.students:
         evals = get_approved_evaluations_for_student(s["id"])
         if evals:
             avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            student_performance_summary.append({
+                "name": s.get("name", "Unknown"),
+                "grade": s.get("grade", "Unknown"),
+                "section": s.get("section", "Unknown"),
+                "avg_score": avg_score,
+                "status": "Pass" if avg_score >= 50 else "Fail"
+            })
             if avg_score >= 50:
                 passed += 1
             else:
                 failed += 1
+    
+    top_performers = sorted(student_performance_summary, key=lambda x: x["avg_score"], reverse=True)[:10]
+    bottom_performers = sorted(student_performance_summary, key=lambda x: x["avg_score"])[:10]
     
     return {
         "total_students": total_students,
@@ -680,20 +747,31 @@ def generate_school_statistics():
         "male_students": male_students,
         "female_students": female_students,
         "gender_ratio": f"{male_students}:{female_students}" if female_students > 0 else f"{male_students}:0",
+        "gender_percentage": {
+            "male": round((male_students / total_students) * 100, 1) if total_students > 0 else 0,
+            "female": round((female_students / total_students) * 100, 1) if total_students > 0 else 0
+        },
         "grade_distribution": grade_distribution,
         "section_distribution": section_distribution,
         "subject_averages": subject_averages,
+        "subject_max": subject_max,
+        "subject_min": subject_min,
         "grade_averages": grade_averages,
+        "grade_max": grade_max,
+        "grade_min": grade_min,
         "teacher_workload": teacher_workload,
         "pending_batches": pending_batches,
         "passed": passed,
         "failed": failed,
         "pass_rate": round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0,
+        "top_performers": top_performers,
+        "bottom_performers": bottom_performers,
+        "student_performance": student_performance_summary,
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
 
 def generate_statistics_report():
-    """Generate a formatted HTML report for office use."""
+    """Generate a formatted HTML report for office use with enhanced design."""
     stats = generate_school_statistics()
     
     html = f"""
@@ -720,6 +798,10 @@ def generate_statistics_report():
             .badge-green {{ background: #E6F4EA; color: #34A853; }}
             .badge-yellow {{ background: #FEF7E0; color: #F9AB00; }}
             .badge-red {{ background: #FCE8E6; color: #EA4335; }}
+            .badge-gold {{ background: #FFF3CD; color: #856404; }}
+            .rank-1 {{ background: #FFD700; color: #1a2a3a; font-weight: 700; padding: 2px 10px; border-radius: 12px; }}
+            .rank-2 {{ background: #C0C0C0; color: #1a2a3a; font-weight: 600; padding: 2px 10px; border-radius: 12px; }}
+            .rank-3 {{ background: #CD7F32; color: #ffffff; font-weight: 600; padding: 2px 10px; border-radius: 12px; }}
             .print-btn {{ background: #1A73E8; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 1rem; cursor: pointer; margin: 10px 0; }}
             .print-btn:hover {{ background: #1557B0; }}
             @media print {{ .no-print {{ display: none; }} body {{ background: white; padding: 15px; }} .container {{ box-shadow: none; border: 1px solid #ddd; }} }}
@@ -733,27 +815,53 @@ def generate_statistics_report():
         
         <h2>📋 Summary Statistics</h2>
         <div class="stats-grid">
-            <div class="stat-card"><div class="number">{stats['total_students']}</div><div class="label">Total Students</div></div>
-            <div class="stat-card"><div class="number">{stats['total_teachers']}</div><div class="label">Total Teachers</div></div>
-            <div class="stat-card"><div class="number">{stats['total_evaluations']}</div><div class="label">Approved Evaluations</div></div>
-            <div class="stat-card"><div class="number">{stats['total_batches']}</div><div class="label">Total Batches</div></div>
-            <div class="stat-card"><div class="number">{stats['pending_batches']}</div><div class="label">Pending Approvals</div></div>
-            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Overall Pass Rate</div></div>
+            <div class="stat-card"><div class="number">{stats['total_students']}</div><div class="label">👨‍🎓 Total Students</div></div>
+            <div class="stat-card"><div class="number">{stats['total_teachers']}</div><div class="label">👨‍🏫 Total Teachers</div></div>
+            <div class="stat-card"><div class="number">{stats['total_evaluations']}</div><div class="label">📝 Approved Evaluations</div></div>
+            <div class="stat-card"><div class="number">{stats['total_batches']}</div><div class="label">📦 Total Batches</div></div>
+            <div class="stat-card"><div class="number">{stats['pending_batches']}</div><div class="label">⏳ Pending Approvals</div></div>
+            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">📈 Overall Pass Rate</div></div>
         </div>
         
         <h2>👤 Gender Distribution</h2>
         <div class="stats-grid">
-            <div class="stat-card"><div class="number">{stats['male_students']}</div><div class="label">Male Students</div></div>
-            <div class="stat-card"><div class="number">{stats['female_students']}</div><div class="label">Female Students</div></div>
-            <div class="stat-card"><div class="number">{stats['gender_ratio']}</div><div class="label">Male:Female Ratio</div></div>
+            <div class="stat-card"><div class="number">{stats['male_students']}</div><div class="label">👨 Male ({stats['gender_percentage']['male']}%)</div></div>
+            <div class="stat-card"><div class="number">{stats['female_students']}</div><div class="label">👩 Female ({stats['gender_percentage']['female']}%)</div></div>
+            <div class="stat-card"><div class="number">{stats['gender_ratio']}</div><div class="label">📊 Male:Female Ratio</div></div>
         </div>
         
         <h2>✅ Pass / Fail Status</h2>
         <div class="stats-grid">
-            <div class="stat-card" style="background:#E6F4EA;"><div class="number" style="color:#34A853;">{stats['passed']}</div><div class="label">Passed</div></div>
-            <div class="stat-card" style="background:#FCE8E6;"><div class="number" style="color:#EA4335;">{stats['failed']}</div><div class="label">Failed</div></div>
-            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Pass Rate</div></div>
+            <div class="stat-card" style="background:#E6F4EA;"><div class="number" style="color:#34A853;">{stats['passed']}</div><div class="label">✅ Passed</div></div>
+            <div class="stat-card" style="background:#FCE8E6;"><div class="number" style="color:#EA4335;">{stats['failed']}</div><div class="label">❌ Failed</div></div>
+            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">📈 Pass Rate</div></div>
         </div>
+        
+        <h2>🏆 Top 10 Performers</h2>
+        <table>
+            <thead><tr><th>Rank</th><th>Name</th><th>Grade</th><th>Section</th><th>Average Score</th></tr></thead>
+            <tbody>
+"""
+    for i, student in enumerate(stats['top_performers'], 1):
+        rank_class = f"rank-{i}" if i <= 3 else ""
+        rank_label = f"🥇" if i == 1 else f"🥈" if i == 2 else f"🥉" if i == 3 else f"#{i}"
+        html += f"<tr><td><span class='{rank_class}'>{rank_label}</span></td><td><strong>{student['name']}</strong></td><td>{student['grade']}</td><td>{student['section']}</td><td><strong>{student['avg_score']}%</strong></td></tr>"
+    
+    html += """
+            </tbody>
+        </table>
+        
+        <h2>📉 Bottom 10 Performers</h2>
+        <table>
+            <thead><tr><th>Rank</th><th>Name</th><th>Grade</th><th>Section</th><th>Average Score</th></tr></thead>
+            <tbody>
+"""
+    for i, student in enumerate(stats['bottom_performers'], 1):
+        html += f"<tr><td>#{i}</td><td>{student['name']}</td><td>{student['grade']}</td><td>{student['section']}</td><td><strong style='color:#EA4335;'>{student['avg_score']}%</strong></td></tr>"
+    
+    html += """
+            </tbody>
+        </table>
         
         <h2>📚 Grade Distribution</h2>
         <table>
@@ -782,40 +890,64 @@ def generate_statistics_report():
         
         <h2>📖 Subject Performance Averages</h2>
         <table>
-            <thead><tr><th>Subject</th><th>Average Score (%)</th><th>Performance</th></tr></thead>
+            <thead><tr><th>Subject</th><th>Average (%)</th><th>Max (%)</th><th>Min (%)</th><th>Performance</th></tr></thead>
             <tbody>
 """
     for subject, avg in sorted(stats['subject_averages'].items(), key=lambda x: x[1], reverse=True):
+        max_score = stats['subject_max'].get(subject, 0)
+        min_score = stats['subject_min'].get(subject, 0)
         badge = "badge-green" if avg >= 70 else "badge-yellow" if avg >= 50 else "badge-red"
-        html += f"<tr><td>{subject}</td><td>{avg}%</td><td><span class='badge {badge}'>{'🌟 Excellent' if avg >= 70 else '📈 Good' if avg >= 50 else '📉 Needs Improvement'}</span></td></tr>"
+        performance = "🌟 Excellent" if avg >= 70 else "📈 Good" if avg >= 50 else "📉 Needs Improvement"
+        html += f"<tr><td>{subject}</td><td><strong>{avg}%</strong></td><td>{max_score}%</td><td>{min_score}%</td><td><span class='badge {badge}'>{performance}</span></td></tr>"
     html += """
             </tbody>
         </table>
         
         <h2>🎓 Grade-wise Performance</h2>
         <table>
-            <thead><tr><th>Grade</th><th>Average Score (%)</th></tr></thead>
+            <thead><tr><th>Grade</th><th>Average (%)</th><th>Max (%)</th><th>Min (%)</th><th>Status</th></tr></thead>
             <tbody>
 """
     for grade, avg in sorted(stats['grade_averages'].items()):
-        html += f"<tr><td>{grade}</td><td>{avg}%</td></tr>"
+        max_score = stats['grade_max'].get(grade, 0)
+        min_score = stats['grade_min'].get(grade, 0)
+        badge = "badge-green" if avg >= 70 else "badge-yellow" if avg >= 50 else "badge-red"
+        status = "🌟 Excellent" if avg >= 70 else "📈 Good" if avg >= 50 else "📉 Needs Improvement"
+        html += f"<tr><td>{grade}</td><td><strong>{avg}%</strong></td><td>{max_score}%</td><td>{min_score}%</td><td><span class='badge {badge}'>{status}</span></td></tr>"
     html += """
             </tbody>
         </table>
         
         <h2>👨‍🏫 Teacher Workload</h2>
         <table>
-            <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th></tr></thead>
+            <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th><th>Workload</th></tr></thead>
             <tbody>
 """
     for teacher, workload in sorted(stats['teacher_workload'].items()):
-        html += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td></tr>"
+        total_work = workload['batches'] + workload['evaluations']
+        badge = "badge-red" if total_work > 20 else "badge-yellow" if total_work > 10 else "badge-green"
+        level = "🔴 Heavy" if total_work > 20 else "🟡 Medium" if total_work > 10 else "🟢 Light"
+        html += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td><td><span class='badge {badge}'>{level}</span></td></tr>"
     html += f"""
             </tbody>
         </table>
         
         <div class="footer">
-            <p>Report generated by School Registration Portal</p>
+            <p>📋 Report generated by School Registration Portal System</p>
+            <div style="display:flex;justify-content:center;gap:40px;margin:15px 0;flex-wrap:wrap;">
+                <div>
+                    <div style="font-weight:600;">_________________________</div>
+                    <div style="font-size:0.8rem;color:#5F6368;">የትምህርት ቤቱ ርዕሰ መምህር / Director</div>
+                </div>
+                <div>
+                    <div style="font-weight:600;">_________________________</div>
+                    <div style="font-size:0.8rem;color:#5F6368;">የስታቲስቲክስ ኃላፊ / Statistics Officer</div>
+                </div>
+                <div>
+                    <div style="font-weight:600;">{datetime.now().strftime('%B %d, %Y')}</div>
+                    <div style="font-size:0.8rem;color:#5F6368;">ቀን / Date</div>
+                </div>
+            </div>
             <p>© {datetime.now().year} {st.session_state.school_name} - All Rights Reserved</p>
         </div>
     </div>
@@ -2184,6 +2316,20 @@ def show_admin_panel():
                             supabase_admin.table("students").insert(new_student).execute()
                             load_all_data()
                             add_notification(f"👨‍🎓 Student {name} added", "success")
+                            
+                            # Create student user account
+                            student_pw, msg = create_student_user(student_id, name)
+                            if student_pw:
+                                st.markdown(f"""
+                                <div style="background: #E6F4EA; padding: 1rem; border-radius: 12px; 
+                                            border: 2px solid #34A853; margin: 1rem 0;">
+                                    <h4 style="color: #34A853; margin: 0;">✅ Student Account Created!</h4>
+                                    <p><b>👤 Student ID:</b> <code>{student_id}</code></p>
+                                    <p><b>🔑 Temporary Password:</b> <code style="font-size:1.1rem;background:#f0f0f0;padding:2px 10px;border-radius:4px;">{student_pw}</code></p>
+                                    <p style="color: #5F6368; font-size:0.85rem;">⚠️ Student can change password after login.</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            
                             st.success(f"✅ Student {name} added!")
                             st.rerun()
                         except Exception as e:
@@ -2194,17 +2340,40 @@ def show_admin_panel():
         # List Students with Photos
         if st.session_state.students:
             st.markdown("#### 📋 All Students")
-            for student in st.session_state.students:
-                col1, col2 = st.columns([1, 5])
+            
+            # Search filter
+            search_student = st.text_input("🔍 Search Student", placeholder="Type name or ID...")
+            
+            filtered_students = st.session_state.students
+            if search_student:
+                search_lower = search_student.lower()
+                filtered_students = [s for s in st.session_state.students 
+                                   if search_lower in s.get('name', '').lower() or 
+                                      search_lower in s.get('id', '').lower()]
+            
+            # Display students in cards
+            for student in filtered_students:
+                col1, col2, col3 = st.columns([1, 3, 1])
                 with col1:
-                    st.markdown(display_student_photo(student['id'], 60), unsafe_allow_html=True)
+                    st.markdown(display_student_photo(student['id'], 80), unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"""
                     <div style="padding:0.5rem 0;">
                         <b>👤 {student['name']}</b><br>
-                        📚 {student.get('grade', 'N/A')} · 📌 {student.get('section', 'N/A')}
+                        📚 {student.get('grade', 'N/A')} · 📌 {student.get('section', 'N/A')}<br>
+                        🆔 {student.get('id', 'N/A')}
                     </div>
                     """, unsafe_allow_html=True)
+                with col3:
+                    # Reset student password
+                    if st.button(f"🔄 Reset PW", key=f"reset_student_pw_{student['id']}", width='stretch'):
+                        new_pw = reset_student_password(student['id'])
+                        if new_pw:
+                            st.success(f"✅ New password: `{new_pw}`")
+                            add_notification(f"Password reset for student {student['name']}", "info")
+                            st.rerun()
+                        else:
+                            st.error("Failed to reset password")
 
     # Tab 9: Import/Export
     with tab10:
@@ -2221,8 +2390,9 @@ def show_admin_panel():
                         if pd.notna(row.get("Name")):
                             existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
                             next_num = max(existing_ids) + 1 if existing_ids else 1
+                            student_id = f"S{next_num:04d}"
                             student = {
-                                "id": f"S{next_num:04d}",
+                                "id": student_id,
                                 "name": str(row.get("Name", "")),
                                 "grade": str(row.get("Grade", "Grade 1")),
                                 "section": str(row.get("Section", "A")),
@@ -2233,9 +2403,12 @@ def show_admin_panel():
                                 "subjects": GRADE_SUBJECTS.get(str(row.get("Grade", "Grade 1")), [])
                             }
                             supabase.table("students").insert(student).execute()
+                            
+                            # Create student account
+                            create_student_user(student_id, student['name'])
                             count += 1
                     load_all_data()
-                    st.success(f"✅ Imported {count} students!")
+                    st.success(f"✅ Imported {count} students with accounts!")
                     st.rerun()
             except Exception as e:
                 st.error(f"Error reading file: {e}")
@@ -2660,63 +2833,97 @@ def show_teacher_panel():
                 st.error(f"❌ Failed to submit: {e}")
 
 # ===================================================================
-# STUDENT PANEL
+# STUDENT PANEL - Complete
 # ===================================================================
 
 def show_student_panel():
     st.markdown("### 👨‍🎓 Student Dashboard")
-    student_name_input = st.text_input("Enter your registered name to view profile:", placeholder="Your full name...")
     
-    if student_name_input:
-        matching_students = [s for s in st.session_state.students if s["name"].lower() == student_name_input.lower()]
-        if matching_students:
-            student = matching_students[0]
-            student_evals = [e for e in st.session_state.evaluations if e.get("student_id") == student["id"]]
+    # Get student from username (which is student ID)
+    student = get_student_by_username(st.session_state.current_user)
+    
+    if not student:
+        st.error("❌ Student profile not found. Please contact administrator.")
+        return
+    
+    student_evals = [e for e in st.session_state.evaluations if e.get("student_id") == student["id"]]
+    
+    # Display student profile with photo
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.markdown(display_student_photo(student["id"], 120), unsafe_allow_html=True)
+        
+        # Student can update their own photo
+        uploaded_photo = st.file_uploader("📸 Update Photo", type=["jpg", "jpeg", "png"], key="student_photo_upload")
+        if uploaded_photo:
+            if save_student_photo(student["id"], uploaded_photo.read()):
+                load_all_data()
+                st.success("✅ Photo updated!")
+                st.rerun()
+    
+    with col2:
+        grade_display = get_grade_display(student["grade"])
+        grade_class = get_grade_class(student["grade"])
+        st.markdown(f"""
+        <div class="student-card">
+            <h3>👤 {student['name']}</h3>
+            <p><b>🆔 ID:</b> {student['id']}</p>
+            <p><b>Age:</b> {student.get('age', 'N/A')}</p>
+            <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
+            <p><b>Section:</b> {student.get('section', 'N/A')}</p>
+            <p><b>Subjects:</b> {', '.join(student.get('subjects', []))}</p>
+            <p><b>Evaluations:</b> {len(student_evals)}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Self-service profile update for students
+    with st.expander("🔐 My Account Settings", expanded=False):
+        st.markdown("#### Change Password")
+        user_data = st.session_state.user_db.get(st.session_state.current_user, {})
+        
+        with st.form("student_change_password"):
+            current_pw = st.text_input("Current Password", type="password")
+            new_pw = st.text_input("New Password", type="password")
+            confirm_pw = st.text_input("Confirm New Password", type="password")
             
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                st.markdown(display_student_photo(student["id"], 120), unsafe_allow_html=True)
-                
-                # Student photo upload
-                uploaded_photo = st.file_uploader("📸 Update Photo", type=["jpg", "jpeg", "png"], key="student_photo_upload")
-                if uploaded_photo:
-                    if save_student_photo(student["id"], uploaded_photo.read()):
-                        load_all_data()
-                        st.success("✅ Photo updated!")
-                        st.rerun()
-            
-            with col2:
-                grade_display = get_grade_display(student["grade"])
-                grade_class = get_grade_class(student["grade"])
-                st.markdown(f"""
-                <div class="student-card">
-                    <h3>👤 {student['name']}</h3>
-                    <p><b>ID:</b> {student['id']}</p>
-                    <p><b>Age:</b> {student['age']}</p>
-                    <p><b>Grade:</b> <span class="{grade_class}">{grade_display}</span></p>
-                    <p><b>Section:</b> {student.get('section', 'N/A')}</p>
-                    <p><b>Subjects:</b> {', '.join(student.get('subjects', []))}</p>
-                    <p><b>Evaluations:</b> {len(student_evals)}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            if student_evals:
-                st.markdown("##### 📝 My Evaluations")
-                for eval_item in student_evals:
-                    status = eval_item.get("status", "pending")
-                    status_label = "✅ Approved" if status == "approved" else "❌ Rejected" if status == "rejected" else "⏳ Pending"
-                    status_class = "badge-approved" if status == "approved" else "badge-rejected" if status == "rejected" else "badge-pending"
-                    st.markdown(f"""
-                    <div class="eval-card">
-                        <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
-                        <p><b>📊 Overall Score:</b> {eval_item.get('overall_score', 0)}%</p>
-                        <p><b>Status:</b> <span class="{status_class}">{status_label}</span></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("No evaluations yet.")
-        else:
-            st.warning("No student found with that name.")
+            if st.form_submit_button("Update Password", width='stretch'):
+                if not verify_password(current_pw, user_data["password"]):
+                    st.error("❌ Current password is incorrect.")
+                elif len(new_pw) < 6:
+                    st.error("New password must be at least 6 characters.")
+                elif new_pw != confirm_pw:
+                    st.error("Passwords do not match.")
+                else:
+                    supabase_admin = get_supabase_admin()
+                    try:
+                        hashed = hash_password(new_pw)
+                        supabase_admin.table("users").update({"password": hashed}).eq("username", st.session_state.current_user).execute()
+                        st.session_state.user_db[st.session_state.current_user]["password"] = hashed
+                        add_notification("Password changed successfully", "success")
+                        st.success("✅ Password updated successfully!")
+                        st.info("Please use your new password next time you log in.")
+                    except Exception as e:
+                        st.error(f"Failed to update password: {e}")
+    
+    # Student evaluations
+    if student_evals:
+        st.markdown("#### 📝 My Evaluations")
+        for eval_item in student_evals:
+            status = eval_item.get("status", "pending")
+            status_label = "✅ Approved" if status == "approved" else "❌ Rejected" if status == "rejected" else "⏳ Pending"
+            status_class = "badge-approved" if status == "approved" else "badge-rejected" if status == "rejected" else "badge-pending"
+            st.markdown(f"""
+            <div class="eval-card">
+                <p><b>📚 Subject:</b> {eval_item.get('subject', 'N/A')}</p>
+                <p><b>👨‍🏫 Teacher:</b> {get_teacher_name(eval_item.get('teacher_id', ''))}</p>
+                <p><b>📊 Overall Score:</b> {eval_item.get('overall_score', 0)}%</p>
+                <p><b>Status:</b> <span class="{status_class}">{status_label}</span></p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No evaluations yet.")
 
 # ===================================================================
 # LOGIN PAGE
@@ -2728,13 +2935,14 @@ def show_login_page():
         <div style="font-size:4rem; margin-bottom:0.5rem;">📚✍️🌍SRP🏫ET ኢትዮጲያ🕊️🎓🚀</div>
         <h1 style="font-size:3rem; margin:0;">School Registration Portal</h1>
         <p style="color:#5F6368; font-size:1.2rem;">👨‍🏫📚 Admin-Controlled Student & Teacher Management</p>
+        <p style="color:#5F6368; font-size:0.9rem;">👨‍🎓 Students: Use your ID as username</p>
     </div>
     """, unsafe_allow_html=True)
     
     with st.container():
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
         with st.form("login_form"):
-            username = st.text_input("👤 Username", placeholder="Enter username")
+            username = st.text_input("👤 Username", placeholder="Enter username (or Student ID)")
             password = st.text_input("🔐 Password", type="password", placeholder="Enter password")
             
             if st.form_submit_button("🇪🇹 Sign In", width='stretch'):
@@ -2747,6 +2955,14 @@ def show_login_page():
                         st.error(message)
                 else:
                     st.error("❌ Please enter both username and password.")
+        
+        st.markdown("""
+        <div style="text-align:center; margin-top:1rem; font-size:0.8rem; color:#5F6368;">
+            <p>👨‍🎓 Students: Login with your <b>Student ID</b> as username</p>
+            <p>👨‍🏫 Teachers: Login with your username</p>
+            <p>👨‍💼 Admin: Use admin credentials</p>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ===================================================================
@@ -2777,7 +2993,17 @@ def main():
     with st.sidebar:
         st.markdown("### School Portal")
         st.markdown("---")
-        st.markdown(display_profile_photo(current_user, 80), unsafe_allow_html=True)
+        
+        # Show profile photo based on role
+        if role == "student":
+            student = get_student_by_username(current_user)
+            if student:
+                st.markdown(display_student_photo(student["id"], 80), unsafe_allow_html=True)
+            else:
+                st.markdown(display_profile_photo(current_user, 80), unsafe_allow_html=True)
+        else:
+            st.markdown(display_profile_photo(current_user, 80), unsafe_allow_html=True)
+        
         st.markdown(f"""
         <div style="text-align:center;margin:8px 0;">
             <p style="font-weight:600;color:#1A73E8;">{display_name}</p>
@@ -2792,6 +3018,8 @@ def main():
             nav_options = ["👤 My Profile", "📋 Subject Admin", "⚠️ Penalties", "🔔 Notifications"]
         elif role == "teacher":
             nav_options = ["👤 My Profile", "👨‍🏫 My Dashboard", "⚠️ Penalties", "🔔 Notifications"]
+        elif role == "student":
+            nav_options = ["👨‍🎓 My Dashboard", "⚠️ Penalties", "🔔 Notifications"]
         else:
             nav_options = ["👤 My Profile", "⚠️ Penalties", "🔔 Notifications"]
         
@@ -2884,6 +3112,14 @@ def main():
             show_profile_update()
         elif current_page == "👨‍🏫 My Dashboard":
             show_teacher_panel()
+        elif current_page == "⚠️ Penalties":
+            show_penalty_log()
+        elif current_page == "🔔 Notifications":
+            show_notification_center()
+    
+    elif role == "student":
+        if current_page == "👨‍🎓 My Dashboard":
+            show_student_panel()
         elif current_page == "⚠️ Penalties":
             show_penalty_log()
         elif current_page == "🔔 Notifications":
