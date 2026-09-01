@@ -1,7 +1,7 @@
 # ===================================================================
 # SCHOOL REGISTRATION PORTAL - PERSISTENT WITH SUPABASE
 # Enhanced with Real Assessment Weights, Profile Photos, Stats & Self-Service
-# Berhanu Mekonen, PhD, Arba Minch University, June 25, 2026 
+# Berhanu Mekonen, PhD, Arba Minch University, June 25, 2026
 # ===================================================================
 
 import streamlit as st
@@ -451,7 +451,7 @@ def create_student_user(student_id, student_name):
             "profile_photo": ""
         }).execute()
         
-        # ✅ Store password in student record for admin reference
+        # Store password in student record for admin reference
         try:
             supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
         except Exception as e:
@@ -463,12 +463,15 @@ def create_student_user(student_id, student_name):
                 except:
                     pass
             else:
-                st.warning(f"Could not store password in student record: {e}")
+                pass
         
         # Store in session state for display
         if 'student_passwords' not in st.session_state:
             st.session_state.student_passwords = {}
         st.session_state.student_passwords[student_id] = password
+        
+        # Reload data to refresh user_db
+        load_all_data()
         
         return password, "Student account created successfully"
     except Exception as e:
@@ -484,17 +487,26 @@ def reset_student_password(student_id):
         # Update users table
         supabase_admin.table("users").update({"password": hashed_pw}).eq("username", student_id).execute()
         
-        # ✅ Update students table
+        # Update students table
         try:
             supabase_admin.table("students").update({"password": new_password}).eq("id", student_id).execute()
         except Exception as e:
-            if "PGRST204" not in str(e):
-                st.warning(f"Could not update password in student record: {e}")
+            if "PGRST204" in str(e):
+                try:
+                    supabase_admin.execute("ALTER TABLE students ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '';")
+                    supabase_admin.table("students").update({"password": new_password}).eq("id", student_id).execute()
+                except:
+                    pass
+            else:
+                pass
         
         # Update session state
         if 'student_passwords' not in st.session_state:
             st.session_state.student_passwords = {}
         st.session_state.student_passwords[student_id] = new_password
+        
+        # Reload data to refresh user_db
+        load_all_data()
         
         return new_password
     except Exception as e:
@@ -528,50 +540,9 @@ def get_student_by_username(username):
             return s
     return None
 
-# ---- Init User DB ----
-def init_user_db():
-    if 'students' not in st.session_state:
-        load_all_data()
-    if "admin" not in st.session_state.user_db:
-        st.session_state.user_db["admin"] = {
-            "password": hash_password("adminbb"),
-            "role": "admin",
-            "name": "School Administrator",
-            "profile_photo": ""
-        }
-        supabase_admin = get_supabase_admin()
-        try:
-            supabase_admin.table("users").insert({
-                "username": "admin",
-                "password": hash_password("adminbb"),
-                "role": "admin",
-                "name": "School Administrator",
-                "profile_photo": ""
-            }).execute()
-        except:
-            pass
-        load_all_data()
-    if 'subjects' not in st.session_state:
-        st.session_state.subjects = ALL_SUBJECTS
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    if 'current_user' not in st.session_state:
-        st.session_state.current_user = None
-    if 'current_role' not in st.session_state:
-        st.session_state.current_role = None
-    if 'registration_period' not in st.session_state:
-        st.session_state.registration_period = {
-            "start": datetime.now(),
-            "end": datetime.now() + timedelta(days=30)
-        }
-    if 'registration_open' not in st.session_state:
-        st.session_state.registration_open = True
-    if 'celebration_dismissed' not in st.session_state:
-        st.session_state.celebration_dismissed = False
-    if 'student_passwords' not in st.session_state:
-        st.session_state.student_passwords = {}
-
 def login_user(username, password):
+    """Login user with proper error handling."""
+    # Admin login
     if username == "admin" and password == "adminbb":
         st.session_state.logged_in = True
         st.session_state.current_user = "admin"
@@ -579,19 +550,51 @@ def login_user(username, password):
         add_notification("Welcome, School Administrator!", "success")
         return True, "✅ Login successful!"
     
-    init_user_db()
-    if username not in st.session_state.user_db:
-        return False, "❌ User not found."
-    
-    stored_hash = st.session_state.user_db[username]["password"]
-    if verify_password(password, stored_hash):
-        st.session_state.logged_in = True
-        st.session_state.current_user = username
-        st.session_state.current_role = st.session_state.user_db[username]["role"]
-        add_notification(f"Welcome, {st.session_state.user_db[username]['name']}!", "success")
-        return True, "✅ Login successful!"
-    else:
-        return False, "❌ Incorrect password."
+    try:
+        # Get fresh data from database
+        supabase = get_supabase()
+        
+        # Check if user exists
+        res = supabase.table("users").select("*").eq("username", username).execute()
+        
+        if not res.data:
+            # Check if this is a student ID that exists in students table
+            student_exists = False
+            for s in st.session_state.students:
+                if s.get("id") == username:
+                    student_exists = True
+                    break
+            
+            if student_exists:
+                return False, "❌ Student account not created. Please ask admin to create your account."
+            else:
+                return False, "❌ User not found."
+        
+        user_data = res.data[0]
+        stored_hash = user_data["password"]
+        
+        if verify_password(password, stored_hash):
+            # Update session state
+            st.session_state.logged_in = True
+            st.session_state.current_user = username
+            st.session_state.current_role = user_data["role"]
+            
+            # Update user_db in session
+            if username not in st.session_state.user_db:
+                st.session_state.user_db[username] = {
+                    "password": stored_hash,
+                    "role": user_data["role"],
+                    "name": user_data["name"],
+                    "profile_photo": user_data.get("profile_photo", "")
+                }
+            
+            add_notification(f"Welcome, {user_data['name']}!", "success")
+            return True, "✅ Login successful!"
+        else:
+            return False, "❌ Incorrect password."
+            
+    except Exception as e:
+        return False, f"❌ Login error: {e}"
 
 def logout_user():
     st.session_state.logged_in = False
@@ -2480,7 +2483,7 @@ def show_login_page():
             username = st.text_input("👤 Username", placeholder="Enter username (or Student ID)")
             password = st.text_input("🔐 Password", type="password", placeholder="Enter password")
             
-            if st.form_submit_button("🇪🇹 Sign In", width='stretch'):
+            if st.form_submit_button("🇪🇹 Sign In📚✍️🌍SRP🏫ኢትዮጲያ🕊️🎓🚀", width='stretch'):
                 if username and password:
                     success, message = login_user(username, password)
                     if success:
