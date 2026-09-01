@@ -2483,7 +2483,7 @@ def show_login_page():
             username = st.text_input("👤 Username", placeholder="Enter username (or Student ID)")
             password = st.text_input("🔐 Password", type="password", placeholder="Enter password")
             
-            if st.form_submit_button("🇪🇹 Sign In📚✍️🌍SRP🏫ኢትዮጲያ🕊️🎓🚀", width='stretch'):
+            if st.form_submit_button("🇪🇹 Sign In 📚✍️🌍SRP🏫ኢትዮጲያ🕊️🎓🚀", width='stretch'):
                 if username and password:
                     success, message = login_user(username, password)
                     if success:
