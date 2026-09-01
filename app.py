@@ -1,7 +1,7 @@
 # ===================================================================
 # SCHOOL REGISTRATION PORTAL - PERSISTENT WITH SUPABASE
 # Enhanced with Real Assessment Weights, Profile Photos, Stats & Self-Service
-# Berhanu Mekonen, PhD, Arba Minch University, June 25, 2026
+# Berhanu Mekonen, PhD, Arba Minch University, June 25, 2026 
 # ===================================================================
 
 import streamlit as st
