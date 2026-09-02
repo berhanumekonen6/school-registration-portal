@@ -830,7 +830,390 @@ def get_subject_mapping_for_admin(teacher_id):
             assignments.append(sa)
     return assignments
 
-# ---- Page Config ----
+# ---- STATISTICAL FUNCTIONS ----
+def generate_school_statistics():
+    """Generate basic school statistics for the dashboard."""
+    total_students = len(st.session_state.students)
+    total_teachers = len(st.session_state.teachers)
+    total_evaluations = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
+    total_batches = len(st.session_state.batches)
+    
+    male_students = len([s for s in st.session_state.students if s.get("gender") == "M"])
+    female_students = len([s for s in st.session_state.students if s.get("gender") == "F"])
+    
+    grade_distribution = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        grade_distribution[grade] = grade_distribution.get(grade, 0) + 1
+    
+    section_distribution = {}
+    for s in st.session_state.students:
+        section = s.get("section", "Unknown")
+        section_distribution[section] = section_distribution.get(section, 0) + 1
+    
+    subject_performance = {}
+    for e in st.session_state.evaluations:
+        if e.get("status") == "approved":
+            subject = e.get("subject", "Unknown")
+            score = e.get("overall_score", 0)
+            if subject not in subject_performance:
+                subject_performance[subject] = []
+            subject_performance[subject].append(score)
+    
+    subject_averages = {}
+    for subject, scores in subject_performance.items():
+        subject_averages[subject] = round(sum(scores) / len(scores), 2) if scores else 0
+    
+    grade_performance = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if grade not in grade_performance:
+                grade_performance[grade] = []
+            grade_performance[grade].append(avg_score)
+    
+    grade_averages = {}
+    for grade, scores in grade_performance.items():
+        grade_averages[grade] = round(sum(scores) / len(scores), 2) if scores else 0
+    
+    teacher_workload = {}
+    for t in st.session_state.teachers:
+        teacher_id = t.get("id")
+        batch_count = len([b for b in st.session_state.batches if b.get("teacher_id") == teacher_id])
+        eval_count = len([e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id])
+        teacher_workload[t.get("name", "Unknown")] = {
+            "batches": batch_count,
+            "evaluations": eval_count
+        }
+    
+    pending_batches = len(get_batches_awaiting_final_approval())
+    
+    passed = 0
+    failed = 0
+    for s in st.session_state.students:
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if avg_score >= 50:
+                passed += 1
+            else:
+                failed += 1
+    
+    return {
+        "total_students": total_students,
+        "total_teachers": total_teachers,
+        "total_evaluations": total_evaluations,
+        "total_batches": total_batches,
+        "male_students": male_students,
+        "female_students": female_students,
+        "gender_ratio": f"{male_students}:{female_students}" if female_students > 0 else f"{male_students}:0",
+        "grade_distribution": grade_distribution,
+        "section_distribution": section_distribution,
+        "subject_averages": subject_averages,
+        "grade_averages": grade_averages,
+        "teacher_workload": teacher_workload,
+        "pending_batches": pending_batches,
+        "passed": passed,
+        "failed": failed,
+        "pass_rate": round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+    }
+
+def generate_statistics_report():
+    """Generate a formatted HTML report for office use."""
+    stats = generate_school_statistics()
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>School Statistics Report</title>
+        <style>
+            body {{ font-family: 'Segoe UI', 'Noto Sans Ethiopic', sans-serif; padding: 30px; background: #f8f9fa; }}
+            .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }}
+            h1 {{ color: #1A73E8; border-bottom: 3px solid #1A73E8; padding-bottom: 10px; }}
+            h2 {{ color: #202124; margin-top: 25px; border-bottom: 2px solid #E8EAED; padding-bottom: 8px; }}
+            .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
+            .stat-card {{ background: #E8F0FE; padding: 20px; border-radius: 12px; text-align: center; }}
+            .stat-card .number {{ font-size: 2.5rem; font-weight: 700; color: #1A73E8; }}
+            .stat-card .label {{ font-size: 0.9rem; color: #5F6368; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
+            th, td {{ padding: 10px 12px; border: 1px solid #E8EAED; text-align: left; }}
+            th {{ background: #F1F3F4; font-weight: 600; }}
+            tr:nth-child(even) {{ background: #F8F9FA; }}
+            .footer {{ margin-top: 30px; border-top: 2px solid #E8EAED; padding-top: 20px; color: #5F6368; text-align: center; font-size: 0.9rem; }}
+            .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }}
+            .badge-green {{ background: #E6F4EA; color: #34A853; }}
+            .badge-yellow {{ background: #FEF7E0; color: #F9AB00; }}
+            .badge-red {{ background: #FCE8E6; color: #EA4335; }}
+            .print-btn {{ background: #1A73E8; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 1rem; cursor: pointer; margin: 10px 0; }}
+            .print-btn:hover {{ background: #1557B0; }}
+            @media print {{ .no-print {{ display: none; }} body {{ background: white; padding: 15px; }} .container {{ box-shadow: none; border: 1px solid #ddd; }} }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 School Statistical Report</h1>
+        <p><strong>School:</strong> {st.session_state.school_name}</p>
+        <p><strong>Report Generated:</strong> {stats['generated_at']}</p>
+        
+        <h2>📋 Summary Statistics</h2>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="number">{stats['total_students']}</div><div class="label">Total Students</div></div>
+            <div class="stat-card"><div class="number">{stats['total_teachers']}</div><div class="label">Total Teachers</div></div>
+            <div class="stat-card"><div class="number">{stats['total_evaluations']}</div><div class="label">Approved Evaluations</div></div>
+            <div class="stat-card"><div class="number">{stats['total_batches']}</div><div class="label">Total Batches</div></div>
+            <div class="stat-card"><div class="number">{stats['pending_batches']}</div><div class="label">Pending Approvals</div></div>
+            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Overall Pass Rate</div></div>
+        </div>
+        
+        <h2>👤 Gender Distribution</h2>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="number">{stats['male_students']}</div><div class="label">Male Students</div></div>
+            <div class="stat-card"><div class="number">{stats['female_students']}</div><div class="label">Female Students</div></div>
+            <div class="stat-card"><div class="number">{stats['gender_ratio']}</div><div class="label">Male:Female Ratio</div></div>
+        </div>
+        
+        <h2>✅ Pass / Fail Status</h2>
+        <div class="stats-grid">
+            <div class="stat-card" style="background:#E6F4EA;"><div class="number" style="color:#34A853;">{stats['passed']}</div><div class="label">Passed</div></div>
+            <div class="stat-card" style="background:#FCE8E6;"><div class="number" style="color:#EA4335;">{stats['failed']}</div><div class="label">Failed</div></div>
+            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Pass Rate</div></div>
+        </div>
+        
+        <h2>📚 Grade Distribution</h2>
+        <table>
+            <thead><tr><th>Grade</th><th>Students</th><th>% of Total</th></tr></thead>
+            <tbody>
+"""
+    total = stats['total_students']
+    for grade, count in sorted(stats['grade_distribution'].items()):
+        pct = round((count / total) * 100, 1) if total > 0 else 0
+        html += f"<tr><td>{grade}</td><td>{count}</td><td>{pct}%</td></tr>"
+    html += """
+            </tbody>
+        </table>
+        
+        <h2>📌 Section Distribution</h2>
+        <table>
+            <thead><tr><th>Section</th><th>Students</th><th>% of Total</th></tr></thead>
+            <tbody>
+"""
+    for section, count in sorted(stats['section_distribution'].items()):
+        pct = round((count / total) * 100, 1) if total > 0 else 0
+        html += f"<tr><td>{section}</td><td>{count}</td><td>{pct}%</td></tr>"
+    html += """
+            </tbody>
+        </table>
+        
+        <h2>📖 Subject Performance Averages</h2>
+        <table>
+            <thead><tr><th>Subject</th><th>Average Score (%)</th><th>Performance</th></tr></thead>
+            <tbody>
+"""
+    for subject, avg in sorted(stats['subject_averages'].items(), key=lambda x: x[1], reverse=True):
+        badge = "badge-green" if avg >= 70 else "badge-yellow" if avg >= 50 else "badge-red"
+        html += f"<tr><td>{subject}</td><td>{avg}%</td><td><span class='badge {badge}'>{'🌟 Excellent' if avg >= 70 else '📈 Good' if avg >= 50 else '📉 Needs Improvement'}</span></td></tr>"
+    html += """
+            </tbody>
+        </table>
+        
+        <h2>🎓 Grade-wise Performance</h2>
+        <table>
+            <thead><tr><th>Grade</th><th>Average Score (%)</th></tr></thead>
+            <tbody>
+"""
+    for grade, avg in sorted(stats['grade_averages'].items()):
+        html += f"<tr><td>{grade}</td><td>{avg}%</td></tr>"
+    html += """
+            </tbody>
+        </table>
+        
+        <h2>👨‍🏫 Teacher Workload</h2>
+        <table>
+            <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th></tr></thead>
+            <tbody>
+"""
+    for teacher, workload in sorted(stats['teacher_workload'].items()):
+        html += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td></tr>"
+    html += f"""
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Report generated by School Registration Portal</p>
+            <p>© {datetime.now().year} {st.session_state.school_name} - All Rights Reserved</p>
+        </div>
+    </div>
+    
+    <div style="text-align:center;margin:20px 0;" class="no-print">
+        <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
+    </div>
+</body>
+</html>
+"""
+    return html
+
+# ---- DEEP STATISTICAL ANALYSIS FUNCTIONS ----
+def generate_deep_statistics():
+    """Generate comprehensive deep statistics with all metrics."""
+    
+    stats = {
+        "student_stats": {},
+        "performance_metrics": {},
+        "demographics": {},
+        "subject_analysis": {},
+        "grade_analysis": {},
+        "teacher_analysis": {},
+        "trends": {},
+        "summary": {}
+    }
+    
+    # Basic counts
+    stats["summary"]["total_students"] = len(st.session_state.students)
+    stats["summary"]["total_teachers"] = len(st.session_state.teachers)
+    stats["summary"]["total_evaluations"] = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
+    stats["summary"]["total_batches"] = len(st.session_state.batches)
+    stats["summary"]["pending_approvals"] = len(get_batches_awaiting_final_approval())
+    
+    # Gender distribution
+    male = len([s for s in st.session_state.students if s.get("gender") == "M"])
+    female = len([s for s in st.session_state.students if s.get("gender") == "F"])
+    other = len([s for s in st.session_state.students if s.get("gender") not in ["M", "F"]])
+    stats["demographics"]["gender"] = {"Male": male, "Female": female, "Other": other}
+    
+    # Grade distribution
+    grade_dist = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        grade_dist[grade] = grade_dist.get(grade, 0) + 1
+    stats["demographics"]["grade_distribution"] = grade_dist
+    
+    # Section distribution
+    section_dist = {}
+    for s in st.session_state.students:
+        section = s.get("section", "Unknown")
+        section_dist[section] = section_dist.get(section, 0) + 1
+    stats["demographics"]["section_distribution"] = section_dist
+    
+    # Subject performance
+    subject_scores = {}
+    for e in st.session_state.evaluations:
+        if e.get("status") == "approved":
+            subject = e.get("subject", "Unknown")
+            score = e.get("overall_score", 0)
+            if subject not in subject_scores:
+                subject_scores[subject] = []
+            subject_scores[subject].append(score)
+    
+    subject_avg = {}
+    subject_min = {}
+    subject_max = {}
+    subject_count = {}
+    for subject, scores in subject_scores.items():
+        if scores:
+            subject_avg[subject] = round(sum(scores) / len(scores), 2)
+            subject_min[subject] = min(scores)
+            subject_max[subject] = max(scores)
+            subject_count[subject] = len(scores)
+    stats["subject_analysis"]["averages"] = subject_avg
+    stats["subject_analysis"]["min"] = subject_min
+    stats["subject_analysis"]["max"] = subject_max
+    stats["subject_analysis"]["counts"] = subject_count
+    
+    # Grade-wise performance
+    grade_perf = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if grade not in grade_perf:
+                grade_perf[grade] = []
+            grade_perf[grade].append(avg_score)
+    
+    grade_avg = {}
+    grade_min = {}
+    grade_max = {}
+    for grade, scores in grade_perf.items():
+        if scores:
+            grade_avg[grade] = round(sum(scores) / len(scores), 2)
+            grade_min[grade] = min(scores)
+            grade_max[grade] = max(scores)
+    stats["grade_analysis"]["averages"] = grade_avg
+    stats["grade_analysis"]["min"] = grade_min
+    stats["grade_analysis"]["max"] = grade_max
+    
+    # Pass/Fail by grade
+    pass_fail = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if grade not in pass_fail:
+                pass_fail[grade] = {"passed": 0, "failed": 0}
+            if avg_score >= 50:
+                pass_fail[grade]["passed"] += 1
+            else:
+                pass_fail[grade]["failed"] += 1
+    stats["grade_analysis"]["pass_fail"] = pass_fail
+    
+    # Overall pass rate
+    passed = 0
+    failed = 0
+    for s in st.session_state.students:
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if avg_score >= 50:
+                passed += 1
+            else:
+                failed += 1
+    stats["summary"]["passed"] = passed
+    stats["summary"]["failed"] = failed
+    stats["summary"]["pass_rate"] = round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0
+    
+    # Teacher workload
+    teacher_workload = {}
+    for t in st.session_state.teachers:
+        teacher_id = t.get("id")
+        batch_count = len([b for b in st.session_state.batches if b.get("teacher_id") == teacher_id])
+        eval_count = len([e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id])
+        teacher_workload[t.get("name", "Unknown")] = {
+            "batches": batch_count,
+            "evaluations": eval_count
+        }
+    stats["teacher_analysis"]["workload"] = teacher_workload
+    
+    # Section performance
+    section_perf = {}
+    for s in st.session_state.students:
+        section = s.get("section", "Unknown")
+        grade = s.get("grade", "Unknown")
+        key = f"{grade} - Section {section}"
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if key not in section_perf:
+                section_perf[key] = []
+            section_perf[key].append(avg_score)
+    
+    section_avg = {}
+    for key, scores in section_perf.items():
+        if scores:
+            section_avg[key] = round(sum(scores) / len(scores), 2)
+    stats["grade_analysis"]["section_performance"] = section_avg
+    
+    # Generate timestamp
+    stats["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    return stats
+
+# ---- PAGE CONFIG ----
 st.set_page_config(
     page_title="School Registration Portal",
     page_icon="SRP🏫@ET",
@@ -1020,36 +1403,6 @@ st.markdown("""
         margin-top: 2px;
     }
 
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        background: rgba(255, 255, 255, 0.9) !important;
-        padding: 8px 20px;
-        border-radius: 30px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        backdrop-filter: blur(10px);
-    }
-
-    .user-info .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #1A73E8, #4285F4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #FFFFFF;
-        font-weight: 700;
-        font-size: 1.2rem;
-    }
-
-    .user-info .user-name {
-        color: #202124 !important;
-        font-weight: 600 !important;
-        font-size: 1rem !important;
-    }
-
     .status-bar {
         background: #F8F9FA !important;
         border: 1px solid #E8EAED;
@@ -1090,66 +1443,6 @@ st.markdown("""
         color: #202124 !important;
         font-size: 1rem !important;
         font-weight: 500 !important;
-    }
-
-    .status-bar .status-text .highlight-green {
-        color: #34A853 !important;
-        font-weight: 700 !important;
-    }
-
-    .status-bar .status-text .highlight-red {
-        color: #EA4335 !important;
-        font-weight: 700 !important;
-    }
-
-    .status-bar .live-badge {
-        background: linear-gradient(135deg, #1A73E8, #4285F4);
-        color: #FFFFFF !important;
-        padding: 6px 18px;
-        border-radius: 25px;
-        font-size: 1rem !important;
-        font-weight: 600 !important;
-        border: none;
-    }
-
-    .badge-pending {
-        background: #FCE8E6 !important;
-        color: #EA4335 !important;
-        border: 1px solid #EA4335;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-    }
-
-    .badge-approved {
-        background: #E6F4EA !important;
-        color: #34A853 !important;
-        border: 1px solid #34A853;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-    }
-
-    .badge-rejected {
-        background: #FCE8E6 !important;
-        color: #EA4335 !important;
-        border: 1px solid #EA4335;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
-    }
-
-    .badge-subject-approved {
-        background: #FFF3CD !important;
-        color: #856404 !important;
-        border: 1px solid #FFEEBA;
-        padding: 4px 16px;
-        border-radius: 25px;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
     }
 
     .stButton > button {
@@ -1414,9 +1707,6 @@ st.markdown("""
         font-size: 1.2rem;
         color: #34A853;
     }
-    .rank-card .medal {
-        font-size: 2rem;
-    }
 
     @media (max-width: 768px) {
         .student-row {
@@ -1428,10 +1718,6 @@ st.markdown("""
         .student-header {
             grid-template-columns: 50px 1fr 1fr;
             grid-template-rows: auto auto;
-        }
-        .watermark-text {
-            font-size: 1.5rem;
-            transform: translate(-50%, -50%) rotate(-15deg);
         }
         .block-container { padding: 0.5rem 0.75rem !important; }
         .main-header .logo-text h1 { font-size: 1.4rem !important; white-space: normal !important; }
@@ -1455,10 +1741,6 @@ st.markdown("""
         .student-row .photo { grid-row: auto; }
         .student-row .reset-btn { grid-column: auto; }
         .student-header { display: none; }
-        .watermark-text {
-            font-size: 1rem;
-            transform: translate(-50%, -50%) rotate(-10deg);
-        }
         .block-container { padding: 0.25rem 0.5rem !important; }
         .main-header .logo-text h1 { font-size: 1.2rem !important; }
         .main-header .header-content { flex-direction: column !important; align-items: flex-start !important; }
@@ -1561,162 +1843,7 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
-# ---- DEEP STATISTICAL ANALYSIS FUNCTIONS (Conditional) ----
-def generate_deep_statistics():
-    """Generate comprehensive deep statistics with all metrics."""
-    
-    stats = {
-        "student_stats": {},
-        "performance_metrics": {},
-        "demographics": {},
-        "subject_analysis": {},
-        "grade_analysis": {},
-        "teacher_analysis": {},
-        "trends": {},
-        "summary": {}
-    }
-    
-    # Basic counts
-    stats["summary"]["total_students"] = len(st.session_state.students)
-    stats["summary"]["total_teachers"] = len(st.session_state.teachers)
-    stats["summary"]["total_evaluations"] = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
-    stats["summary"]["total_batches"] = len(st.session_state.batches)
-    stats["summary"]["pending_approvals"] = len(get_batches_awaiting_final_approval())
-    
-    # Gender distribution
-    male = len([s for s in st.session_state.students if s.get("gender") == "M"])
-    female = len([s for s in st.session_state.students if s.get("gender") == "F"])
-    other = len([s for s in st.session_state.students if s.get("gender") not in ["M", "F"]])
-    stats["demographics"]["gender"] = {"Male": male, "Female": female, "Other": other}
-    
-    # Grade distribution
-    grade_dist = {}
-    for s in st.session_state.students:
-        grade = s.get("grade", "Unknown")
-        grade_dist[grade] = grade_dist.get(grade, 0) + 1
-    stats["demographics"]["grade_distribution"] = grade_dist
-    
-    # Section distribution
-    section_dist = {}
-    for s in st.session_state.students:
-        section = s.get("section", "Unknown")
-        section_dist[section] = section_dist.get(section, 0) + 1
-    stats["demographics"]["section_distribution"] = section_dist
-    
-    # Subject performance
-    subject_scores = {}
-    for e in st.session_state.evaluations:
-        if e.get("status") == "approved":
-            subject = e.get("subject", "Unknown")
-            score = e.get("overall_score", 0)
-            if subject not in subject_scores:
-                subject_scores[subject] = []
-            subject_scores[subject].append(score)
-    
-    subject_avg = {}
-    subject_min = {}
-    subject_max = {}
-    subject_count = {}
-    for subject, scores in subject_scores.items():
-        if scores:
-            subject_avg[subject] = round(sum(scores) / len(scores), 2)
-            subject_min[subject] = min(scores)
-            subject_max[subject] = max(scores)
-            subject_count[subject] = len(scores)
-    stats["subject_analysis"]["averages"] = subject_avg
-    stats["subject_analysis"]["min"] = subject_min
-    stats["subject_analysis"]["max"] = subject_max
-    stats["subject_analysis"]["counts"] = subject_count
-    
-    # Grade-wise performance
-    grade_perf = {}
-    for s in st.session_state.students:
-        grade = s.get("grade", "Unknown")
-        evals = get_approved_evaluations_for_student(s["id"])
-        if evals:
-            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-            if grade not in grade_perf:
-                grade_perf[grade] = []
-            grade_perf[grade].append(avg_score)
-    
-    grade_avg = {}
-    grade_min = {}
-    grade_max = {}
-    for grade, scores in grade_perf.items():
-        if scores:
-            grade_avg[grade] = round(sum(scores) / len(scores), 2)
-            grade_min[grade] = min(scores)
-            grade_max[grade] = max(scores)
-    stats["grade_analysis"]["averages"] = grade_avg
-    stats["grade_analysis"]["min"] = grade_min
-    stats["grade_analysis"]["max"] = grade_max
-    
-    # Pass/Fail by grade
-    pass_fail = {}
-    for s in st.session_state.students:
-        grade = s.get("grade", "Unknown")
-        evals = get_approved_evaluations_for_student(s["id"])
-        if evals:
-            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-            if grade not in pass_fail:
-                pass_fail[grade] = {"passed": 0, "failed": 0}
-            if avg_score >= 50:
-                pass_fail[grade]["passed"] += 1
-            else:
-                pass_fail[grade]["failed"] += 1
-    stats["grade_analysis"]["pass_fail"] = pass_fail
-    
-    # Overall pass rate
-    passed = 0
-    failed = 0
-    for s in st.session_state.students:
-        evals = get_approved_evaluations_for_student(s["id"])
-        if evals:
-            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-            if avg_score >= 50:
-                passed += 1
-            else:
-                failed += 1
-    stats["summary"]["passed"] = passed
-    stats["summary"]["failed"] = failed
-    stats["summary"]["pass_rate"] = round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0
-    
-    # Teacher workload
-    teacher_workload = {}
-    for t in st.session_state.teachers:
-        teacher_id = t.get("id")
-        batch_count = len([b for b in st.session_state.batches if b.get("teacher_id") == teacher_id])
-        eval_count = len([e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id])
-        teacher_workload[t.get("name", "Unknown")] = {
-            "batches": batch_count,
-            "evaluations": eval_count
-        }
-    stats["teacher_analysis"]["workload"] = teacher_workload
-    
-    # Section performance
-    section_perf = {}
-    for s in st.session_state.students:
-        section = s.get("section", "Unknown")
-        grade = s.get("grade", "Unknown")
-        key = f"{grade} - Section {section}"
-        evals = get_approved_evaluations_for_student(s["id"])
-        if evals:
-            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-            if key not in section_perf:
-                section_perf[key] = []
-            section_perf[key].append(avg_score)
-    
-    section_avg = {}
-    for key, scores in section_perf.items():
-        if scores:
-            section_avg[key] = round(sum(scores) / len(scores), 2)
-    stats["grade_analysis"]["section_performance"] = section_avg
-    
-    # Generate timestamp
-    stats["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    return stats
-
+# ---- CREATE STATISTICS CHARTS (Fixed) ----
 def create_statistics_charts(stats):
     """Create interactive Plotly charts for statistics."""
     if not PLOTLY_AVAILABLE:
@@ -1771,90 +1898,99 @@ def create_statistics_charts(stats):
     
     # 3. Subject Performance Bar Chart
     subject_avg = stats["subject_analysis"]["averages"]
-    sorted_subjects = sorted(subject_avg.items(), key=lambda x: x[1], reverse=True)
-    colors = ['#34A853' if s >= 70 else '#FBBC04' if s >= 50 else '#EA4335' for _, s in sorted_subjects]
-    fig3 = go.Figure(data=[go.Bar(
-        x=[s[0] for s in sorted_subjects],
-        y=[s[1] for s in sorted_subjects],
-        marker=dict(
-            color=colors,
-            line=dict(color='rgba(0,0,0,0.1)', width=1)
-        ),
-        text=[f"{s[1]}%" for s in sorted_subjects],
-        textposition='outside'
-    )])
-    fig3.update_layout(
-        title="Subject Performance Averages",
-        xaxis_title="Subject",
-        yaxis_title="Average Score (%)",
-        height=450,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=14),
-        showlegend=False
-    )
-    fig3.update_yaxis(range=[0, 105])
-    charts["subject_performance"] = fig3
+    if subject_avg:
+        sorted_subjects = sorted(subject_avg.items(), key=lambda x: x[1], reverse=True)
+        colors = ['#34A853' if s >= 70 else '#FBBC04' if s >= 50 else '#EA4335' for _, s in sorted_subjects]
+        fig3 = go.Figure(data=[go.Bar(
+            x=[s[0] for s in sorted_subjects],
+            y=[s[1] for s in sorted_subjects],
+            marker=dict(
+                color=colors,
+                line=dict(color='rgba(0,0,0,0.1)', width=1)
+            ),
+            text=[f"{s[1]}%" for s in sorted_subjects],
+            textposition='outside'
+        )])
+        fig3.update_layout(
+            title="Subject Performance Averages",
+            xaxis_title="Subject",
+            yaxis_title="Average Score (%)",
+            height=450,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(size=14),
+            showlegend=False,
+            yaxis=dict(range=[0, 105])
+        )
+        charts["subject_performance"] = fig3
+    else:
+        charts["subject_performance"] = None
     
     # 4. Grade-wise Performance with Min/Max
     grade_avg = stats["grade_analysis"]["averages"]
     grade_min = stats["grade_analysis"]["min"]
     grade_max = stats["grade_analysis"]["max"]
-    sorted_grade_names = sorted(grade_avg.keys())
-    
-    fig4 = go.Figure()
-    fig4.add_trace(go.Bar(
-        name='Average',
-        x=sorted_grade_names,
-        y=[grade_avg[g] for g in sorted_grade_names],
-        marker_color='#1A73E8',
-        text=[f"{grade_avg[g]}%" for g in sorted_grade_names],
-        textposition='outside'
-    ))
-    fig4.add_trace(go.Scatter(
-        name='Min-Max Range',
-        x=sorted_grade_names + sorted_grade_names[::-1],
-        y=[grade_min[g] for g in sorted_grade_names] + [grade_max[g] for g in sorted_grade_names[::-1]],
-        fill='toself',
-        fillcolor='rgba(26, 115, 232, 0.2)',
-        line=dict(color='rgba(26, 115, 232, 0.5)'),
-        showlegend=True
-    ))
-    fig4.update_layout(
-        title="Grade-wise Performance with Min-Max Range",
-        xaxis_title="Grade",
-        yaxis_title="Score (%)",
-        height=400,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=14),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    fig4.update_yaxis(range=[0, 105])
-    charts["grade_performance"] = fig4
+    if grade_avg:
+        sorted_grade_names = sorted(grade_avg.keys())
+        
+        fig4 = go.Figure()
+        fig4.add_trace(go.Bar(
+            name='Average',
+            x=sorted_grade_names,
+            y=[grade_avg[g] for g in sorted_grade_names],
+            marker_color='#1A73E8',
+            text=[f"{grade_avg[g]}%" for g in sorted_grade_names],
+            textposition='outside'
+        ))
+        fig4.add_trace(go.Scatter(
+            name='Min-Max Range',
+            x=sorted_grade_names + sorted_grade_names[::-1],
+            y=[grade_min[g] for g in sorted_grade_names] + [grade_max[g] for g in sorted_grade_names[::-1]],
+            fill='toself',
+            fillcolor='rgba(26, 115, 232, 0.2)',
+            line=dict(color='rgba(26, 115, 232, 0.5)'),
+            showlegend=True
+        ))
+        fig4.update_layout(
+            title="Grade-wise Performance with Min-Max Range",
+            xaxis_title="Grade",
+            yaxis_title="Score (%)",
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(size=14),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            yaxis=dict(range=[0, 105])
+        )
+        charts["grade_performance"] = fig4
+    else:
+        charts["grade_performance"] = None
     
     # 5. Pass/Fail Stacked Bar Chart
     pass_fail_data = stats["grade_analysis"]["pass_fail"]
-    grade_names = sorted(pass_fail_data.keys())
-    passed_data = [pass_fail_data[g]["passed"] for g in grade_names]
-    failed_data = [pass_fail_data[g]["failed"] for g in grade_names]
-    
-    fig5 = go.Figure(data=[
-        go.Bar(name='Passed', x=grade_names, y=passed_data, marker_color='#34A853'),
-        go.Bar(name='Failed', x=grade_names, y=failed_data, marker_color='#EA4335')
-    ])
-    fig5.update_layout(
-        title="Pass/Fail Distribution by Grade",
-        xaxis_title="Grade",
-        yaxis_title="Number of Students",
-        height=400,
-        barmode='stack',
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=14),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    charts["pass_fail"] = fig5
+    if pass_fail_data:
+        grade_names = sorted(pass_fail_data.keys())
+        passed_data = [pass_fail_data[g]["passed"] for g in grade_names]
+        failed_data = [pass_fail_data[g]["failed"] for g in grade_names]
+        
+        fig5 = go.Figure(data=[
+            go.Bar(name='Passed', x=grade_names, y=passed_data, marker_color='#34A853'),
+            go.Bar(name='Failed', x=grade_names, y=failed_data, marker_color='#EA4335')
+        ])
+        fig5.update_layout(
+            title="Pass/Fail Distribution by Grade",
+            xaxis_title="Grade",
+            yaxis_title="Number of Students",
+            height=400,
+            barmode='stack',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(size=14),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        charts["pass_fail"] = fig5
+    else:
+        charts["pass_fail"] = None
     
     # 6. Section Performance
     section_perf = stats["grade_analysis"]["section_performance"]
@@ -1879,9 +2015,9 @@ def create_statistics_charts(stats):
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(size=14),
-            showlegend=False
+            showlegend=False,
+            yaxis=dict(range=[0, 105])
         )
-        fig6.update_yaxis(range=[0, 105])
         charts["section_performance"] = fig6
     else:
         charts["section_performance"] = None
@@ -3531,28 +3667,34 @@ def show_deep_statistics():
     if PLOTLY_AVAILABLE and charts:
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(charts['gender_pie'], use_container_width=True)
+            if charts.get('gender_pie'):
+                st.plotly_chart(charts['gender_pie'], use_container_width=True)
         with col2:
-            st.plotly_chart(charts['pass_rate_gauge'], use_container_width=True)
+            if charts.get('pass_rate_gauge'):
+                st.plotly_chart(charts['pass_rate_gauge'], use_container_width=True)
         
-        st.plotly_chart(charts['grade_distribution'], use_container_width=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(charts['subject_performance'], use_container_width=True)
-        with col2:
-            st.plotly_chart(charts['grade_performance'], use_container_width=True)
+        if charts.get('grade_distribution'):
+            st.plotly_chart(charts['grade_distribution'], use_container_width=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            st.plotly_chart(charts['pass_fail'], use_container_width=True)
+            if charts.get('subject_performance'):
+                st.plotly_chart(charts['subject_performance'], use_container_width=True)
         with col2:
-            if charts['section_performance']:
+            if charts.get('grade_performance'):
+                st.plotly_chart(charts['grade_performance'], use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if charts.get('pass_fail'):
+                st.plotly_chart(charts['pass_fail'], use_container_width=True)
+        with col2:
+            if charts.get('section_performance'):
                 st.plotly_chart(charts['section_performance'], use_container_width=True)
             else:
                 st.info("No section performance data available.")
         
-        if charts['teacher_workload']:
+        if charts.get('teacher_workload'):
             st.plotly_chart(charts['teacher_workload'], use_container_width=True)
     else:
         st.info("📊 Charts unavailable. Please install plotly to see visualizations.")
