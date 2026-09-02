@@ -4127,7 +4127,7 @@ def show_admin_panel():
                         st.error(f"❌ Error adding teacher: {e}")
                 else:
                     st.error("❌ Please enter teacher name.")
-
+                    
         st.markdown("---")
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
@@ -4139,9 +4139,8 @@ def show_admin_panel():
                 is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
                 added_date = teacher.get('added', 'N/A')
                 
-                # Build the teacher card HTML
-                html_card = f"""
-                <div class="teacher-card">
+                # Build the teacher card HTML as a single string
+                html_card = f"""<div class="teacher-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
                         <div>
                             <h4>👨‍🏫 {teacher['name']}</h4>
@@ -4159,19 +4158,11 @@ def show_admin_panel():
                         <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
                         <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
                     </div>
-                """
-                
-                # Add admin subjects if they exist
-                if admin_subjects:
-                    html_card += f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>'
-                
-                # Add the added date
-                html_card += f"""
+                    {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
                     <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
                         <b>📅 Added:</b> {added_date}
                     </div>
-                </div>
-                """
+                </div>"""
                 
                 st.markdown(html_card, unsafe_allow_html=True)
 
