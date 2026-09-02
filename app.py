@@ -3576,14 +3576,16 @@ def show_teacher_panel():
         key="batch_editor"
     )
     
-    for idx, row in edited_df.iterrows():
+        for idx, row in edited_df.iterrows():
         total_weighted = 0
         total_weight = 0
         for c in components:
             score = row.get(c["name"], 0)
             total_weighted += score * weights[c["name"]]
             total_weight += weights[c["name"]]
-        edited_df.at[idx, "overall"] = round(total_weighted / total_weight, 2) if total_weight > 0 else 0
+        # Convert to float explicitly to avoid dtype issues
+        overall_value = round(total_weighted / total_weight, 2) if total_weight > 0 else 0.0
+        edited_df.at[idx, "overall"] = float(overall_value)
     
     remarks = st.text_area("Batch Remarks / Comments", value=remarks)
     
