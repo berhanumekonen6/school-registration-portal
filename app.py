@@ -259,6 +259,20 @@ def get_supabase_admin():
         st.session_state.supabase_admin = init_supabase_admin()
     return st.session_state.supabase_admin
 
+# ---- Helper function to safely parse JSON fields ----
+def safe_json_loads(value, default=None):
+    """Safely parse JSON data, handling both strings and already-parsed objects."""
+    if value is None:
+        return default if default is not None else []
+    if isinstance(value, (list, dict)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except:
+            return default if default is not None else []
+    return default if default is not None else []
+
 # ---- Data Load with Error Handling ----
 def load_all_data():
     supabase = get_supabase()
@@ -348,7 +362,7 @@ def load_all_data():
     except Exception as e:
         error_msg = str(e)
         if "PGRST205" in error_msg or "Could not find the table" in error_msg:
-            st.warning("⚠️ Subject Admin Assignments table not found. Please create it in Supabase.")
+            # Table doesn't exist - create empty list
             st.session_state.subject_admin_assignments = []
         else:
             st.warning(f"Could not load subject_admin_assignments: {e}")
@@ -3468,7 +3482,7 @@ def show_teacher_panel():
     teacher_id = teacher["id"]
     teacher_name = teacher["name"]
     teacher_subject = teacher.get("subject", "")
-    assignments = json.loads(teacher.get("assignments", "[]"))
+    assignments = safe_json_loads(teacher.get("assignments", "[]"))
     
     if not assignments:
         st.warning("No grade/section assignments. Contact admin.")
@@ -4051,7 +4065,7 @@ def show_admin_panel():
                             "profile_photo": ""
                         }).execute()
                         
-                        # Create teacher record
+                        # Create teacher record with admin_subjects as JSON array
                         supabase_admin.table("teachers").insert({
                             "id": teacher_id,
                             "name": teacher_name,
@@ -4061,31 +4075,26 @@ def show_admin_panel():
                             "password": password,
                             "added": added_time,
                             "assignments": json.dumps(st.session_state.assignments_list),
-                            "admin_subjects": json.dumps(subject_admin_subjects)
+                            "admin_subjects": json.dumps(subject_admin_subjects) if subject_admin_subjects else json.dumps([])
                         }).execute()
                         
                         # If subject admin, create subject_admin_assignments entries
                         if is_subject_admin and subject_admin_subjects:
                             for subject in subject_admin_subjects:
-                                # Check if assignment already exists
-                                existing_assignment = None
-                                for sa in st.session_state.subject_admin_assignments:
-                                    if sa.get('teacher_id') == teacher_id and sa.get('subject') == subject:
-                                        existing_assignment = sa
-                                        break
-                                
                                 assignment_data = {
+                                    "id": str(uuid.uuid4())[:8],
                                     "teacher_id": teacher_id,
                                     "teacher_name": teacher_name,
                                     "subject": subject,
                                     "grade_range": []  # Empty means all grades
                                 }
-                                
-                                if existing_assignment:
-                                    supabase_admin.table("subject_admin_assignments").update(assignment_data).eq("id", existing_assignment.get("id")).execute()
-                                else:
-                                    assignment_data["id"] = str(uuid.uuid4())[:8]
+                                try:
                                     supabase_admin.table("subject_admin_assignments").insert(assignment_data).execute()
+                                except Exception as e:
+                                    if "PGRST204" in str(e) or "PGRST205" in str(e):
+                                        st.warning(f"⚠️ Subject Admin Assignments table not found. Please create it in Supabase.")
+                                    else:
+                                        st.warning(f"Could not create subject admin assignment: {e}")
                         
                         load_all_data()
                         add_notification(f"👨‍🏫 New {'Subject Admin' if is_subject_admin else 'Teacher'} added: {teacher_name}", "success")
@@ -4123,10 +4132,11 @@ def show_admin_panel():
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
             for teacher in st.session_state.teachers:
-                assignments = json.loads(teacher.get("assignments", "[]"))
+                assignments = safe_json_loads(teacher.get("assignments", "[]"))
                 assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
                 teacher_password = teacher.get('password', 'N/A')
-                admin_subjects = json.loads(teacher.get("admin_subjects", "[]"))
+                # Use safe_json_loads instead of json.loads to handle already-parsed data
+                admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
                 is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
                 
                 st.markdown(f"""
