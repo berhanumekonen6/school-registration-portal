@@ -38,7 +38,6 @@ DEFAULT_REMARKS = "በአጠቃላይ የተማሪዎች ውጤት ጥሩ ነው
 # ===================================================================
 
 GRADE_ASSESSMENT_CONFIG = {
-    # Grades 1-3: 9 components
     "Grade 1": {
         "components": [
             {"name": "ሙከራ (Test 1)", "weight": 5, "max_score": 5},
@@ -78,7 +77,6 @@ GRADE_ASSESSMENT_CONFIG = {
             {"name": "ማጠቃለያ ፈተና (Final Exam)", "weight": 30, "max_score": 30}
         ]
     },
-    # Grades 4-6: 9 components with different weights
     "Grade 4": {
         "components": [
             {"name": "ሙከራ (Test 1)", "weight": 5, "max_score": 5},
@@ -118,7 +116,6 @@ GRADE_ASSESSMENT_CONFIG = {
             {"name": "ማጠቃለያ ፈተና (Final Exam)", "weight": 40, "max_score": 40}
         ]
     },
-    # Grade 7-8: 6 components
     "Grade 7": {
         "components": [
             {"name": "Quiz", "weight": 5, "max_score": 5},
@@ -139,7 +136,6 @@ GRADE_ASSESSMENT_CONFIG = {
             {"name": "Final-Exam", "weight": 60, "max_score": 60}
         ]
     },
-    # Grades 9-12: 7 components
     "Grade 9": {
         "components": [
             {"name": "Quiz 1", "weight": 5, "max_score": 5},
@@ -191,21 +187,16 @@ GRADE_ASSESSMENT_CONFIG = {
 # ===================================================================
 
 GRADE_SUBJECTS = {
-    # Grades 1-4
     "Grade 1": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
     "Grade 2": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
     "Grade 3": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
     "Grade 4": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
-    # Grades 5-6
     "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
-    # Grades 7-8
     "Grade 7": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
     "Grade 8": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
-    # Grades 9-10
     "Grade 9": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
     "Grade 10": ["English", "Mathematics", "Physics", "Chemistry", "Biology", "Geography", "History", "Citizenship Education (CE)", "Information Technology (IT)", "አማርኛ", "Health and Physical Education (HPE)"],
-    # Grades 11-12
     "Grade 11": ["Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English", "Information Technology (IT)", "Citizenship Education / Civics", "Geography", "History", "Economics", "General Business"],
     "Grade 12": ["Biology", "Chemistry", "Physics", "Technical Drawing", "Mathematics", "English", "Information Technology (IT)", "Citizenship Education / Civics", "Geography", "History", "Economics", "General Business"],
 }
@@ -342,7 +333,7 @@ def load_all_data():
         st.warning(f"Could not load penalty_log: {e}")
         st.session_state.penalty_log = []
     
-    # Load homeroom_assignments (with error handling for missing table)
+    # Load homeroom_assignments
     try:
         res = supabase.table("homeroom_assignments").select("*").execute()
         st.session_state.homeroom_assignments = res.data if res.data else []
@@ -355,14 +346,13 @@ def load_all_data():
             st.warning(f"Could not load homeroom_assignments: {e}")
             st.session_state.homeroom_assignments = []
     
-    # Load subject_admin_assignments (with error handling for missing table)
+    # Load subject_admin_assignments
     try:
         res = supabase.table("subject_admin_assignments").select("*").execute()
         st.session_state.subject_admin_assignments = res.data if res.data else []
     except Exception as e:
         error_msg = str(e)
         if "PGRST205" in error_msg or "Could not find the table" in error_msg:
-            # Table doesn't exist - create empty list
             st.session_state.subject_admin_assignments = []
         else:
             st.warning(f"Could not load subject_admin_assignments: {e}")
@@ -370,26 +360,21 @@ def load_all_data():
 
 # ---- Assessment Helper Functions ----
 def get_assessment_config(grade):
-    """Get the assessment components for a given grade."""
     return GRADE_ASSESSMENT_CONFIG.get(grade, GRADE_ASSESSMENT_CONFIG["Grade 1"])
 
 def get_component_names(grade):
-    """Get just the names of assessment components for a grade."""
     config = get_assessment_config(grade)
     return [c["name"] for c in config["components"]]
 
 def get_component_weights(grade):
-    """Get a dict of component name -> weight for a grade."""
     config = get_assessment_config(grade)
     return {c["name"]: c["weight"] for c in config["components"]}
 
 def get_component_max_scores(grade):
-    """Get a dict of component name -> max_score for a grade."""
     config = get_assessment_config(grade)
     return {c["name"]: c["max_score"] for c in config["components"]}
 
 def compute_overall_from_components(scores_dict, grade):
-    """Compute overall score from component scores using grade weights."""
     weights = get_component_weights(grade)
     total_weighted = 0
     total_weight = 0
@@ -435,7 +420,6 @@ def is_username_taken(username):
 
 # ---- Profile Photo Helpers ----
 def save_profile_photo(username, photo_bytes):
-    """Save profile photo to Supabase."""
     if not photo_bytes:
         return ""
     try:
@@ -460,12 +444,10 @@ def save_profile_photo(username, photo_bytes):
         return ""
 
 def get_profile_photo(username):
-    """Get profile photo for a user."""
     user_data = st.session_state.user_db.get(username, {})
     return user_data.get("profile_photo", "")
 
 def display_profile_photo(username, size=80):
-    """Display profile photo as HTML image."""
     photo_data = get_profile_photo(username)
     if photo_data and len(photo_data) > 10:
         return f'<img src="data:image/png;base64,{photo_data}" style="width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;border:2px solid #1A73E8;">'
@@ -475,7 +457,6 @@ def display_profile_photo(username, size=80):
 
 # ---- Student Profile Photo Helpers ----
 def save_student_photo(student_id, photo_bytes):
-    """Save student profile photo with error handling."""
     if not photo_bytes:
         return ""
     try:
@@ -502,14 +483,12 @@ def save_student_photo(student_id, photo_bytes):
         return ""
 
 def get_student_photo(student_id):
-    """Get student profile photo."""
     for s in st.session_state.students:
         if s.get("id") == student_id:
             return s.get("profile_photo", "")
     return ""
 
 def display_student_photo(student_id, size=80):
-    """Display student profile photo."""
     photo_data = get_student_photo(student_id)
     if photo_data and len(photo_data) > 10:
         return f'<img src="data:image/png;base64,{photo_data}" style="width:{size}px;height:{size}px;border-radius:50%;object-fit:cover;border:2px solid #34A853;">'
@@ -518,19 +497,16 @@ def display_student_photo(student_id, size=80):
 
 # ---- Student Login Functions ----
 def create_student_user(student_id, student_name):
-    """Create a user account for a student and store password."""
     username = student_id
     password = generate_random_password(8)
     hashed_pw = hash_password(password)
     
     supabase_admin = get_supabase_admin()
     try:
-        # Check if user already exists
         res = supabase_admin.table("users").select("username").eq("username", username).execute()
         if res.data:
             return None, "Student user already exists"
         
-        # Create user account
         supabase_admin.table("users").insert({
             "username": username,
             "password": hashed_pw,
@@ -539,12 +515,10 @@ def create_student_user(student_id, student_name):
             "profile_photo": ""
         }).execute()
         
-        # Store password in student record for admin reference
         try:
             supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
         except Exception as e:
             if "PGRST204" in str(e):
-                # Column doesn't exist - try to add it
                 try:
                     supabase_admin.execute("ALTER TABLE students ADD COLUMN IF NOT EXISTS password TEXT DEFAULT '';")
                     supabase_admin.table("students").update({"password": password}).eq("id", student_id).execute()
@@ -553,29 +527,23 @@ def create_student_user(student_id, student_name):
             else:
                 pass
         
-        # Store in session state for display
         if 'student_passwords' not in st.session_state:
             st.session_state.student_passwords = {}
         st.session_state.student_passwords[student_id] = password
         
-        # Reload data to refresh user_db
         load_all_data()
-        
         return password, "Student account created successfully"
     except Exception as e:
         return None, f"Error creating student account: {e}"
 
 def reset_student_password(student_id):
-    """Reset student password and update both tables."""
     new_password = generate_random_password(8)
     hashed_pw = hash_password(new_password)
     
     supabase_admin = get_supabase_admin()
     try:
-        # Update users table
         supabase_admin.table("users").update({"password": hashed_pw}).eq("username", student_id).execute()
         
-        # Update students table
         try:
             supabase_admin.table("students").update({"password": new_password}).eq("id", student_id).execute()
         except Exception as e:
@@ -588,31 +556,24 @@ def reset_student_password(student_id):
             else:
                 pass
         
-        # Update session state
         if 'student_passwords' not in st.session_state:
             st.session_state.student_passwords = {}
         st.session_state.student_passwords[student_id] = new_password
         
-        # Reload data to refresh user_db
         load_all_data()
-        
         return new_password
     except Exception as e:
         return None
 
 def get_student_password(student_id):
-    """Get student password from session or student record."""
-    # Check session first
     if 'student_passwords' in st.session_state:
         if student_id in st.session_state.student_passwords:
             return st.session_state.student_passwords[student_id]
     
-    # Check student record
     for s in st.session_state.students:
         if s.get("id") == student_id:
             password = s.get("password", "")
             if password:
-                # Cache in session
                 if 'student_passwords' not in st.session_state:
                     st.session_state.student_passwords = {}
                 st.session_state.student_passwords[student_id] = password
@@ -622,15 +583,12 @@ def get_student_password(student_id):
     return "Not set"
 
 def get_student_by_username(username):
-    """Get student by username (student ID)."""
     for s in st.session_state.students:
         if s.get("id") == username:
             return s
     return None
 
 def login_user(username, password):
-    """Login user with proper error handling."""
-    # Admin login
     if username == "admin" and password == "adminbb":
         st.session_state.logged_in = True
         st.session_state.current_user = "admin"
@@ -639,14 +597,10 @@ def login_user(username, password):
         return True, "✅ Login successful!"
     
     try:
-        # Get fresh data from database
         supabase = get_supabase()
-        
-        # Check if user exists
         res = supabase.table("users").select("*").eq("username", username).execute()
         
         if not res.data:
-            # Check if this is a student ID that exists in students table
             student_exists = False
             for s in st.session_state.students:
                 if s.get("id") == username:
@@ -662,12 +616,10 @@ def login_user(username, password):
         stored_hash = user_data["password"]
         
         if verify_password(password, stored_hash):
-            # Update session state
             st.session_state.logged_in = True
             st.session_state.current_user = username
             st.session_state.current_role = user_data["role"]
             
-            # Update user_db in session
             if username not in st.session_state.user_db:
                 st.session_state.user_db[username] = {
                     "password": stored_hash,
@@ -773,15 +725,6 @@ def is_registration_open():
     now = datetime.now()
     return period["start"] <= now <= period["end"]
 
-def check_action_allowed(action_name, user_name="Unknown"):
-    if is_registration_open():
-        return True, None
-    else:
-        period = st.session_state.registration_period
-        reason = f"Attempted {action_name} outside allowed time. Allowed: {period['start'].strftime('%B %d, %Y %I:%M %p')} - {period['end'].strftime('%B %d, %Y %I:%M %p')}"
-        log_penalty(user_name, action_name, reason)
-        return False, reason
-
 # ---- Helper Functions ----
 def get_student_by_id(student_id):
     for s in st.session_state.students:
@@ -802,7 +745,6 @@ def get_teacher_by_username(username):
     return None
 
 def get_batches_for_subject_admin(admin_id):
-    """Get batches for a specific subject admin."""
     return [b for b in st.session_state.batches if b.get("subject_admin_id") == admin_id and b.get("status") == "pending"]
 
 def get_batches_awaiting_final_approval():
@@ -814,10 +756,8 @@ def get_approved_evaluations_for_student(student_id):
     return [e for e in st.session_state.evaluations if e.get("student_id") == student_id and e.get("status") == "approved"]
 
 def get_subject_admin(subject, grade):
-    """Get the subject admin for a given subject and grade."""
     for assignment in st.session_state.get('subject_admin_assignments', []):
         if assignment.get('subject') == subject:
-            # Check if this admin covers this grade
             grade_range = assignment.get('grade_range', [])
             if not grade_range or grade in grade_range:
                 return assignment.get('teacher_id')
@@ -837,7 +777,6 @@ def get_grade_display(grade):
         return grade
 
 def get_subject_mapping_for_admin(teacher_id):
-    """Get all subject assignments for a subject admin."""
     assignments = []
     for sa in st.session_state.get('subject_admin_assignments', []):
         if sa.get('teacher_id') == teacher_id:
@@ -846,7 +785,6 @@ def get_subject_mapping_for_admin(teacher_id):
 
 # ---- STATISTICAL FUNCTIONS ----
 def generate_school_statistics():
-    """Generate basic school statistics for the dashboard."""
     total_students = len(st.session_state.students)
     total_teachers = len(st.session_state.teachers)
     total_evaluations = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
@@ -936,9 +874,7 @@ def generate_school_statistics():
     }
 
 def generate_statistics_report():
-    """Generate a formatted HTML report for office use."""
     stats = generate_school_statistics()
-    
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -1073,8 +1009,6 @@ def generate_statistics_report():
 
 # ---- DEEP STATISTICAL ANALYSIS FUNCTIONS ----
 def generate_deep_statistics():
-    """Generate comprehensive deep statistics with all metrics."""
-    
     stats = {
         "student_stats": {},
         "performance_metrics": {},
@@ -1086,34 +1020,29 @@ def generate_deep_statistics():
         "summary": {}
     }
     
-    # Basic counts
     stats["summary"]["total_students"] = len(st.session_state.students)
     stats["summary"]["total_teachers"] = len(st.session_state.teachers)
     stats["summary"]["total_evaluations"] = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
     stats["summary"]["total_batches"] = len(st.session_state.batches)
     stats["summary"]["pending_approvals"] = len(get_batches_awaiting_final_approval())
     
-    # Gender distribution
     male = len([s for s in st.session_state.students if s.get("gender") == "M"])
     female = len([s for s in st.session_state.students if s.get("gender") == "F"])
     other = len([s for s in st.session_state.students if s.get("gender") not in ["M", "F"]])
     stats["demographics"]["gender"] = {"Male": male, "Female": female, "Other": other}
     
-    # Grade distribution
     grade_dist = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
         grade_dist[grade] = grade_dist.get(grade, 0) + 1
     stats["demographics"]["grade_distribution"] = grade_dist
     
-    # Section distribution
     section_dist = {}
     for s in st.session_state.students:
         section = s.get("section", "Unknown")
         section_dist[section] = section_dist.get(section, 0) + 1
     stats["demographics"]["section_distribution"] = section_dist
     
-    # Subject performance
     subject_scores = {}
     for e in st.session_state.evaluations:
         if e.get("status") == "approved":
@@ -1138,7 +1067,6 @@ def generate_deep_statistics():
     stats["subject_analysis"]["max"] = subject_max
     stats["subject_analysis"]["counts"] = subject_count
     
-    # Grade-wise performance
     grade_perf = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
@@ -1161,7 +1089,6 @@ def generate_deep_statistics():
     stats["grade_analysis"]["min"] = grade_min
     stats["grade_analysis"]["max"] = grade_max
     
-    # Pass/Fail by grade
     pass_fail = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
@@ -1176,7 +1103,6 @@ def generate_deep_statistics():
                 pass_fail[grade]["failed"] += 1
     stats["grade_analysis"]["pass_fail"] = pass_fail
     
-    # Overall pass rate
     passed = 0
     failed = 0
     for s in st.session_state.students:
@@ -1191,7 +1117,6 @@ def generate_deep_statistics():
     stats["summary"]["failed"] = failed
     stats["summary"]["pass_rate"] = round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0
     
-    # Teacher workload
     teacher_workload = {}
     for t in st.session_state.teachers:
         teacher_id = t.get("id")
@@ -1203,7 +1128,6 @@ def generate_deep_statistics():
         }
     stats["teacher_analysis"]["workload"] = teacher_workload
     
-    # Section performance
     section_perf = {}
     for s in st.session_state.students:
         section = s.get("section", "Unknown")
@@ -1222,20 +1146,17 @@ def generate_deep_statistics():
             section_avg[key] = round(sum(scores) / len(scores), 2)
     stats["grade_analysis"]["section_performance"] = section_avg
     
-    # Generate timestamp
     stats["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     return stats
 
 # ---- CREATE STATISTICS CHARTS ----
 def create_statistics_charts(stats):
-    """Create interactive Plotly charts for statistics."""
     if not PLOTLY_AVAILABLE:
         return {}
     
     charts = {}
     
-    # 1. Gender Distribution Pie Chart
     gender_data = stats["demographics"]["gender"]
     fig1 = go.Figure(data=[go.Pie(
         labels=list(gender_data.keys()),
@@ -1255,7 +1176,6 @@ def create_statistics_charts(stats):
     )
     charts["gender_pie"] = fig1
     
-    # 2. Grade Distribution Bar Chart
     grade_data = stats["demographics"]["grade_distribution"]
     sorted_grades = sorted(grade_data.keys())
     fig2 = go.Figure(data=[go.Bar(
@@ -1280,7 +1200,6 @@ def create_statistics_charts(stats):
     )
     charts["grade_distribution"] = fig2
     
-    # 3. Subject Performance Bar Chart
     subject_avg = stats["subject_analysis"]["averages"]
     if subject_avg:
         sorted_subjects = sorted(subject_avg.items(), key=lambda x: x[1], reverse=True)
@@ -1310,7 +1229,6 @@ def create_statistics_charts(stats):
     else:
         charts["subject_performance"] = None
     
-    # 4. Grade-wise Performance with Min/Max
     grade_avg = stats["grade_analysis"]["averages"]
     grade_min = stats["grade_analysis"]["min"]
     grade_max = stats["grade_analysis"]["max"]
@@ -1350,7 +1268,6 @@ def create_statistics_charts(stats):
     else:
         charts["grade_performance"] = None
     
-    # 5. Pass/Fail Stacked Bar Chart
     pass_fail_data = stats["grade_analysis"]["pass_fail"]
     if pass_fail_data:
         grade_names = sorted(pass_fail_data.keys())
@@ -1376,7 +1293,6 @@ def create_statistics_charts(stats):
     else:
         charts["pass_fail"] = None
     
-    # 6. Section Performance
     section_perf = stats["grade_analysis"]["section_performance"]
     if section_perf:
         sorted_sections = sorted(section_perf.items(), key=lambda x: x[1], reverse=True)
@@ -1406,7 +1322,6 @@ def create_statistics_charts(stats):
     else:
         charts["section_performance"] = None
     
-    # 7. Teacher Workload
     workload = stats["teacher_analysis"]["workload"]
     if workload:
         teacher_names = list(workload.keys())
@@ -1432,7 +1347,6 @@ def create_statistics_charts(stats):
     else:
         charts["teacher_workload"] = None
     
-    # 8. Summary Statistics Cards (as a gauge chart for pass rate)
     fig8 = go.Figure(go.Indicator(
         mode="gauge+number+delta",
         value=stats["summary"]["pass_rate"],
@@ -1468,7 +1382,6 @@ def create_statistics_charts(stats):
     return charts
 
 def generate_deep_report_html(stats, charts):
-    """Generate a comprehensive HTML report with all charts embedded."""
     import base64
     import io
     
@@ -1482,7 +1395,6 @@ def generate_deep_report_html(stats, charts):
             except:
                 chart_images[name] = None
     
-    # Prepare data tables
     subject_table = ""
     for subject, avg in sorted(stats["subject_analysis"]["averages"].items(), key=lambda x: x[1], reverse=True):
         badge = "badge-excellent" if avg >= 70 else "badge-good" if avg >= 60 else "badge-average" if avg >= 50 else "badge-poor"
@@ -2341,7 +2253,6 @@ def get_grade_class(grade):
         return "english-grade"
 
 def get_student_rank(student_id, grade, section):
-    """Get student rank within their grade and section."""
     students_in_class = [s for s in st.session_state.students 
                          if s.get("grade") == grade and s.get("section") == section]
     if not students_in_class:
@@ -2361,7 +2272,6 @@ def get_student_rank(student_id, grade, section):
     return f"{rank}/{total}", rank, total
 
 def get_rankings_by_grade_section(grade, section):
-    """Get rankings for students in a specific grade and section."""
     students_in_class = [s for s in st.session_state.students 
                          if s.get("grade") == grade and s.get("section") == section]
     if not students_in_class:
@@ -2419,25 +2329,20 @@ def get_student_subject_scores(student_id, semester=None):
 
 # ---- DEEP STATISTICS SUMMARY ----
 def generate_deep_summary():
-    """Generate a comprehensive summary of the deep statistics in English and Amharic."""
     stats = generate_deep_statistics()
     
-    # Calculate key metrics
     total_students = stats['summary']['total_students']
     pass_rate = stats['summary']['pass_rate']
     passed = stats['summary']['passed']
     failed = stats['summary']['failed']
     
-    # Find best and worst subjects
     subject_avgs = stats['subject_analysis']['averages']
     best_subject = max(subject_avgs.items(), key=lambda x: x[1]) if subject_avgs else ("N/A", 0)
     worst_subject = min(subject_avgs.items(), key=lambda x: x[1]) if subject_avgs else ("N/A", 0)
     
-    # Grade with best performance
     grade_avgs = stats['grade_analysis']['averages']
     best_grade = max(grade_avgs.items(), key=lambda x: x[1]) if grade_avgs else ("N/A", 0)
     
-    # Gender distribution
     gender_data = stats['demographics']['gender']
     male = gender_data.get('Male', 0)
     female = gender_data.get('Female', 0)
@@ -2513,7 +2418,6 @@ def generate_deep_summary():
 
 # ---- PROFILE UPDATE ----
 def show_profile_update():
-    """Allow users to update their own username, password, and profile photo."""
     st.markdown("### 👤 My Profile Settings")
     
     current_username = st.session_state.current_user
@@ -2546,7 +2450,6 @@ def show_profile_update():
         st.markdown(f"**Username:** {current_username}")
         st.markdown(f"**Role:** {user_data.get('role', 'unknown').title()}")
         
-        # Show password (for admin only)
         if st.session_state.current_role == "admin":
             st.markdown(f"""
             <div class="credential-box">
@@ -3370,7 +3273,6 @@ def show_student_card_panel():
         grade_options = ["All"] + [f"Grade {i}" for i in range(1, 13)]
         selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="card_grade")
     with col2:
-        # Get sections for selected grade
         if selected_grade != "All":
             sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == selected_grade]))
             section_options = ["All"] + sections
@@ -3382,7 +3284,6 @@ def show_student_card_panel():
         semester_options = ["Semester I", "Semester II", "Semester III"]
         selected_semester = st.selectbox("Semester", semester_options, index=2, key="card_semester")
     
-    # Filter students
     filtered_students = st.session_state.students
     if selected_grade != "All":
         filtered_students = [s for s in filtered_students if s.get("grade") == selected_grade]
@@ -3415,7 +3316,6 @@ def show_subject_admin_panel():
         st.error("Subject admin profile not found.")
         return
     
-    # Show which subjects this admin manages
     admin_assignments = get_subject_mapping_for_admin(teacher["id"])
     if admin_assignments:
         st.markdown("#### 📚 Subjects You Administer:")
@@ -3441,7 +3341,6 @@ def show_subject_admin_panel():
         </div>
         """, unsafe_allow_html=True)
         
-        # Show student scores preview
         if batch.get('students'):
             with st.expander("📊 View Student Scores"):
                 preview_data = []
@@ -3501,7 +3400,6 @@ def show_teacher_panel():
     assigned_sections = [a["section"] for a in semester_assignments if a["grade"] == selected_grade]
     selected_section = st.selectbox("📚 Select Section", assigned_sections, key="section_selector")
     
-    # Get assessment config for this grade
     assessment_config = get_assessment_config(selected_grade)
     components = assessment_config["components"]
     weights = {c["name"]: c["weight"] for c in components}
@@ -3547,12 +3445,15 @@ def show_teacher_panel():
             student_entry = {"student_id": s["id"], "student_name": s["name"]}
             for c in components:
                 student_entry[c["name"]] = 0
-            student_entry["overall"] = 0
+            student_entry["overall"] = 0.0
             student_data.append(student_entry)
         remarks = DEFAULT_REMARKS
     
     st.markdown("#### ✏️ Enter Scores")
     df_edit = pd.DataFrame(student_data)
+    
+    if "overall" in df_edit.columns:
+        df_edit["overall"] = df_edit["overall"].astype(float)
     
     col_config = {
         "student_id": st.column_config.TextColumn("ID", disabled=True),
@@ -3576,20 +3477,19 @@ def show_teacher_panel():
         key="batch_editor"
     )
     
-        for idx, row in edited_df.iterrows():
+    # Calculate overall scores - FIXED INDENTATION
+    for idx, row in edited_df.iterrows():
         total_weighted = 0
         total_weight = 0
         for c in components:
             score = row.get(c["name"], 0)
             total_weighted += score * weights[c["name"]]
             total_weight += weights[c["name"]]
-        # Convert to float explicitly to avoid dtype issues
         overall_value = round(total_weighted / total_weight, 2) if total_weight > 0 else 0.0
         edited_df.at[idx, "overall"] = float(overall_value)
     
     remarks = st.text_area("Batch Remarks / Comments", value=remarks)
     
-    # Find subject admin for this subject and grade
     subject_admin_id = get_subject_admin(teacher_subject, selected_grade)
     
     if subject_admin_id:
@@ -3755,9 +3655,8 @@ def show_login_page():
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ---- DEEP STATISTICS DISPLAY FUNCTION ----
+# ---- DEEP STATISTICS DISPLAY ----
 def show_deep_statistics():
-    """Display deep statistics with interactive charts."""
     st.markdown("## 📊 Deep Statistical Analysis")
     st.markdown("Comprehensive analysis with interactive charts and visualizations for office reporting.")
     
@@ -3769,7 +3668,6 @@ def show_deep_statistics():
         stats = generate_deep_statistics()
         charts = create_statistics_charts(stats) if PLOTLY_AVAILABLE else {}
     
-    # Display Summary
     summary = generate_deep_summary()
     with st.expander("📋 Executive Summary - English", expanded=True):
         st.markdown(summary['en'])
@@ -3778,7 +3676,6 @@ def show_deep_statistics():
     
     st.markdown("---")
     
-    # Summary Cards
     st.markdown("### 📈 Key Metrics")
     col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
     with col1:
@@ -3799,7 +3696,6 @@ def show_deep_statistics():
     
     st.markdown("---")
     
-    # Charts in two columns
     if PLOTLY_AVAILABLE and charts:
         col1, col2 = st.columns(2)
         with col1:
@@ -3837,7 +3733,6 @@ def show_deep_statistics():
     
     st.markdown("---")
     
-    # Download Report
     st.markdown("### 📄 Download Comprehensive Report")
     st.info("This report includes all charts, tables, and statistics in a professionally formatted HTML document.")
     
@@ -3850,7 +3745,6 @@ def show_deep_statistics():
         width='stretch'
     )
     
-    # Detailed Data Tables
     with st.expander("📋 View Detailed Data Tables"):
         st.markdown("#### Subject Performance Details")
         if stats["subject_analysis"]["averages"]:
@@ -3937,7 +3831,6 @@ def show_admin_panel():
         else:
             st.error("🔴 Registration is currently **CLOSED**")
         
-        # Admin Credentials Display
         st.markdown("---")
         st.markdown("#### 🔐 Admin Credentials")
         st.markdown(f"""
@@ -4019,7 +3912,6 @@ def show_admin_panel():
             teacher_subject = st.selectbox("Subject Taught *", ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
             
-            # --- NEW: Subject Admin Assignment ---
             st.markdown("---")
             st.markdown("##### 📚 Subject Admin Assignment (Optional)")
             st.caption("If assigned as a Subject Admin, this teacher will approve batches for the selected subject(s) across all grades.")
@@ -4055,10 +3947,8 @@ def show_admin_panel():
 
                     supabase_admin = get_supabase_admin()
                     try:
-                        # Determine role
                         user_role = "subject_admin" if is_subject_admin and subject_admin_subjects else "teacher"
                         
-                        # Create user account
                         supabase_admin.table("users").insert({
                             "username": username,
                             "password": hashed_pw,
@@ -4067,7 +3957,6 @@ def show_admin_panel():
                             "profile_photo": ""
                         }).execute()
                         
-                        # Create teacher record with admin_subjects as JSON array
                         supabase_admin.table("teachers").insert({
                             "id": teacher_id,
                             "name": teacher_name,
@@ -4080,7 +3969,6 @@ def show_admin_panel():
                             "admin_subjects": json.dumps(subject_admin_subjects) if subject_admin_subjects else json.dumps([])
                         }).execute()
                         
-                        # If subject admin, create subject_admin_assignments entries
                         if is_subject_admin and subject_admin_subjects:
                             for subject in subject_admin_subjects:
                                 assignment_data = {
@@ -4088,7 +3976,7 @@ def show_admin_panel():
                                     "teacher_id": teacher_id,
                                     "teacher_name": teacher_name,
                                     "subject": subject,
-                                    "grade_range": []  # Empty means all grades
+                                    "grade_range": []
                                 }
                                 try:
                                     supabase_admin.table("subject_admin_assignments").insert(assignment_data).execute()
@@ -4128,52 +4016,51 @@ def show_admin_panel():
                     except Exception as e:
                         st.error(f"❌ Error adding teacher: {e}")
                 else:
-         
                     st.error("❌ Please enter teacher name.")
+
+        # Teacher display section - FIXED INDENTATION
         st.markdown("---")
-if st.session_state.teachers:
-    st.markdown("#### 📋 All Teachers")
-    for teacher in st.session_state.teachers:
-        assignments = safe_json_loads(teacher.get("assignments", "[]"))
-        assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
-        teacher_password = teacher.get('password', 'N/A')
-        admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
-        is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
-        added_date = teacher.get('added', 'N/A')
-        
-        html_card = f"""
-        <div class="teacher-card">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
-                <div>
-                    <h4>👨‍🏫 {teacher['name']}</h4>
-                    <p><b>📚 Subject:</b> {teacher['subject']}</p>
-                    <p><b>📌 Assignments:</b> {assign_str}</p>
-                    <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
+        if st.session_state.teachers:
+            st.markdown("#### 📋 All Teachers")
+            for teacher in st.session_state.teachers:
+                assignments = safe_json_loads(teacher.get("assignments", "[]"))
+                assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
+                teacher_password = teacher.get('password', 'N/A')
+                admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
+                is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
+                added_date = teacher.get('added', 'N/A')
+                
+                html_card = f"""
+                <div class="teacher-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                        <div>
+                            <h4>👨‍🏫 {teacher['name']}</h4>
+                            <p><b>📚 Subject:</b> {teacher['subject']}</p>
+                            <p><b>📌 Assignments:</b> {assign_str}</p>
+                            <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="background:{'#E8F0FE' if is_admin else '#E6F4EA'};padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
+                                {'📋 Subject Admin' if is_admin else '👨‍🏫 Teacher'}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;background:#F8F9FA;padding:10px;border-radius:8px;">
+                        <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
+                        <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
+                    </div>
+                    {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
+                    <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
+                        <b>📅 Added:</b> {added_date}
+                    </div>
                 </div>
-                <div style="text-align:right;">
-                    <span style="background:{'#E8F0FE' if is_admin else '#E6F4EA'};padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
-                        {'📋 Subject Admin' if is_admin else '👨‍🏫 Teacher'}
-                    </span>
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;background:#F8F9FA;padding:10px;border-radius:8px;">
-                <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
-                <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
-            </div>
-            {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
-            <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
-                <b>📅 Added:</b> {added_date}
-            </div>
-        </div>
-        """
-        
-        # Try using st.html for better HTML rendering
-        try:
-            st.html(html_card)
-        except AttributeError:
-            # Fallback to st.markdown with unsafe_allow_html=True
-            st.markdown(html_card, unsafe_allow_html=True)
-        
+                """
+                
+                try:
+                    st.html(html_card)
+                except AttributeError:
+                    st.markdown(html_card, unsafe_allow_html=True)
+
     # Tab 4: Subjects
     with tab5:
         st.markdown("#### 📚 Manage Subjects")
@@ -4223,7 +4110,6 @@ if st.session_state.teachers:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Show student scores preview
                 if batch.get('students'):
                     with st.expander("📊 View Student Scores"):
                         preview_data = []
@@ -4285,7 +4171,6 @@ if st.session_state.teachers:
             grade_options = [f"Grade {i}" for i in range(1, 13)]
             selected_rank_grade = st.selectbox("Select Grade", grade_options, key="rank_grade")
         with col2:
-            # Get sections for selected grade
             sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == selected_rank_grade]))
             section_options = ["All"] + sections
             selected_rank_section = st.selectbox("Select Section", section_options, key="rank_section")
@@ -4301,7 +4186,6 @@ if st.session_state.teachers:
         else:
             rankings = get_rankings_by_grade_section(selected_rank_grade, selected_rank_section if selected_rank_section != "All" else students_to_rank[0].get("section", "A"))
             
-            # If "All" sections, combine all students
             if selected_rank_section == "All":
                 all_students = []
                 for s in students_to_rank:
@@ -4324,7 +4208,6 @@ if st.session_state.teachers:
             
             st.markdown(f"**📊 Rankings for {selected_rank_grade} - Section {selected_rank_section if selected_rank_section != 'All' else 'All Sections'}**")
             
-            # Display rankings with medals
             for student in rankings:
                 rank = student.get("rank", 0)
                 medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
@@ -4341,7 +4224,6 @@ if st.session_state.teachers:
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
-        # Add Student with Photo and Parent Contact
         with st.expander("➕ Add New Student", expanded=False):
             with st.form("add_student_form"):
                 col1, col2 = st.columns(2)
@@ -4392,7 +4274,6 @@ if st.session_state.teachers:
                             load_all_data()
                             add_notification(f"👨‍🎓 Student {name} added", "success")
                             
-                            # Create student user account with password
                             student_pw, msg = create_student_user(student_id, name)
                             if student_pw:
                                 st.markdown(f"""
@@ -4412,13 +4293,11 @@ if st.session_state.teachers:
                     else:
                         st.error("Name and Parent Contact Number are required.")
 
-        # List Students with Photos, Passwords and Parent Contact
         if st.session_state.students:
             st.markdown("#### 📋 All Students")
             
             search_student = st.text_input("🔍 Search Student", placeholder="Type name or ID...")
             
-            # Filter by grade and section
             col1, col2 = st.columns(2)
             with col1:
                 grade_filter = st.selectbox("Filter by Grade", ["All"] + [f"Grade {i}" for i in range(1, 13)])
@@ -4441,7 +4320,6 @@ if st.session_state.teachers:
             if section_filter != "All":
                 filtered_students = [s for s in filtered_students if s.get("section") == section_filter]
             
-            # Display header
             st.markdown("""
             <div class="student-header">
                 <div>📷</div>
@@ -4455,7 +4333,6 @@ if st.session_state.teachers:
             for student in filtered_students:
                 student_id = student.get('id', 'N/A')
                 
-                # Get password from session or student record
                 student_password = get_student_password(student_id)
                 if student_password == "Not set":
                     student_password = "🔑 Set Password"
@@ -4468,7 +4345,6 @@ if st.session_state.teachers:
                     st.markdown(display_student_photo(student_id, 50), unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"**{student.get('name', 'Unknown')}**")
-                    # Edit and Delete buttons for student
                     col2a, col2b = st.columns([1, 1])
                     with col2a:
                         if st.button(f"✏️ Edit", key=f"edit_student_{student_id}", width='stretch'):
@@ -4477,11 +4353,9 @@ if st.session_state.teachers:
                     with col2b:
                         if st.button(f"🗑️ Delete", key=f"delete_student_{student_id}", width='stretch'):
                             if st.session_state.get('confirm_delete_student') == student_id:
-                                # Actually delete
                                 supabase_admin = get_supabase_admin()
                                 try:
                                     supabase_admin.table("students").delete().eq("id", student_id).execute()
-                                    # Also delete user account
                                     supabase_admin.table("users").delete().eq("username", student_id).execute()
                                     load_all_data()
                                     add_notification(f"Student {student.get('name', '')} deleted", "warning")
@@ -4599,14 +4473,12 @@ if st.session_state.teachers:
         st.markdown("### 👨‍🏫 Homeroom Teacher Assignments")
         st.markdown("Assign a homeroom teacher to each grade and section.")
         
-        # Add homeroom assignment
         with st.form("add_homeroom"):
             col1, col2, col3 = st.columns(3)
             with col1:
                 grade_options = [f"Grade {i}" for i in range(1, 13)]
                 homeroom_grade = st.selectbox("Grade", grade_options)
             with col2:
-                # Get sections for the selected grade
                 if homeroom_grade:
                     sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == homeroom_grade]))
                     if not sections:
@@ -4629,7 +4501,6 @@ if st.session_state.teachers:
                     
                     if teacher_id:
                         supabase_admin = get_supabase_admin()
-                        # Check if assignment already exists
                         existing = None
                         for h in st.session_state.homeroom_assignments:
                             if h.get('grade') == homeroom_grade and h.get('section') == homeroom_section:
@@ -4670,7 +4541,6 @@ if st.session_state.teachers:
                 })
             st.dataframe(pd.DataFrame(assignments_data), use_container_width=True, hide_index=True)
             
-            # Option to remove assignment
             for h in st.session_state.homeroom_assignments:
                 col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
                 with col1:
