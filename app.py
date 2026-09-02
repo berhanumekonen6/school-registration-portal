@@ -4128,18 +4128,19 @@ def show_admin_panel():
                 else:
                     st.error("❌ Please enter teacher name.")
 
-        st.markdown("---")
+                st.markdown("---")
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
             for teacher in st.session_state.teachers:
                 assignments = safe_json_loads(teacher.get("assignments", "[]"))
                 assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
                 teacher_password = teacher.get('password', 'N/A')
-                # Use safe_json_loads instead of json.loads to handle already-parsed data
                 admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
                 is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
+                added_date = teacher.get('added', 'N/A')
                 
-                st.markdown(f"""
+                # Build the teacher card HTML
+                html_card = f"""
                 <div class="teacher-card">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
                         <div>
@@ -4158,12 +4159,21 @@ def show_admin_panel():
                         <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
                         <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
                     </div>
-                    {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
+                """
+                
+                # Add admin subjects if they exist
+                if admin_subjects:
+                    html_card += f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>'
+                
+                # Add the added date
+                html_card += f"""
                     <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
-                        <b>📅 Added:</b> {teacher.get('added', 'N/A')}
+                        <b>📅 Added:</b> {added_date}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                
+                st.markdown(html_card, unsafe_allow_html=True)
 
     # Tab 4: Subjects
     with tab5:
