@@ -4128,42 +4128,48 @@ def show_admin_panel():
                 else:
          
                     st.error("❌ Please enter teacher name.")
-st.markdown("---")
-if st.session_state.teachers:
-    st.markdown("#### 📋 All Teachers")
-    for teacher in st.session_state.teachers:
-        assignments = safe_json_loads(teacher.get("assignments", "[]"))
-        assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
-        teacher_password = teacher.get('password', 'N/A')
-        admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
-        is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
-        added_date = teacher.get('added', 'N/A')
-        
-        st.markdown(f"""
-        <div class="teacher-card">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
-                <div>
-                    <h4>👨‍🏫 {teacher['name']}</h4>
-                    <p><b>📚 Subject:</b> {teacher['subject']}</p>
-                    <p><b>📌 Assignments:</b> {assign_str}</p>
-                    <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
-                </div>
-                <div style="text-align:right;">
-                    <span style="background:{'#E8F0FE' if is_admin else '#E6F4EA'};padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
-                        {'📋 Subject Admin' if is_admin else '👨‍🏫 Teacher'}
-                    </span>
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;background:#F8F9FA;padding:10px;border-radius:8px;">
-                <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
-                <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
-            </div>
-            {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
-            <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
-                <b>📅 Added:</b> {added_date}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("---")
+        if st.session_state.teachers:
+            st.markdown("#### 📋 All Teachers")
+            for teacher in st.session_state.teachers:
+                assignments = safe_json_loads(teacher.get("assignments", "[]"))
+                assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
+                teacher_password = teacher.get('password', 'N/A')
+                admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
+                is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
+                added_date = teacher.get('added', 'N/A')
+                
+                # Build the teacher card HTML
+                html_card = f"""<div class="teacher-card">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;">
+                        <div>
+                            <h4>👨‍🏫 {teacher['name']}</h4>
+                            <p><b>📚 Subject:</b> {teacher['subject']}</p>
+                            <p><b>📌 Assignments:</b> {assign_str}</p>
+                            <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="background:{'#E8F0FE' if is_admin else '#E6F4EA'};padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
+                                {'📋 Subject Admin' if is_admin else '👨‍🏫 Teacher'}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;background:#F8F9FA;padding:10px;border-radius:8px;">
+                        <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
+                        <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
+                    </div>
+                    {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
+                    <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
+                        <b>📅 Added:</b> {added_date}
+                    </div>
+                </div>"""
+                
+                # Try using st.html if available (newer Streamlit)
+                try:
+                    st.html(html_card)
+                except AttributeError:
+                    # Fallback to st.markdown with unsafe_allow_html=True
+                    st.markdown(html_card, unsafe_allow_html=True)
         
     # Tab 4: Subjects
     with tab5:
