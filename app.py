@@ -4004,7 +4004,7 @@ def show_admin_panel():
             teacher_subject = st.selectbox("Subject Taught *", ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
             teacher_admin_subjects = st.multiselect(
-                "Subjects this teacher administers (leave empty for regular teacher)",
+                "📚Subject Admins (leave empty for regular teacher)",
                 options=ALL_SUBJECTS,
                 default=[]
             )
