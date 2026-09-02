@@ -19,6 +19,8 @@ import time
 import base64
 from supabase import create_client, Client
 from PIL import Image
+import plotly.graph_objects as go
+import plotly.express as px
 
 # ===================================================================
 # DEFAULT REMARKS TEXT
@@ -184,13 +186,13 @@ GRADE_ASSESSMENT_CONFIG = {
 
 GRADE_SUBJECTS = {
     # Grades 1-4
-    "Grade 1": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
-    "Grade 2": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
-    "Grade 3": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
-    "Grade 4": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 1": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 2": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 3": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
+    "Grade 4": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "እንግሊዘኛ(S)", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "ጋሞኛ", "እይታና ትወና", "ስፖርት"],
     # Grades 5-6
-    "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
-    "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ -ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
+    "Grade 5": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
+    "Grade 6": ["አማርኛ", "ግዕዝ", "እንሊዘኛ(G)", "ጋሞኛ", "ሒሳብ", "አ/ሳይንስ", "ግብረ-ገብ", "እይታና ትወና", "ስፖርት", "ኮምፒተር"],
     # Grades 7-8
     "Grade 7": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
     "Grade 8": ["አማርኛ", "ግዕዝ", "English (G)", "Mathematics", "G/Science", "Citizenship", "Social study", "Gammogna", "P.V.A", "I.T", "C.T.E", "H.P.E"],
@@ -734,7 +736,7 @@ def get_subject_admin(subject, grade):
         if assignment.get('subject') == subject:
             # Check if this admin covers this grade
             grade_range = assignment.get('grade_range', [])
-            if grade in grade_range or not grade_range:
+            if not grade_range or grade in grade_range:
                 return assignment.get('teacher_id')
     return None
 
@@ -1490,66 +1492,112 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
-# ---- STATISTICAL ANALYSIS FUNCTIONS ----
-def generate_school_statistics():
-    """Generate comprehensive school statistics report."""
-    total_students = len(st.session_state.students)
-    total_teachers = len(st.session_state.teachers)
-    total_evaluations = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
-    total_batches = len(st.session_state.batches)
+# ---- DEEP STATISTICAL ANALYSIS FUNCTIONS ----
+def generate_deep_statistics():
+    """Generate comprehensive deep statistics with all metrics."""
     
-    male_students = len([s for s in st.session_state.students if s.get("gender") == "M"])
-    female_students = len([s for s in st.session_state.students if s.get("gender") == "F"])
+    stats = {
+        "student_stats": {},
+        "performance_metrics": {},
+        "demographics": {},
+        "subject_analysis": {},
+        "grade_analysis": {},
+        "teacher_analysis": {},
+        "trends": {},
+        "summary": {}
+    }
     
-    grade_distribution = {}
+    # Basic counts
+    stats["summary"]["total_students"] = len(st.session_state.students)
+    stats["summary"]["total_teachers"] = len(st.session_state.teachers)
+    stats["summary"]["total_evaluations"] = len([e for e in st.session_state.evaluations if e.get("status") == "approved"])
+    stats["summary"]["total_batches"] = len(st.session_state.batches)
+    stats["summary"]["pending_approvals"] = len(get_batches_awaiting_final_approval())
+    
+    # Gender distribution
+    male = len([s for s in st.session_state.students if s.get("gender") == "M"])
+    female = len([s for s in st.session_state.students if s.get("gender") == "F"])
+    other = len([s for s in st.session_state.students if s.get("gender") not in ["M", "F"]])
+    stats["demographics"]["gender"] = {"Male": male, "Female": female, "Other": other}
+    
+    # Grade distribution
+    grade_dist = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
-        grade_distribution[grade] = grade_distribution.get(grade, 0) + 1
+        grade_dist[grade] = grade_dist.get(grade, 0) + 1
+    stats["demographics"]["grade_distribution"] = grade_dist
     
-    section_distribution = {}
+    # Section distribution
+    section_dist = {}
     for s in st.session_state.students:
         section = s.get("section", "Unknown")
-        section_distribution[section] = section_distribution.get(section, 0) + 1
+        section_dist[section] = section_dist.get(section, 0) + 1
+    stats["demographics"]["section_distribution"] = section_dist
     
-    subject_performance = {}
+    # Subject performance
+    subject_scores = {}
     for e in st.session_state.evaluations:
         if e.get("status") == "approved":
             subject = e.get("subject", "Unknown")
             score = e.get("overall_score", 0)
-            if subject not in subject_performance:
-                subject_performance[subject] = []
-            subject_performance[subject].append(score)
+            if subject not in subject_scores:
+                subject_scores[subject] = []
+            subject_scores[subject].append(score)
     
-    subject_averages = {}
-    for subject, scores in subject_performance.items():
-        subject_averages[subject] = round(sum(scores) / len(scores), 2) if scores else 0
+    subject_avg = {}
+    subject_min = {}
+    subject_max = {}
+    subject_count = {}
+    for subject, scores in subject_scores.items():
+        if scores:
+            subject_avg[subject] = round(sum(scores) / len(scores), 2)
+            subject_min[subject] = min(scores)
+            subject_max[subject] = max(scores)
+            subject_count[subject] = len(scores)
+    stats["subject_analysis"]["averages"] = subject_avg
+    stats["subject_analysis"]["min"] = subject_min
+    stats["subject_analysis"]["max"] = subject_max
+    stats["subject_analysis"]["counts"] = subject_count
     
-    grade_performance = {}
+    # Grade-wise performance
+    grade_perf = {}
     for s in st.session_state.students:
         grade = s.get("grade", "Unknown")
         evals = get_approved_evaluations_for_student(s["id"])
         if evals:
             avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
-            if grade not in grade_performance:
-                grade_performance[grade] = []
-            grade_performance[grade].append(avg_score)
+            if grade not in grade_perf:
+                grade_perf[grade] = []
+            grade_perf[grade].append(avg_score)
     
-    grade_averages = {}
-    for grade, scores in grade_performance.items():
-        grade_averages[grade] = round(sum(scores) / len(scores), 2) if scores else 0
+    grade_avg = {}
+    grade_min = {}
+    grade_max = {}
+    for grade, scores in grade_perf.items():
+        if scores:
+            grade_avg[grade] = round(sum(scores) / len(scores), 2)
+            grade_min[grade] = min(scores)
+            grade_max[grade] = max(scores)
+    stats["grade_analysis"]["averages"] = grade_avg
+    stats["grade_analysis"]["min"] = grade_min
+    stats["grade_analysis"]["max"] = grade_max
     
-    teacher_workload = {}
-    for t in st.session_state.teachers:
-        teacher_id = t.get("id")
-        batch_count = len([b for b in st.session_state.batches if b.get("teacher_id") == teacher_id])
-        eval_count = len([e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id])
-        teacher_workload[t.get("name", "Unknown")] = {
-            "batches": batch_count,
-            "evaluations": eval_count
-        }
+    # Pass/Fail by grade
+    pass_fail = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if grade not in pass_fail:
+                pass_fail[grade] = {"passed": 0, "failed": 0}
+            if avg_score >= 50:
+                pass_fail[grade]["passed"] += 1
+            else:
+                pass_fail[grade]["failed"] += 1
+    stats["grade_analysis"]["pass_fail"] = pass_fail
     
-    pending_batches = len(get_batches_awaiting_final_approval())
-    
+    # Overall pass rate
     passed = 0
     failed = 0
     for s in st.session_state.students:
@@ -1560,161 +1608,574 @@ def generate_school_statistics():
                 passed += 1
             else:
                 failed += 1
+    stats["summary"]["passed"] = passed
+    stats["summary"]["failed"] = failed
+    stats["summary"]["pass_rate"] = round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0
     
-    return {
-        "total_students": total_students,
-        "total_teachers": total_teachers,
-        "total_evaluations": total_evaluations,
-        "total_batches": total_batches,
-        "male_students": male_students,
-        "female_students": female_students,
-        "gender_ratio": f"{male_students}:{female_students}" if female_students > 0 else f"{male_students}:0",
-        "grade_distribution": grade_distribution,
-        "section_distribution": section_distribution,
-        "subject_averages": subject_averages,
-        "grade_averages": grade_averages,
-        "teacher_workload": teacher_workload,
-        "pending_batches": pending_batches,
-        "passed": passed,
-        "failed": failed,
-        "pass_rate": round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0,
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-    }
+    # Teacher workload
+    teacher_workload = {}
+    for t in st.session_state.teachers:
+        teacher_id = t.get("id")
+        batch_count = len([b for b in st.session_state.batches if b.get("teacher_id") == teacher_id])
+        eval_count = len([e for e in st.session_state.evaluations if e.get("teacher_id") == teacher_id])
+        teacher_workload[t.get("name", "Unknown")] = {
+            "batches": batch_count,
+            "evaluations": eval_count
+        }
+    stats["teacher_analysis"]["workload"] = teacher_workload
+    
+    # Section performance
+    section_perf = {}
+    for s in st.session_state.students:
+        section = s.get("section", "Unknown")
+        grade = s.get("grade", "Unknown")
+        key = f"{grade} - Section {section}"
+        evals = get_approved_evaluations_for_student(s["id"])
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if key not in section_perf:
+                section_perf[key] = []
+            section_perf[key].append(avg_score)
+    
+    section_avg = {}
+    for key, scores in section_perf.items():
+        if scores:
+            section_avg[key] = round(sum(scores) / len(scores), 2)
+    stats["grade_analysis"]["section_performance"] = section_avg
+    
+    # Generate timestamp
+    stats["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    return stats
 
-def generate_statistics_report():
-    """Generate a formatted HTML report for office use."""
-    stats = generate_school_statistics()
+def create_statistics_charts(stats):
+    """Create interactive Plotly charts for statistics."""
+    charts = {}
+    
+    # 1. Gender Distribution Pie Chart
+    gender_data = stats["demographics"]["gender"]
+    fig1 = go.Figure(data=[go.Pie(
+        labels=list(gender_data.keys()),
+        values=list(gender_data.values()),
+        hole=0.4,
+        marker=dict(colors=['#1A73E8', '#EA4335', '#FBBC04']),
+        textinfo='label+percent',
+        textposition='inside'
+    )])
+    fig1.update_layout(
+        title="Gender Distribution",
+        height=400,
+        showlegend=True,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=14)
+    )
+    charts["gender_pie"] = fig1
+    
+    # 2. Grade Distribution Bar Chart
+    grade_data = stats["demographics"]["grade_distribution"]
+    sorted_grades = sorted(grade_data.keys())
+    fig2 = go.Figure(data=[go.Bar(
+        x=sorted_grades,
+        y=[grade_data[g] for g in sorted_grades],
+        marker=dict(
+            color='#1A73E8',
+            line=dict(color='#1557B0', width=2)
+        ),
+        text=[grade_data[g] for g in sorted_grades],
+        textposition='outside'
+    )])
+    fig2.update_layout(
+        title="Student Distribution by Grade",
+        xaxis_title="Grade",
+        yaxis_title="Number of Students",
+        height=400,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=14),
+        showlegend=False
+    )
+    charts["grade_distribution"] = fig2
+    
+    # 3. Subject Performance Bar Chart
+    subject_avg = stats["subject_analysis"]["averages"]
+    sorted_subjects = sorted(subject_avg.items(), key=lambda x: x[1], reverse=True)
+    colors = ['#34A853' if s >= 70 else '#FBBC04' if s >= 50 else '#EA4335' for _, s in sorted_subjects]
+    fig3 = go.Figure(data=[go.Bar(
+        x=[s[0] for s in sorted_subjects],
+        y=[s[1] for s in sorted_subjects],
+        marker=dict(
+            color=colors,
+            line=dict(color='rgba(0,0,0,0.1)', width=1)
+        ),
+        text=[f"{s[1]}%" for s in sorted_subjects],
+        textposition='outside'
+    )])
+    fig3.update_layout(
+        title="Subject Performance Averages",
+        xaxis_title="Subject",
+        yaxis_title="Average Score (%)",
+        height=450,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=14),
+        showlegend=False
+    )
+    fig3.update_yaxis(range=[0, 105])
+    charts["subject_performance"] = fig3
+    
+    # 4. Grade-wise Performance with Min/Max
+    grade_avg = stats["grade_analysis"]["averages"]
+    grade_min = stats["grade_analysis"]["min"]
+    grade_max = stats["grade_analysis"]["max"]
+    sorted_grade_names = sorted(grade_avg.keys())
+    
+    fig4 = go.Figure()
+    fig4.add_trace(go.Bar(
+        name='Average',
+        x=sorted_grade_names,
+        y=[grade_avg[g] for g in sorted_grade_names],
+        marker_color='#1A73E8',
+        text=[f"{grade_avg[g]}%" for g in sorted_grade_names],
+        textposition='outside'
+    ))
+    fig4.add_trace(go.Scatter(
+        name='Min-Max Range',
+        x=sorted_grade_names + sorted_grade_names[::-1],
+        y=[grade_min[g] for g in sorted_grade_names] + [grade_max[g] for g in sorted_grade_names[::-1]],
+        fill='toself',
+        fillcolor='rgba(26, 115, 232, 0.2)',
+        line=dict(color='rgba(26, 115, 232, 0.5)'),
+        showlegend=True
+    ))
+    fig4.update_layout(
+        title="Grade-wise Performance with Min-Max Range",
+        xaxis_title="Grade",
+        yaxis_title="Score (%)",
+        height=400,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=14),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig4.update_yaxis(range=[0, 105])
+    charts["grade_performance"] = fig4
+    
+    # 5. Pass/Fail Stacked Bar Chart
+    pass_fail_data = stats["grade_analysis"]["pass_fail"]
+    grade_names = sorted(pass_fail_data.keys())
+    passed_data = [pass_fail_data[g]["passed"] for g in grade_names]
+    failed_data = [pass_fail_data[g]["failed"] for g in grade_names]
+    
+    fig5 = go.Figure(data=[
+        go.Bar(name='Passed', x=grade_names, y=passed_data, marker_color='#34A853'),
+        go.Bar(name='Failed', x=grade_names, y=failed_data, marker_color='#EA4335')
+    ])
+    fig5.update_layout(
+        title="Pass/Fail Distribution by Grade",
+        xaxis_title="Grade",
+        yaxis_title="Number of Students",
+        height=400,
+        barmode='stack',
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=14),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    charts["pass_fail"] = fig5
+    
+    # 6. Section Performance
+    section_perf = stats["grade_analysis"]["section_performance"]
+    if section_perf:
+        sorted_sections = sorted(section_perf.items(), key=lambda x: x[1], reverse=True)
+        colors_section = ['#34A853' if s >= 70 else '#FBBC04' if s >= 50 else '#EA4335' for _, s in sorted_sections]
+        fig6 = go.Figure(data=[go.Bar(
+            x=[s[0] for s in sorted_sections],
+            y=[s[1] for s in sorted_sections],
+            marker=dict(
+                color=colors_section,
+                line=dict(color='rgba(0,0,0,0.1)', width=1)
+            ),
+            text=[f"{s[1]}%" for s in sorted_sections],
+            textposition='outside'
+        )])
+        fig6.update_layout(
+            title="Section-wise Performance",
+            xaxis_title="Class (Grade - Section)",
+            yaxis_title="Average Score (%)",
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(size=14),
+            showlegend=False
+        )
+        fig6.update_yaxis(range=[0, 105])
+        charts["section_performance"] = fig6
+    else:
+        charts["section_performance"] = None
+    
+    # 7. Teacher Workload
+    workload = stats["teacher_analysis"]["workload"]
+    if workload:
+        teacher_names = list(workload.keys())
+        batch_counts = [workload[t]["batches"] for t in teacher_names]
+        eval_counts = [workload[t]["evaluations"] for t in teacher_names]
+        
+        fig7 = go.Figure(data=[
+            go.Bar(name='Batches', x=teacher_names, y=batch_counts, marker_color='#1A73E8'),
+            go.Bar(name='Evaluations', x=teacher_names, y=eval_counts, marker_color='#34A853')
+        ])
+        fig7.update_layout(
+            title="Teacher Workload Distribution",
+            xaxis_title="Teacher",
+            yaxis_title="Count",
+            height=400,
+            barmode='group',
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(size=14),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        charts["teacher_workload"] = fig7
+    else:
+        charts["teacher_workload"] = None
+    
+    # 8. Summary Statistics Cards (as a gauge chart for pass rate)
+    fig8 = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=stats["summary"]["pass_rate"],
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': "Overall Pass Rate"},
+        delta={'reference': 50},
+        gauge={
+            'axis': {'range': [None, 100]},
+            'bar': {'color': "#34A853" if stats["summary"]["pass_rate"] >= 60 else "#FBBC04" if stats["summary"]["pass_rate"] >= 50 else "#EA4335"},
+            'bgcolor': "white",
+            'borderwidth': 2,
+            'bordercolor': "gray",
+            'steps': [
+                {'range': [0, 50], 'color': 'rgba(234, 67, 53, 0.3)'},
+                {'range': [50, 70], 'color': 'rgba(251, 188, 4, 0.3)'},
+                {'range': [70, 100], 'color': 'rgba(52, 168, 83, 0.3)'}
+            ],
+            'threshold': {
+                'line': {'color': "red", 'width': 4},
+                'thickness': 0.75,
+                'value': 50
+            }
+        }
+    ))
+    fig8.update_layout(
+        height=300,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=16)
+    )
+    charts["pass_rate_gauge"] = fig8
+    
+    return charts
+
+def generate_deep_report_html(stats, charts):
+    """Generate a comprehensive HTML report with all charts embedded."""
+    import base64
+    import io
+    
+    chart_images = {}
+    for name, fig in charts.items():
+        if fig is not None:
+            try:
+                img_bytes = fig.to_image(format="png", width=800, height=500, scale=2)
+                b64 = base64.b64encode(img_bytes).decode('utf-8')
+                chart_images[name] = b64
+            except:
+                chart_images[name] = None
+    
+    # Prepare data tables
+    subject_table = ""
+    for subject, avg in sorted(stats["subject_analysis"]["averages"].items(), key=lambda x: x[1], reverse=True):
+        badge = "badge-excellent" if avg >= 70 else "badge-good" if avg >= 60 else "badge-average" if avg >= 50 else "badge-poor"
+        label = "Excellent" if avg >= 70 else "Good" if avg >= 60 else "Average" if avg >= 50 else "Poor"
+        subject_table += f"<tr><td>{subject}</td><td>{avg}%</td><td><span class='badge {badge}'>{label}</span></td></tr>"
+    
+    grade_table = ""
+    for grade, avg in sorted(stats["grade_analysis"]["averages"].items()):
+        grade_table += f"<tr><td>{grade}</td><td>{avg}%</td></tr>"
+    
+    section_table = ""
+    for section, avg in sorted(stats["grade_analysis"]["section_performance"].items(), key=lambda x: x[1], reverse=True):
+        section_table += f"<tr><td>{section}</td><td>{avg}%</td></tr>"
+    
+    teacher_table = ""
+    for teacher, workload in sorted(stats["teacher_analysis"]["workload"].items()):
+        teacher_table += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td></tr>"
     
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
-        <title>School Statistics Report</title>
+        <title>Comprehensive School Statistics Report</title>
         <style>
-            body {{ font-family: 'Segoe UI', 'Noto Sans Ethiopic', sans-serif; padding: 30px; background: #f8f9fa; }}
-            .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }}
-            h1 {{ color: #1A73E8; border-bottom: 3px solid #1A73E8; padding-bottom: 10px; }}
-            h2 {{ color: #202124; margin-top: 25px; border-bottom: 2px solid #E8EAED; padding-bottom: 8px; }}
-            .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }}
-            .stat-card {{ background: #E8F0FE; padding: 20px; border-radius: 12px; text-align: center; }}
-            .stat-card .number {{ font-size: 2.5rem; font-weight: 700; color: #1A73E8; }}
-            .stat-card .label {{ font-size: 0.9rem; color: #5F6368; }}
-            table {{ width: 100%; border-collapse: collapse; margin: 15px 0; }}
-            th, td {{ padding: 10px 12px; border: 1px solid #E8EAED; text-align: left; }}
-            th {{ background: #F1F3F4; font-weight: 600; }}
-            tr:nth-child(even) {{ background: #F8F9FA; }}
-            .footer {{ margin-top: 30px; border-top: 2px solid #E8EAED; padding-top: 20px; color: #5F6368; text-align: center; font-size: 0.9rem; }}
-            .badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }}
-            .badge-green {{ background: #E6F4EA; color: #34A853; }}
-            .badge-yellow {{ background: #FEF7E0; color: #F9AB00; }}
-            .badge-red {{ background: #FCE8E6; color: #EA4335; }}
-            .print-btn {{ background: #1A73E8; color: white; border: none; padding: 12px 30px; border-radius: 30px; font-size: 1rem; cursor: pointer; margin: 10px 0; }}
-            .print-btn:hover {{ background: #1557B0; }}
-            @media print {{ .no-print {{ display: none; }} body {{ background: white; padding: 15px; }} .container {{ box-shadow: none; border: 1px solid #ddd; }} }}
-    </style>
-</head>
-<body>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: 'Segoe UI', 'Noto Sans Ethiopic', Arial, sans-serif;
+                background: #f0f2f5;
+                padding: 20px;
+                color: #202124;
+            }}
+            .container {{
+                max-width: 1400px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+            }}
+            .header {{
+                text-align: center;
+                padding: 20px 0 30px 0;
+                border-bottom: 3px solid #1A73E8;
+                margin-bottom: 30px;
+            }}
+            .header h1 {{
+                font-size: 2.5rem;
+                color: #1A73E8;
+                margin-bottom: 5px;
+            }}
+            .header .subtitle {{
+                color: #5F6368;
+                font-size: 1.1rem;
+            }}
+            .header .date {{
+                color: #5F6368;
+                font-size: 0.9rem;
+                margin-top: 5px;
+            }}
+            
+            .summary-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 15px;
+                margin: 25px 0;
+            }}
+            .summary-card {{
+                background: #F8F9FA;
+                border-radius: 12px;
+                padding: 20px;
+                text-align: center;
+                border: 1px solid #E8EAED;
+                transition: all 0.3s;
+            }}
+            .summary-card:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+                border-color: #1A73E8;
+            }}
+            .summary-card .number {{
+                font-size: 2.2rem;
+                font-weight: 700;
+                color: #1A73E8;
+                display: block;
+            }}
+            .summary-card .label {{
+                font-size: 0.85rem;
+                color: #5F6368;
+                margin-top: 5px;
+                display: block;
+            }}
+            .summary-card.pass .number {{ color: #34A853; }}
+            .summary-card.fail .number {{ color: #EA4335; }}
+            .summary-card.pending .number {{ color: #FBBC04; }}
+            .summary-card.rate .number {{ 
+                color: {'#34A853' if stats['summary']['pass_rate'] >= 70 else '#FBBC04' if stats['summary']['pass_rate'] >= 50 else '#EA4335'};
+            }}
+            
+            .chart-container {{
+                margin: 30px 0;
+                padding: 20px;
+                background: #FFFFFF;
+                border-radius: 16px;
+                border: 1px solid #E8EAED;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            }}
+            .chart-container h2 {{
+                color: #202124;
+                font-size: 1.4rem;
+                margin-bottom: 15px;
+                border-bottom: 2px solid #E8EAED;
+                padding-bottom: 10px;
+            }}
+            .chart-container img {{
+                width: 100%;
+                height: auto;
+                border-radius: 8px;
+            }}
+            
+            .two-col {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 30px;
+            }}
+            
+            .data-table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                font-size: 0.9rem;
+            }}
+            .data-table th {{
+                background: #F1F3F4;
+                padding: 12px 15px;
+                text-align: left;
+                font-weight: 600;
+                border-bottom: 2px solid #DADCE0;
+            }}
+            .data-table td {{
+                padding: 10px 15px;
+                border-bottom: 1px solid #E8EAED;
+            }}
+            .data-table tr:hover {{
+                background: #F8F9FA;
+            }}
+            .data-table .badge {{
+                display: inline-block;
+                padding: 2px 12px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 600;
+            }}
+            .badge-excellent {{ background: #E6F4EA; color: #34A853; }}
+            .badge-good {{ background: #E8F0FE; color: #1A73E8; }}
+            .badge-average {{ background: #FEF7E0; color: #F9AB00; }}
+            .badge-poor {{ background: #FCE8E6; color: #EA4335; }}
+            
+            .footer {{
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 2px solid #E8EAED;
+                text-align: center;
+                color: #5F6368;
+                font-size: 0.9rem;
+            }}
+            
+            @media (max-width: 768px) {{
+                .two-col {{ grid-template-columns: 1fr; }}
+                .container {{ padding: 20px; }}
+                .summary-grid {{ grid-template-columns: repeat(2, 1fr); }}
+                .header h1 {{ font-size: 1.8rem; }}
+            }}
+            @media print {{
+                body {{ background: white; padding: 10px; }}
+                .container {{ box-shadow: none; border: 1px solid #ddd; }}
+                .chart-container {{ break-inside: avoid; }}
+            }}
+        </style>
+    </head>
+    <body>
     <div class="container">
-        <h1>📊 School Statistical Report</h1>
-        <p><strong>School:</strong> {st.session_state.school_name}</p>
-        <p><strong>Report Generated:</strong> {stats['generated_at']}</p>
-        
-        <h2>📋 Summary Statistics</h2>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="number">{stats['total_students']}</div><div class="label">Total Students</div></div>
-            <div class="stat-card"><div class="number">{stats['total_teachers']}</div><div class="label">Total Teachers</div></div>
-            <div class="stat-card"><div class="number">{stats['total_evaluations']}</div><div class="label">Approved Evaluations</div></div>
-            <div class="stat-card"><div class="number">{stats['total_batches']}</div><div class="label">Total Batches</div></div>
-            <div class="stat-card"><div class="number">{stats['pending_batches']}</div><div class="label">Pending Approvals</div></div>
-            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Overall Pass Rate</div></div>
+        <div class="header">
+            <h1>📊 Comprehensive School Statistics Report</h1>
+            <div class="subtitle">{st.session_state.school_name}</div>
+            <div class="subtitle">City: {st.session_state.school_city}</div>
+            <div class="date">Report Generated: {stats['generated_at']}</div>
         </div>
         
-        <h2>👤 Gender Distribution</h2>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="number">{stats['male_students']}</div><div class="label">Male Students</div></div>
-            <div class="stat-card"><div class="number">{stats['female_students']}</div><div class="label">Female Students</div></div>
-            <div class="stat-card"><div class="number">{stats['gender_ratio']}</div><div class="label">Male:Female Ratio</div></div>
+        <div class="summary-grid">
+            <div class="summary-card"><span class="number">{stats['summary']['total_students']}</span><span class="label">👨‍🎓 Total Students</span></div>
+            <div class="summary-card"><span class="number">{stats['summary']['total_teachers']}</span><span class="label">👨‍🏫 Total Teachers</span></div>
+            <div class="summary-card"><span class="number">{stats['summary']['total_evaluations']}</span><span class="label">📝 Evaluations</span></div>
+            <div class="summary-card pending"><span class="number">{stats['summary']['pending_approvals']}</span><span class="label">⏳ Pending Approvals</span></div>
+            <div class="summary-card pass"><span class="number">{stats['summary']['passed']}</span><span class="label">✅ Passed</span></div>
+            <div class="summary-card fail"><span class="number">{stats['summary']['failed']}</span><span class="label">❌ Failed</span></div>
+            <div class="summary-card rate"><span class="number">{stats['summary']['pass_rate']}%</span><span class="label">📈 Pass Rate</span></div>
         </div>
         
-        <h2>✅ Pass / Fail Status</h2>
-        <div class="stats-grid">
-            <div class="stat-card" style="background:#E6F4EA;"><div class="number" style="color:#34A853;">{stats['passed']}</div><div class="label">Passed</div></div>
-            <div class="stat-card" style="background:#FCE8E6;"><div class="number" style="color:#EA4335;">{stats['failed']}</div><div class="label">Failed</div></div>
-            <div class="stat-card"><div class="number">{stats['pass_rate']}%</div><div class="label">Pass Rate</div></div>
+        <div class="two-col">
+            <div class="chart-container">
+                <h2>Gender Distribution</h2>
+                <img src="data:image/png;base64,{chart_images.get('gender_pie', '')}" alt="Gender Distribution">
+            </div>
+            <div class="chart-container">
+                <h2>Overall Pass Rate</h2>
+                <img src="data:image/png;base64,{chart_images.get('pass_rate_gauge', '')}" alt="Pass Rate">
+            </div>
         </div>
         
-        <h2>📚 Grade Distribution</h2>
-        <table>
-            <thead><tr><th>Grade</th><th>Students</th><th>% of Total</th></tr></thead>
-            <tbody>
-"""
-    total = stats['total_students']
-    for grade, count in sorted(stats['grade_distribution'].items()):
-        pct = round((count / total) * 100, 1) if total > 0 else 0
-        html += f"<tr><td>{grade}</td><td>{count}</td><td>{pct}%</td></tr>"
-    html += """
-            </tbody>
-        </table>
+        <div class="chart-container">
+            <h2>Student Distribution by Grade</h2>
+            <img src="data:image/png;base64,{chart_images.get('grade_distribution', '')}" alt="Grade Distribution">
+        </div>
         
-        <h2>📌 Section Distribution</h2>
-        <table>
-            <thead><tr><th>Section</th><th>Students</th><th>% of Total</th></tr></thead>
-            <tbody>
-"""
-    for section, count in sorted(stats['section_distribution'].items()):
-        pct = round((count / total) * 100, 1) if total > 0 else 0
-        html += f"<tr><td>{section}</td><td>{count}</td><td>{pct}%</td></tr>"
-    html += """
-            </tbody>
-        </table>
+        <div class="two-col">
+            <div class="chart-container">
+                <h2>Subject Performance Averages</h2>
+                <img src="data:image/png;base64,{chart_images.get('subject_performance', '')}" alt="Subject Performance">
+            </div>
+            <div class="chart-container">
+                <h2>Grade-wise Performance</h2>
+                <img src="data:image/png;base64,{chart_images.get('grade_performance', '')}" alt="Grade Performance">
+            </div>
+        </div>
         
-        <h2>📖 Subject Performance Averages</h2>
-        <table>
-            <thead><tr><th>Subject</th><th>Average Score (%)</th><th>Performance</th></tr></thead>
-            <tbody>
-"""
-    for subject, avg in sorted(stats['subject_averages'].items(), key=lambda x: x[1], reverse=True):
-        badge = "badge-green" if avg >= 70 else "badge-yellow" if avg >= 50 else "badge-red"
-        html += f"<tr><td>{subject}</td><td>{avg}%</td><td><span class='badge {badge}'>{'🌟 Excellent' if avg >= 70 else '📈 Good' if avg >= 50 else '📉 Needs Improvement'}</span></td></tr>"
-    html += """
-            </tbody>
-        </table>
+        <div class="two-col">
+            <div class="chart-container">
+                <h2>Pass/Fail Distribution by Grade</h2>
+                <img src="data:image/png;base64,{chart_images.get('pass_fail', '')}" alt="Pass Fail">
+            </div>
+            <div class="chart-container">
+                <h2>Section-wise Performance</h2>
+                <img src="data:image/png;base64,{chart_images.get('section_performance', '')}" alt="Section Performance">
+            </div>
+        </div>
         
-        <h2>🎓 Grade-wise Performance</h2>
-        <table>
-            <thead><tr><th>Grade</th><th>Average Score (%)</th></tr></thead>
-            <tbody>
-"""
-    for grade, avg in sorted(stats['grade_averages'].items()):
-        html += f"<tr><td>{grade}</td><td>{avg}%</td></tr>"
-    html += """
-            </tbody>
-        </table>
+        <div class="chart-container">
+            <h2>Teacher Workload Distribution</h2>
+            <img src="data:image/png;base64,{chart_images.get('teacher_workload', '')}" alt="Teacher Workload">
+        </div>
         
-        <h2>👨‍🏫 Teacher Workload</h2>
-        <table>
-            <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th></tr></thead>
-            <tbody>
-"""
-    for teacher, workload in sorted(stats['teacher_workload'].items()):
-        html += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td></tr>"
-    html += f"""
-            </tbody>
-        </table>
+        <div class="two-col">
+            <div class="chart-container">
+                <h2>📖 Subject Performance Details</h2>
+                <table class="data-table">
+                    <thead><tr><th>Subject</th><th>Average Score</th><th>Performance</th></tr></thead>
+                    <tbody>{subject_table}</tbody>
+                </table>
+            </div>
+            <div class="chart-container">
+                <h2>🎓 Grade-wise Performance</h2>
+                <table class="data-table">
+                    <thead><tr><th>Grade</th><th>Average Score</th></tr></thead>
+                    <tbody>{grade_table}</tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="two-col">
+            <div class="chart-container">
+                <h2>📌 Section Performance</h2>
+                <table class="data-table">
+                    <thead><tr><th>Section</th><th>Average Score</th></tr></thead>
+                    <tbody>{section_table}</tbody>
+                </table>
+            </div>
+            <div class="chart-container">
+                <h2>👨‍🏫 Teacher Workload</h2>
+                <table class="data-table">
+                    <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th></tr></thead>
+                    <tbody>{teacher_table}</tbody>
+                </table>
+            </div>
+        </div>
         
         <div class="footer">
-            <p>Report generated by School Registration Portal</p>
+            <p>Report generated by School Registration Portal v2.0</p>
             <p>© {datetime.now().year} {st.session_state.school_name} - All Rights Reserved</p>
+            <p>Developed by Berhanu Mekonen, PhD - Arba Minch University</p>
         </div>
     </div>
-    
-    <div style="text-align:center;margin:20px 0;" class="no-print">
-        <button onclick="window.print()" class="print-btn">🖨️ Print / Save as PDF</button>
-    </div>
-</body>
-</html>
-"""
+    </body>
+    </html>
+    """
     return html
 
 # ---- PROFILE UPDATE ----
@@ -2959,6 +3420,110 @@ def show_login_page():
         """, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
+# ---- DEEP STATISTICS DISPLAY FUNCTION ----
+def show_deep_statistics():
+    """Display deep statistics with interactive charts."""
+    st.markdown("## 📊 Deep Statistical Analysis")
+    st.markdown("Comprehensive analysis with interactive charts and visualizations for office reporting.")
+    
+    with st.spinner("Generating statistics and charts..."):
+        stats = generate_deep_statistics()
+        charts = create_statistics_charts(stats)
+    
+    # Summary Cards
+    st.markdown("### 📈 Key Metrics")
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+    with col1:
+        st.metric("👨‍🎓 Students", stats['summary']['total_students'])
+    with col2:
+        st.metric("👨‍🏫 Teachers", stats['summary']['total_teachers'])
+    with col3:
+        st.metric("📝 Evaluations", stats['summary']['total_evaluations'])
+    with col4:
+        st.metric("📦 Batches", stats['summary']['total_batches'])
+    with col5:
+        st.metric("⏳ Pending", stats['summary']['pending_approvals'])
+    with col6:
+        st.metric("✅ Passed", stats['summary']['passed'])
+    with col7:
+        rate_color = "normal" if stats['summary']['pass_rate'] >= 70 else "inverse" if stats['summary']['pass_rate'] >= 50 else "off"
+        st.metric("📈 Pass Rate", f"{stats['summary']['pass_rate']}%", delta_color=rate_color)
+    
+    st.markdown("---")
+    
+    # Charts in two columns
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(charts['gender_pie'], use_container_width=True)
+    with col2:
+        st.plotly_chart(charts['pass_rate_gauge'], use_container_width=True)
+    
+    st.plotly_chart(charts['grade_distribution'], use_container_width=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(charts['subject_performance'], use_container_width=True)
+    with col2:
+        st.plotly_chart(charts['grade_performance'], use_container_width=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(charts['pass_fail'], use_container_width=True)
+    with col2:
+        if charts['section_performance']:
+            st.plotly_chart(charts['section_performance'], use_container_width=True)
+        else:
+            st.info("No section performance data available.")
+    
+    if charts['teacher_workload']:
+        st.plotly_chart(charts['teacher_workload'], use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Download Report
+    st.markdown("### 📄 Download Comprehensive Report")
+    st.info("This report includes all charts, tables, and statistics in a professionally formatted HTML document.")
+    
+    html_report = generate_deep_report_html(stats, charts)
+    st.download_button(
+        label="📥 Download Deep Statistics Report (HTML)",
+        data=html_report.encode('utf-8'),
+        file_name=f"Deep_Statistics_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+        mime="text/html",
+        width='stretch'
+    )
+    
+    # Detailed Data Tables
+    with st.expander("📋 View Detailed Data Tables"):
+        st.markdown("#### Subject Performance Details")
+        subject_df = pd.DataFrame([
+            {"Subject": s, "Average": stats['subject_analysis']['averages'].get(s, 0)}
+            for s in sorted(stats['subject_analysis']['averages'].keys(), key=lambda x: stats['subject_analysis']['averages'].get(x, 0), reverse=True)
+        ])
+        st.dataframe(subject_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("#### Grade Performance Details")
+        grade_df = pd.DataFrame([
+            {"Grade": g, "Average": stats['grade_analysis']['averages'].get(g, 0)}
+            for g in sorted(stats['grade_analysis']['averages'].keys())
+        ])
+        st.dataframe(grade_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("#### Section Performance Details")
+        section_df = pd.DataFrame([
+            {"Section": s, "Average": stats['grade_analysis']['section_performance'].get(s, 0)}
+            for s in sorted(stats['grade_analysis']['section_performance'].keys(), key=lambda x: stats['grade_analysis']['section_performance'].get(x, 0), reverse=True)
+        ])
+        st.dataframe(section_df, use_container_width=True, hide_index=True)
+        
+        st.markdown("#### Teacher Workload Details")
+        teacher_df = pd.DataFrame([
+            {"Teacher": t, "Batches": stats['teacher_analysis']['workload'][t]['batches'], 
+             "Evaluations": stats['teacher_analysis']['workload'][t]['evaluations']}
+            for t in stats['teacher_analysis']['workload'].keys()
+        ])
+        st.dataframe(teacher_df, use_container_width=True, hide_index=True)
+
 # ---- ADMIN PANEL ----
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
@@ -3858,7 +4423,7 @@ def main():
         st.markdown("---")
         
         if role == "admin":
-            nav_options = ["👤 My Profile", "📊 Dashboard", "👨‍🏫 Teachers", "👨‍🎓 Students", "✅ Approvals", "📄 Reports", "⚠️ Penalty Log", "🔔 Notifications"]
+            nav_options = ["👤 My Profile", "📊 Dashboard", "👨‍🏫 Teachers", "👨‍🎓 Students", "✅ Approvals", "📊 Deep Statistics", "📄 Reports", "⚠️ Penalty Log", "🔔 Notifications"]
         elif role == "subject_admin":
             nav_options = ["👤 My Profile", "📋 Subject Admin", "⚠️ Penalties", "🔔 Notifications"]
         elif role == "teacher":
@@ -3929,6 +4494,8 @@ def main():
             show_profile_update()
         elif current_page == "📊 Dashboard":
             show_admin_panel()
+        elif current_page == "📊 Deep Statistics":
+            show_deep_statistics()
         elif current_page == "👨‍🏫 Teachers":
             st.info("Use the Admin Dashboard → Teachers tab for full management.")
         elif current_page == "👨‍🎓 Students":
