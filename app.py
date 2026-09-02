@@ -279,6 +279,9 @@ def load_all_data():
     st.session_state.penalty_log = res.data if res.data else []
     res = supabase.table("homeroom_assignments").select("*").execute()
     st.session_state.homeroom_assignments = res.data if res.data else []
+    # Load subject admin assignments
+    res = supabase.table("subject_admin_assignments").select("*").execute()
+    st.session_state.subject_admin_assignments = res.data if res.data else []
 
 # ---- Assessment Helper Functions ----
 def get_assessment_config(grade):
@@ -714,6 +717,7 @@ def get_teacher_by_username(username):
     return None
 
 def get_batches_for_subject_admin(admin_id):
+    """Get batches for a specific subject admin."""
     return [b for b in st.session_state.batches if b.get("subject_admin_id") == admin_id and b.get("status") == "pending"]
 
 def get_batches_awaiting_final_approval():
@@ -724,11 +728,14 @@ def get_batches_awaiting_final_approval():
 def get_approved_evaluations_for_student(student_id):
     return [e for e in st.session_state.evaluations if e.get("student_id") == student_id and e.get("status") == "approved"]
 
-def get_subject_admin(subject):
-    for t in st.session_state.teachers:
-        admin_subjects = json.loads(t.get("admin_subjects", "[]"))
-        if subject in admin_subjects:
-            return t["id"]
+def get_subject_admin(subject, grade):
+    """Get the subject admin for a given subject and grade."""
+    for assignment in st.session_state.get('subject_admin_assignments', []):
+        if assignment.get('subject') == subject:
+            # Check if this admin covers this grade
+            grade_range = assignment.get('grade_range', [])
+            if grade in grade_range or not grade_range:
+                return assignment.get('teacher_id')
     return None
 
 def get_grade_display(grade):
@@ -743,6 +750,14 @@ def get_grade_display(grade):
             return grade
     except:
         return grade
+
+def get_subject_mapping_for_admin(teacher_id):
+    """Get all subject assignments for a subject admin."""
+    assignments = []
+    for sa in st.session_state.get('subject_admin_assignments', []):
+        if sa.get('teacher_id') == teacher_id:
+            assignments.append(sa)
+    return assignments
 
 # ---- Page Config ----
 st.set_page_config(
@@ -816,10 +831,10 @@ st.markdown("""
         background-size: cover !important;
         background-position: center !important;
         background-repeat: no-repeat !important;
-        padding: 2rem 3rem 1.8rem 3rem !important;
+        padding: 1.5rem 2rem !important;
         border-radius: 16px !important;
         border: 1px solid rgba(255, 215, 0, 0.3) !important;
-        margin-bottom: 1.5rem !important;
+        margin-bottom: 1rem !important;
         box-shadow: 0 4px 30px rgba(0,0,0,0.1) !important;
         position: relative !important;
         overflow: hidden !important;
@@ -832,30 +847,30 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 20px;
+        gap: 15px;
     }
 
     .main-header .logo-section {
         display: flex;
         align-items: center;
-        gap: 25px;
-        flex: 1;
+        gap: 15px;
     }
 
     .main-header .logo-icon {
-        width: 75px;
-        height: 75px;
+        width: 60px;
+        height: 60px;
         background: rgba(255, 215, 0, 0.2) !important;
         border: 2px solid #FFD700 !important;
-        border-radius: 20px;
+        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2.8rem;
+        font-size: 2.2rem;
         color: #FFFFFF;
         backdrop-filter: blur(10px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.2);
         animation: pulse 3s infinite;
+        flex-shrink: 0;
     }
 
     @keyframes pulse {
@@ -864,20 +879,21 @@ st.markdown("""
     }
 
     .main-header .logo-text h1 {
-        font-size: 3.5rem !important;
+        font-size: 2.2rem !important;
         font-weight: 800 !important;
         color: #FFFFFF !important;
         background: none !important;
         -webkit-text-fill-color: #FFFFFF !important;
         margin: 0;
         text-shadow: 0 2px 30px rgba(0,0,0,0.3);
+        white-space: nowrap;
     }
 
     .main-header .logo-text .subtitle {
-        color: rgba(255, 255, 255, 0.95) !important;
-        font-size: 1.4rem !important;
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 0.9rem !important;
         font-weight: 400 !important;
-        margin: 5px 0 0 0;
+        margin: 2px 0 0 0;
         text-shadow: 0 1px 15px rgba(0,0,0,0.2);
     }
 
@@ -886,36 +902,16 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    .main-header .logo-text .developer-credit {
-        color: rgba(255, 255, 255, 0.7) !important;
-        font-size: 1rem !important;
-        font-weight: 400 !important;
-        margin: 8px 0 0 0;
-        font-style: italic;
-        letter-spacing: 0.5px;
-        text-shadow: 0 1px 10px rgba(0,0,0,0.2);
-    }
-
-    .main-header .logo-text .developer-credit .highlight-name {
-        color: #FFD700 !important;
-        font-weight: 600 !important;
-    }
-
-    .main-header .logo-text .developer-credit .highlight-institution {
-        color: #90EE90 !important;
-        font-weight: 600 !important;
-    }
-
     .main-header .header-right {
         display: flex;
         align-items: center;
-        gap: 30px;
+        gap: 15px;
         flex-wrap: wrap;
     }
 
     .main-header .header-stats {
         display: flex;
-        gap: 25px;
+        gap: 12px;
         flex-wrap: wrap;
         align-items: center;
     }
@@ -924,10 +920,10 @@ st.markdown("""
         background: rgba(255, 255, 255, 0.12) !important;
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.15);
-        padding: 12px 22px;
-        border-radius: 14px;
+        padding: 8px 16px;
+        border-radius: 12px;
         text-align: center;
-        min-width: 100px;
+        min-width: 80px;
         transition: all 0.3s;
     }
 
@@ -938,18 +934,19 @@ st.markdown("""
     }
 
     .main-header .stat-item .number {
-        font-size: 2.5rem !important;
+        font-size: 1.8rem !important;
         font-weight: 800 !important;
         color: #FFD700 !important;
         display: block;
+        line-height: 1.2;
     }
 
     .main-header .stat-item .label {
-        font-size: 0.95rem !important;
+        font-size: 0.75rem !important;
         font-weight: 500 !important;
         color: rgba(255, 255, 255, 0.8) !important;
         display: block;
-        margin-top: 4px;
+        margin-top: 2px;
     }
 
     .user-info {
@@ -986,18 +983,18 @@ st.markdown("""
         background: #F8F9FA !important;
         border: 1px solid #E8EAED;
         border-radius: 16px;
-        padding: 1.2rem 2.5rem;
-        margin-bottom: 2rem;
+        padding: 0.8rem 1.5rem;
+        margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 15px;
+        gap: 10px;
     }
 
     .status-bar .status-dot {
-        width: 14px;
-        height: 14px;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
         display: inline-block;
         animation: blink 2s infinite;
@@ -1020,7 +1017,7 @@ st.markdown("""
 
     .status-bar .status-text {
         color: #202124 !important;
-        font-size: 1.2rem !important;
+        font-size: 1rem !important;
         font-weight: 500 !important;
     }
 
@@ -1085,9 +1082,9 @@ st.markdown("""
     }
 
     .stButton > button {
-        font-size: 1.2rem !important;
+        font-size: 1.1rem !important;
         font-weight: 600 !important;
-        padding: 0.9rem 2.2rem !important;
+        padding: 0.7rem 1.8rem !important;
         background: linear-gradient(135deg, #1A73E8, #4285F4) !important;
         color: white !important;
         border-radius: 30px !important;
@@ -1095,7 +1092,7 @@ st.markdown("""
         width: 100%;
         transition: all 0.3s !important;
         box-shadow: 0 2px 8px rgba(26,115,232,0.25) !important;
-        min-height: 55px !important;
+        min-height: 48px !important;
     }
 
     .stButton > button:hover {
@@ -1104,19 +1101,20 @@ st.markdown("""
     }
 
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
+        gap: 8px;
         background: #F8F9FA !important;
         border-radius: 16px;
-        padding: 8px;
+        padding: 6px;
         border: 1px solid #E8EAED;
+        flex-wrap: wrap;
     }
 
     .stTabs [data-baseweb="tab"] {
         border-radius: 12px;
-        padding: 14px 30px;
+        padding: 10px 20px;
         color: #5F6368 !important;
         font-weight: 500 !important;
-        font-size: 1.1rem !important;
+        font-size: 0.95rem !important;
     }
 
     .stTabs [aria-selected="true"] {
@@ -1133,10 +1131,10 @@ st.markdown("""
         border: 1px solid #DADCE0 !important;
         border-radius: 12px !important;
         color: #202124 !important;
-        padding: 14px 20px !important;
-        font-size: 1.15rem !important;
+        padding: 12px 18px !important;
+        font-size: 1.05rem !important;
         font-weight: 400 !important;
-        min-height: 55px !important;
+        min-height: 48px !important;
         transition: all 0.3s !important;
     }
 
@@ -1155,8 +1153,8 @@ st.markdown("""
         background: #FFFFFF !important;
         border: 1px solid #E8EAED !important;
         border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
         transition: all 0.3s;
         box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
@@ -1317,6 +1315,38 @@ st.markdown("""
         margin-bottom: 8px;
     }
 
+    .rank-card {
+        background: #FFFFFF;
+        border: 1px solid #E8EAED;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .rank-card .rank-number {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1A73E8;
+        min-width: 60px;
+    }
+    .rank-card .student-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        flex: 1;
+        padding: 0 15px;
+    }
+    .rank-card .student-score {
+        font-weight: 700;
+        font-size: 1.2rem;
+        color: #34A853;
+    }
+    .rank-card .medal {
+        font-size: 2rem;
+    }
+
     @media (max-width: 768px) {
         .student-row {
             grid-template-columns: 50px 1fr 1fr;
@@ -1333,11 +1363,16 @@ st.markdown("""
             transform: translate(-50%, -50%) rotate(-15deg);
         }
         .block-container { padding: 0.5rem 0.75rem !important; }
-        .main-header .logo-text h1 { font-size: 1.8rem !important; }
-        .main-header .logo-text .subtitle { font-size: 1rem !important; }
-        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 8px 12px !important; }
+        .main-header .logo-text h1 { font-size: 1.4rem !important; white-space: normal !important; }
+        .main-header .logo-text .subtitle { font-size: 0.8rem !important; }
+        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 6px 10px !important; }
         .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
-        .main-header .header-stats .stat-item .label { font-size: 0.7rem !important; }
+        .main-header .header-stats .stat-item .label { font-size: 0.65rem !important; }
+        .main-header .logo-icon { width: 45px !important; height: 45px !important; font-size: 1.6rem !important; }
+        .main-header { padding: 1rem !important; }
+        .rank-card .rank-number { font-size: 1.5rem; min-width: 40px; }
+        .rank-card .student-name { font-size: 0.95rem; }
+        .rank-card .student-score { font-size: 1rem; }
     }
 
     @media (max-width: 480px) {
@@ -1354,13 +1389,17 @@ st.markdown("""
             transform: translate(-50%, -50%) rotate(-10deg);
         }
         .block-container { padding: 0.25rem 0.5rem !important; }
-        .main-header .logo-text h1 { font-size: 1.4rem !important; }
+        .main-header .logo-text h1 { font-size: 1.2rem !important; }
         .main-header .header-content { flex-direction: column !important; align-items: flex-start !important; }
         .main-header .header-right { width: 100% !important; flex-direction: column !important; align-items: stretch !important; }
-        .main-header .header-stats { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-        .main-header .stat-item { min-width: auto !important; padding: 6px 10px !important; }
-        .main-header .logo-icon { width: 50px !important; height: 50px !important; font-size: 1.8rem !important; }
+        .main-header .header-stats { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 6px !important; }
+        .main-header .stat-item { min-width: auto !important; padding: 4px 8px !important; }
+        .main-header .stat-item .number { font-size: 1rem !important; }
+        .main-header .stat-item .label { font-size: 0.55rem !important; }
+        .main-header .logo-icon { width: 35px !important; height: 35px !important; font-size: 1.2rem !important; }
         .login-container { padding: 1.5rem !important; margin: 1rem !important; }
+        .rank-card { flex-direction: column; text-align: center; gap: 5px; }
+        .rank-card .student-name { padding: 5px 0; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1375,6 +1414,7 @@ def get_grade_class(grade):
         return "english-grade"
 
 def get_student_rank(student_id, grade, section):
+    """Get student rank within their grade and section."""
     students_in_class = [s for s in st.session_state.students 
                          if s.get("grade") == grade and s.get("section") == section]
     if not students_in_class:
@@ -1392,6 +1432,29 @@ def get_student_rank(student_id, grade, section):
             rank = i + 1
             break
     return f"{rank}/{total}", rank, total
+
+def get_rankings_by_grade_section(grade, section):
+    """Get rankings for students in a specific grade and section."""
+    students_in_class = [s for s in st.session_state.students 
+                         if s.get("grade") == grade and s.get("section") == section]
+    if not students_in_class:
+        return []
+    
+    student_scores = []
+    for s in students_in_class:
+        evals = get_approved_evaluations_for_student(s["id"])
+        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
+        student_scores.append({
+            "id": s["id"],
+            "name": s["name"],
+            "avg": avg_score,
+            "gender": s.get("gender", "N/A"),
+            "evaluations": len(evals)
+        })
+    sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
+    for i, s in enumerate(sorted_students):
+        s["rank"] = i + 1
+    return sorted_students
 
 def get_homeroom_comment(avg_score):
     if avg_score >= 90:
@@ -2013,6 +2076,7 @@ def generate_student_card(student, semester="Semester III"):
     address = student.get('address', '_________')
     grade = student.get('grade', 'Grade 1')
     section = student.get('section', 'A')
+    parent_contact = student.get('parent_contact', '_________')
     academic_year = "2018"
     school_name = st.session_state.school_name
 
@@ -2398,6 +2462,7 @@ def generate_student_card(student, semester="Semester III"):
                 <tr><td class="label">የተማሪው ስም / Name of student:</td><td class="value">{name}</td></tr>
                 <tr><td class="label">ፆታ / Sex:</td><td class="value">{gender}</td><td class="label">ዕድሜ / Age:</td><td class="value">{age}</td></tr>
                 <tr><td class="label">አድራሻ / Address:</td><td class="value">{address}</td></tr>
+                <tr><td class="label">የወላጅ ስልክ / Parent Contact:</td><td class="value">{parent_contact}</td></tr>
                 <tr><td class="label">የትምህርት ዘመን / Academic Year:</td><td class="value">{academic_year}</td></tr>
                 <tr><td class="label">ክፍሉ / Grade:</td><td class="value">{grade}</td></tr>
                 <tr><td class="label">ክፍል ተዛውሯል/ራለች / Promoted to grade:</td><td class="value">{promoted}</td></tr>
@@ -2506,22 +2571,35 @@ def show_student_card_panel():
     st.markdown("### 🎓 Student Report Cards")
     st.info("📄 Generate a two-page landscape report card for each student.")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         grade_options = ["All"] + [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options, index=0)
+        selected_grade = st.selectbox("Select Grade", grade_options, index=0, key="card_grade")
     with col2:
+        # Get sections for selected grade
+        if selected_grade != "All":
+            sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == selected_grade]))
+            section_options = ["All"] + sections
+        else:
+            sections = sorted(set([s.get("section", "A") for s in st.session_state.students]))
+            section_options = ["All"] + sections
+        selected_section = st.selectbox("Select Section", section_options, index=0, key="card_section")
+    with col3:
         semester_options = ["Semester I", "Semester II", "Semester III"]
-        selected_semester = st.selectbox("Semester", semester_options, index=2)
+        selected_semester = st.selectbox("Semester", semester_options, index=2, key="card_semester")
     
+    # Filter students
+    filtered_students = st.session_state.students
     if selected_grade != "All":
-        filtered_students = [s for s in st.session_state.students if s.get("grade") == selected_grade]
-    else:
-        filtered_students = st.session_state.students
+        filtered_students = [s for s in filtered_students if s.get("grade") == selected_grade]
+    if selected_section != "All":
+        filtered_students = [s for s in filtered_students if s.get("section") == selected_section]
     
     if not filtered_students:
         st.info("No students match the selection.")
         return
+    
+    st.markdown(f"**Found {len(filtered_students)} student(s)**")
     
     for student in filtered_students:
         with st.expander(f"📄 {student['name']} - {student.get('grade', '')} {student.get('section', '')}"):
@@ -2543,6 +2621,17 @@ def show_subject_admin_panel():
         st.error("Subject admin profile not found.")
         return
     
+    # Show which subjects this admin manages
+    admin_assignments = get_subject_mapping_for_admin(teacher["id"])
+    if admin_assignments:
+        st.markdown("#### 📚 Subjects You Administer:")
+        for assign in admin_assignments:
+            grade_range = assign.get('grade_range', [])
+            grade_str = ", ".join(grade_range) if grade_range else "All Grades"
+            st.markdown(f"- **{assign.get('subject')}** (Grades: {grade_str})")
+    else:
+        st.warning("You are not assigned as a subject admin for any subject.")
+    
     my_pending_batches = get_batches_for_subject_admin(teacher["id"])
     if not my_pending_batches:
         st.success("🎉 No pending batches for your subjects.")
@@ -2553,9 +2642,21 @@ def show_subject_admin_panel():
         <div class="approval-card pending">
             <h4>📦 Batch from {batch.get('teacher_name', 'Unknown')} · {batch.get('subject', 'N/A')}</h4>
             <p><b>Grade:</b> {batch.get('grade', 'N/A')} · <b>Section:</b> {batch.get('section', 'N/A')}</p>
+            <p><b>Semester:</b> {batch.get('semester', 'N/A')}</p>
             <p><b>Students:</b> {len(batch.get('students', []))}</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Show student scores preview
+        if batch.get('students'):
+            with st.expander("📊 View Student Scores"):
+                preview_data = []
+                for s in batch['students']:
+                    preview_data.append({
+                        "Name": s.get('student_name', 'Unknown'),
+                        "Overall": s.get('overall', 0)
+                    })
+                st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -2565,7 +2666,7 @@ def show_subject_admin_panel():
                 load_all_data()
                 add_notification(f"Batch approved by subject admin", "success")
                 st.balloons()
-                st.success("✅ Batch approved!")
+                st.success("✅ Batch approved! It will now go to school admin for final approval.")
                 time.sleep(1)
                 st.rerun()
         with col2:
@@ -2692,12 +2793,19 @@ def show_teacher_panel():
     
     remarks = st.text_area("Batch Remarks / Comments", value=remarks)
     
+    # Find subject admin for this subject and grade
+    subject_admin_id = get_subject_admin(teacher_subject, selected_grade)
+    
+    if subject_admin_id:
+        st.info(f"📤 This batch will be sent to the subject admin for approval.")
+    else:
+        st.warning(f"⚠️ No subject admin assigned for {teacher_subject}. Batch will go directly to school admin.")
+    
     if st.button("💾 Submit Batch for Approval", width='stretch'):
         if not is_registration_open():
             st.error("⚠️ Registration period is closed. Cannot submit.")
         else:
             students_list = edited_df.to_dict(orient="records")
-            subject_admin_id = get_subject_admin(teacher_subject)
             
             batch_data = {
                 "teacher_id": teacher_id,
@@ -2855,7 +2963,7 @@ def show_login_page():
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
         "👤 My Profile",
         "📊 Overview",
         "⏰ Registration",
@@ -2870,7 +2978,8 @@ def show_admin_panel():
         "⚠️ Penalty Log",
         "🏫 Settings",
         "👨‍🏫 Homeroom",
-        "🎓 Student Cards"
+        "🎓 Student Cards",
+        "📚 Subject Admins"
     ])
 
     # Tab 0: My Profile
@@ -3130,9 +3239,22 @@ def show_admin_panel():
                 <div class="approval-card pending">
                     <h4>📦 Batch from {batch.get('teacher_name', 'Unknown')} · {batch.get('subject', 'N/A')}</h4>
                     <p><b>Grade:</b> {batch.get('grade', 'N/A')} · <b>Section:</b> {batch.get('section', 'N/A')}</p>
+                    <p><b>Semester:</b> {batch.get('semester', 'N/A')}</p>
+                    <p><b>Status:</b> {'Subject Approved' if batch.get('status') == 'subject_approved' else 'Pending'}</p>
                     <p><b>Students:</b> {len(batch.get('students', []))}</p>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Show student scores preview
+                if batch.get('students'):
+                    with st.expander("📊 View Student Scores"):
+                        preview_data = []
+                        for s in batch['students']:
+                            preview_data.append({
+                                "Name": s.get('student_name', 'Unknown'),
+                                "Overall": s.get('overall', 0)
+                            })
+                        st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
                 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -3178,28 +3300,70 @@ def show_admin_panel():
 
     # Tab 7: Rankings
     with tab8:
-        st.markdown("#### 📊 Grade Rankings")
-        grade_options = [f"Grade {i}" for i in range(1, 13)]
-        selected_grade = st.selectbox("Select Grade", grade_options, key="rank_grade")
+        st.markdown("#### 📊 Grade and Section Rankings")
         
-        students_in_grade = [s for s in st.session_state.students if s.get("grade") == selected_grade]
-        if not students_in_grade:
-            st.info(f"No students in {selected_grade}")
+        col1, col2 = st.columns(2)
+        with col1:
+            grade_options = [f"Grade {i}" for i in range(1, 13)]
+            selected_rank_grade = st.selectbox("Select Grade", grade_options, key="rank_grade")
+        with col2:
+            # Get sections for selected grade
+            sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == selected_rank_grade]))
+            section_options = ["All"] + sections
+            selected_rank_section = st.selectbox("Select Section", section_options, key="rank_section")
+        
+        if selected_rank_section == "All":
+            students_to_rank = [s for s in st.session_state.students if s.get("grade") == selected_rank_grade]
         else:
-            student_data = []
-            for s in students_in_grade:
-                evals = get_approved_evaluations_for_student(s["id"])
-                avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
-                student_data.append({"Name": s["name"], "Average": avg_score, "Evaluations": len(evals)})
-            df = pd.DataFrame(student_data).sort_values("Average", ascending=False).reset_index(drop=True)
-            df["Rank"] = df.index + 1
-            st.dataframe(df[["Rank", "Name", "Average", "Evaluations"]], use_container_width=True, hide_index=True)
+            students_to_rank = [s for s in st.session_state.students 
+                               if s.get("grade") == selected_rank_grade and s.get("section") == selected_rank_section]
+        
+        if not students_to_rank:
+            st.info(f"No students in {selected_rank_grade}{' - Section ' + selected_rank_section if selected_rank_section != 'All' else ''}")
+        else:
+            rankings = get_rankings_by_grade_section(selected_rank_grade, selected_rank_section if selected_rank_section != "All" else students_to_rank[0].get("section", "A"))
+            
+            # If "All" sections, combine all students
+            if selected_rank_section == "All":
+                all_students = []
+                for s in students_to_rank:
+                    evals = get_approved_evaluations_for_student(s["id"])
+                    avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
+                    all_students.append({
+                        "id": s["id"],
+                        "name": s["name"],
+                        "section": s.get("section", "A"),
+                        "avg": avg_score,
+                        "gender": s.get("gender", "N/A"),
+                        "evaluations": len(evals)
+                    })
+                sorted_students = sorted(all_students, key=lambda x: x["avg"], reverse=True)
+                for i, s in enumerate(sorted_students):
+                    s["rank"] = i + 1
+                rankings = sorted_students
+            else:
+                rankings = get_rankings_by_grade_section(selected_rank_grade, selected_rank_section)
+            
+            st.markdown(f"**📊 Rankings for {selected_rank_grade} - Section {selected_rank_section if selected_rank_section != 'All' else 'All Sections'}**")
+            
+            # Display rankings with medals
+            for student in rankings:
+                rank = student.get("rank", 0)
+                medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"#{rank}"
+                st.markdown(f"""
+                <div class="rank-card">
+                    <div class="rank-number">{medal}</div>
+                    <div class="student-name">👤 {student['name']}</div>
+                    <div style="color:#5F6368;font-size:0.9rem;">Section: {student.get('section', 'A')}</div>
+                    <div class="student-score">{student['avg']}%</div>
+                </div>
+                """, unsafe_allow_html=True)
 
     # Tab 8: Students
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
-        # Add Student with Photo
+        # Add Student with Photo and Parent Contact
         with st.expander("➕ Add New Student", expanded=False):
             with st.form("add_student_form"):
                 col1, col2 = st.columns(2)
@@ -3210,11 +3374,12 @@ def show_admin_panel():
                 with col2:
                     gender = st.selectbox("Gender", ["M", "F", "Other"])
                     parent = st.text_input("Parent/Guardian")
+                    parent_contact = st.text_input("Parent/Guardian Contact Number *")
                     section = st.text_input("Section", value="A")
                     student_photo = st.file_uploader("📸 Student Photo", type=["jpg", "jpeg", "png"])
                 
                 if st.form_submit_button("Add Student", width='stretch'):
-                    if name:
+                    if name and parent_contact:
                         existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
                         next_num = max(existing_ids) + 1 if existing_ids else 1
                         student_id = f"S{next_num:04d}"
@@ -3239,6 +3404,7 @@ def show_admin_panel():
                             "section": section,
                             "subjects": GRADE_SUBJECTS.get(grade, []),
                             "parent_name": parent,
+                            "parent_contact": parent_contact,
                             "profile_photo": photo_encoded,
                             "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M")
                         }
@@ -3266,20 +3432,36 @@ def show_admin_panel():
                         except Exception as e:
                             st.error(f"❌ Failed to add student: {e}")
                     else:
-                        st.error("Name is required.")
+                        st.error("Name and Parent Contact Number are required.")
 
-        # List Students with Photos and Passwords
+        # List Students with Photos, Passwords and Parent Contact
         if st.session_state.students:
             st.markdown("#### 📋 All Students")
             
             search_student = st.text_input("🔍 Search Student", placeholder="Type name or ID...")
             
+            # Filter by grade and section
+            col1, col2 = st.columns(2)
+            with col1:
+                grade_filter = st.selectbox("Filter by Grade", ["All"] + [f"Grade {i}" for i in range(1, 13)])
+            with col2:
+                if grade_filter != "All":
+                    sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == grade_filter]))
+                    section_filter = st.selectbox("Filter by Section", ["All"] + sections)
+                else:
+                    sections = sorted(set([s.get("section", "A") for s in st.session_state.students]))
+                    section_filter = st.selectbox("Filter by Section", ["All"] + sections)
+            
             filtered_students = st.session_state.students
             if search_student:
                 search_lower = search_student.lower()
-                filtered_students = [s for s in st.session_state.students 
+                filtered_students = [s for s in filtered_students 
                                    if search_lower in s.get('name', '').lower() or 
                                       search_lower in s.get('id', '').lower()]
+            if grade_filter != "All":
+                filtered_students = [s for s in filtered_students if s.get("grade") == grade_filter]
+            if section_filter != "All":
+                filtered_students = [s for s in filtered_students if s.get("section") == section_filter]
             
             # Display header
             st.markdown("""
@@ -3287,7 +3469,7 @@ def show_admin_panel():
                 <div>📷</div>
                 <div>👤 Name</div>
                 <div>📚 Grade</div>
-                <div>🆔 ID / Password</div>
+                <div>📱 Contact</div>
                 <div style="text-align:center;">Action</div>
             </div>
             """, unsafe_allow_html=True)
@@ -3301,9 +3483,9 @@ def show_admin_panel():
                     student_password = "🔑 Set Password"
                     color = "#F9AB00"
                 else:
-                    color = "#EA4335"  # Red for set passwords
+                    color = "#EA4335"
                 
-                col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 1.5, 1])
+                col1, col2, col3, col4, col5 = st.columns([1, 2, 1.5, 1.5, 1])
                 with col1:
                     st.markdown(display_student_photo(student_id, 50), unsafe_allow_html=True)
                 with col2:
@@ -3312,9 +3494,12 @@ def show_admin_panel():
                     st.markdown(f"{student.get('grade', 'N/A')} · {student.get('section', 'N/A')}")
                 with col4:
                     st.markdown(f"""
-                    <div>
-                        <code style="font-size:0.85rem;">{student_id}</code><br>
-                        <span style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:{color};font-weight:600;font-size:0.9rem;">{student_password}</span>
+                    <div style="font-size:0.85rem;">
+                        <div><span style="font-weight:600;">Parent:</span> {student.get('parent_name', 'N/A')}</div>
+                        <div><span style="font-weight:600;">📱:</span> {student.get('parent_contact', 'N/A')}</div>
+                        <div style="font-size:0.7rem;margin-top:2px;">
+                            <span style="background:#FCE8E6;padding:2px 8px;border-radius:4px;color:{color};font-weight:600;">{student_password}</span>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 with col5:
@@ -3350,6 +3535,7 @@ def show_admin_panel():
                                 "section": str(row.get("Section", "A")),
                                 "gender": str(row.get("Gender", "")),
                                 "parent_name": str(row.get("Parent", "")),
+                                "parent_contact": str(row.get("Parent Contact", "")),
                                 "profile_photo": "",
                                 "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
                                 "subjects": GRADE_SUBJECTS.get(str(row.get("Grade", "Grade 1")), [])
@@ -3407,16 +3593,226 @@ def show_admin_panel():
     # Tab 13: Homeroom
     with tab14:
         st.markdown("### 👨‍🏫 Homeroom Teacher Assignments")
+        st.markdown("Assign a homeroom teacher to each grade and section.")
+        
+        # Add homeroom assignment
+        with st.form("add_homeroom"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                grade_options = [f"Grade {i}" for i in range(1, 13)]
+                homeroom_grade = st.selectbox("Grade", grade_options)
+            with col2:
+                # Get sections for the selected grade
+                if homeroom_grade:
+                    sections = sorted(set([s.get("section", "A") for s in st.session_state.students if s.get("grade") == homeroom_grade]))
+                    if not sections:
+                        sections = ["A"]
+                    homeroom_section = st.selectbox("Section", sections)
+                else:
+                    homeroom_section = st.text_input("Section", "A")
+            with col3:
+                teacher_options = ["None"] + [f"{t['name']} ({t.get('username', '')})" for t in st.session_state.teachers]
+                homeroom_teacher = st.selectbox("Homeroom Teacher", teacher_options)
+            
+            if st.form_submit_button("Assign Homeroom Teacher", width='stretch'):
+                if homeroom_teacher != "None" and homeroom_grade:
+                    teacher_name = homeroom_teacher.split(" (")[0]
+                    teacher_id = None
+                    for t in st.session_state.teachers:
+                        if t['name'] == teacher_name:
+                            teacher_id = t['id']
+                            break
+                    
+                    if teacher_id:
+                        supabase_admin = get_supabase_admin()
+                        # Check if assignment already exists
+                        existing = None
+                        for h in st.session_state.homeroom_assignments:
+                            if h.get('grade') == homeroom_grade and h.get('section') == homeroom_section:
+                                existing = h
+                                break
+                        
+                        if existing:
+                            supabase_admin.table("homeroom_assignments").update({
+                                "teacher_id": teacher_id,
+                                "teacher_name": teacher_name
+                            }).eq("id", existing["id"]).execute()
+                        else:
+                            supabase_admin.table("homeroom_assignments").insert({
+                                "grade": homeroom_grade,
+                                "section": homeroom_section,
+                                "teacher_id": teacher_id,
+                                "teacher_name": teacher_name
+                            }).execute()
+                        load_all_data()
+                        add_notification(f"Homeroom teacher assigned for {homeroom_grade} - Section {homeroom_section}", "success")
+                        st.success(f"✅ Homeroom teacher assigned for {homeroom_grade} - Section {homeroom_section}")
+                        st.rerun()
+                    else:
+                        st.error("Teacher not found.")
+                else:
+                    st.warning("Please select a grade, section, and teacher.")
+        
+        st.markdown("---")
+        st.markdown("#### 📋 Current Homeroom Assignments")
+        
         if st.session_state.homeroom_assignments:
-            df = pd.DataFrame(st.session_state.homeroom_assignments)
-            df["Teacher Name"] = df["teacher_id"].apply(get_teacher_name)
-            st.dataframe(df[["grade", "section", "Teacher Name"]], use_container_width=True)
+            assignments_data = []
+            for h in st.session_state.homeroom_assignments:
+                assignments_data.append({
+                    "Grade": h.get('grade', ''),
+                    "Section": h.get('section', ''),
+                    "Homeroom Teacher": h.get('teacher_name', 'Unknown')
+                })
+            st.dataframe(pd.DataFrame(assignments_data), use_container_width=True, hide_index=True)
+            
+            # Option to remove assignment
+            for h in st.session_state.homeroom_assignments:
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                with col1:
+                    st.markdown(f"**{h.get('grade', '')}**")
+                with col2:
+                    st.markdown(f"Section {h.get('section', '')}")
+                with col3:
+                    st.markdown(f"👨‍🏫 {h.get('teacher_name', 'Unknown')}")
+                with col4:
+                    if st.button("🗑️ Remove", key=f"remove_homeroom_{h.get('id', '')}", width='stretch'):
+                        supabase_admin = get_supabase_admin()
+                        supabase_admin.table("homeroom_assignments").delete().eq("id", h.get("id")).execute()
+                        load_all_data()
+                        st.rerun()
         else:
             st.info("No homeroom assignments yet.")
 
     # Tab 14: Student Cards
     with tab15:
         show_student_card_panel()
+
+    # Tab 15: Subject Admins
+    with tab16:
+        st.markdown("### 📚 Subject Admin Assignments")
+        st.markdown("Assign teachers as subject admins for specific subjects and grade ranges.")
+        st.info("Subject admins review and approve teacher-submitted batches before they go to the school admin for final approval.")
+        
+        # Display current subject admin assignments
+        if st.session_state.get('subject_admin_assignments'):
+            st.markdown("#### Current Subject Admin Assignments")
+            for assign in st.session_state.subject_admin_assignments:
+                teacher_name = get_teacher_name(assign.get('teacher_id', ''))
+                grade_range = assign.get('grade_range', [])
+                grade_str = ", ".join(grade_range) if grade_range else "All Grades"
+                st.markdown(f"""
+                <div style="background:#F8F9FA;padding:0.8rem 1rem;border-radius:10px;margin-bottom:0.5rem;
+                            border-left:4px solid #1A73E8;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+                    <div>
+                        <b>📚 {assign.get('subject', '')}</b>
+                        <span style="color:#5F6368;margin-left:10px;">👨‍🏫 {teacher_name}</span>
+                        <span style="color:#5F6368;margin-left:10px;font-size:0.85rem;">Grades: {grade_str}</span>
+                    </div>
+                    <div>
+                        <span style="background:#E8F0FE;padding:2px 12px;border-radius:12px;font-size:0.8rem;">Subject Admin</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Add new subject admin assignment
+        with st.expander("➕ Assign Subject Admin", expanded=False):
+            with st.form("add_subject_admin"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    # Get all teachers who are subject admins or can be assigned
+                    teacher_options = [f"{t['name']} ({t.get('username', '')})" for t in st.session_state.teachers]
+                    if not teacher_options:
+                        teacher_options = ["No teachers available"]
+                    selected_teacher = st.selectbox("Select Teacher *", teacher_options)
+                    
+                    subject_options = ALL_SUBJECTS
+                    selected_subject = st.selectbox("Subject to Administer *", subject_options)
+                
+                with col2:
+                    # Grade range selection
+                    grade_range_options = ["All Grades"] + [f"Grade {i}" for i in range(1, 13)]
+                    selected_grades = st.multiselect(
+                        "Grade Range (select specific grades or leave empty for all)",
+                        options=grade_range_options,
+                        default=["All Grades"]
+                    )
+                
+                if st.form_submit_button("Assign Subject Admin", width='stretch'):
+                    if selected_teacher and selected_teacher != "No teachers available":
+                        teacher_name = selected_teacher.split(" (")[0]
+                        teacher_id = None
+                        for t in st.session_state.teachers:
+                            if t['name'] == teacher_name:
+                                teacher_id = t['id']
+                                break
+                        
+                        if teacher_id:
+                            # Determine grade range
+                            if "All Grades" in selected_grades or not selected_grades:
+                                grade_range = []
+                            else:
+                                grade_range = [g for g in selected_grades if g != "All Grades"]
+                            
+                            supabase_admin = get_supabase_admin()
+                            
+                            # Check if assignment already exists
+                            existing = None
+                            for a in st.session_state.get('subject_admin_assignments', []):
+                                if a.get('subject') == selected_subject and a.get('teacher_id') == teacher_id:
+                                    existing = a
+                                    break
+                            
+                            if existing:
+                                supabase_admin.table("subject_admin_assignments").update({
+                                    "grade_range": json.dumps(grade_range)
+                                }).eq("id", existing["id"]).execute()
+                            else:
+                                supabase_admin.table("subject_admin_assignments").insert({
+                                    "teacher_id": teacher_id,
+                                    "teacher_name": teacher_name,
+                                    "subject": selected_subject,
+                                    "grade_range": json.dumps(grade_range)
+                                }).execute()
+                            
+                            # Also update teacher's admin_subjects field
+                            for t in st.session_state.teachers:
+                                if t['id'] == teacher_id:
+                                    admin_subjects = json.loads(t.get('admin_subjects', '[]'))
+                                    if selected_subject not in admin_subjects:
+                                        admin_subjects.append(selected_subject)
+                                        supabase_admin.table("teachers").update({
+                                            "admin_subjects": json.dumps(admin_subjects)
+                                        }).eq("id", teacher_id).execute()
+                                    break
+                            
+                            load_all_data()
+                            add_notification(f"Subject admin assigned: {teacher_name} → {selected_subject}", "success")
+                            st.success(f"✅ Subject admin assigned for {selected_subject}!")
+                            st.rerun()
+                        else:
+                            st.error("Teacher not found.")
+                    else:
+                        st.warning("Please select a valid teacher.")
+        
+        # Remove subject admin assignment
+        if st.session_state.get('subject_admin_assignments'):
+            st.markdown("---")
+            st.markdown("#### 🗑️ Remove Subject Admin Assignment")
+            remove_options = [f"{a.get('subject', '')} - {a.get('teacher_name', '')}" for a in st.session_state.subject_admin_assignments]
+            if remove_options:
+                to_remove = st.selectbox("Select assignment to remove", remove_options)
+                if st.button("Remove Assignment", width='stretch'):
+                    subject = to_remove.split(" - ")[0]
+                    teacher_name = to_remove.split(" - ")[1] if " - " in to_remove else ""
+                    for a in st.session_state.subject_admin_assignments:
+                        if a.get('subject') == subject and a.get('teacher_name') == teacher_name:
+                            supabase_admin = get_supabase_admin()
+                            supabase_admin.table("subject_admin_assignments").delete().eq("id", a.get("id")).execute()
+                            load_all_data()
+                            st.success(f"✅ Removed subject admin assignment for {subject}")
+                            st.rerun()
+                            break
 
 # ---- MAIN ----
 def main():
