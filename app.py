@@ -3877,11 +3877,11 @@ def show_deep_statistics():
         else:
             st.info("No teacher workload data available.")
 
-# ---- ADMIN PANEL ----
+# ---- ADMIN PANEL (UPDATED: Removed "📚 Subject Admins" tab) ----
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
         "👤 My Profile",
         "📊 Overview",
         "⏰ Registration",
@@ -3896,8 +3896,7 @@ def show_admin_panel():
         "⚠️ Penalty Log",
         "🏫 Settings",
         "👨‍🏫 Homeroom",
-        "🎓 Student Cards",
-        "📚 Subject Admins"
+        "🎓 Student Cards"
     ])
 
     # Tab 0: My Profile
@@ -4003,11 +4002,6 @@ def show_admin_panel():
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
             teacher_subject = st.selectbox("Subject Taught *", ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
-            teacher_admin_subjects = st.multiselect(
-                "📚Subject Admins (leave empty for regular teacher)",
-                options=ALL_SUBJECTS,
-                default=[]
-            )
 
             if st.form_submit_button("➕ Add Teacher", width='stretch'):
                 if teacher_name:
@@ -4025,14 +4019,13 @@ def show_admin_panel():
                     next_num = max(existing_ids) + 1 if existing_ids else 1
                     teacher_id = f"T{next_num:04d}"
                     added_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    role = "subject_admin" if teacher_admin_subjects else "teacher"
 
                     supabase_admin = get_supabase_admin()
                     try:
                         supabase_admin.table("users").insert({
                             "username": username,
                             "password": hashed_pw,
-                            "role": role,
+                            "role": "teacher",
                             "name": teacher_name,
                             "profile_photo": ""
                         }).execute()
@@ -4045,7 +4038,7 @@ def show_admin_panel():
                             "password": password,
                             "added": added_time,
                             "assignments": json.dumps(st.session_state.assignments_list),
-                            "admin_subjects": json.dumps(teacher_admin_subjects)
+                            "admin_subjects": json.dumps([])
                         }).execute()
                         load_all_data()
                         add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
@@ -4061,7 +4054,7 @@ def show_admin_panel():
                             <div style="background: white; padding: 1rem; border-radius: 10px; margin: 0.5rem 0;">
                                 <p><b>👤 Name:</b> {teacher_name}</p>
                                 <p><b>📚 Subject:</b> {teacher_subject}</p>
-                                <p><b>👤 Role:</b> {role.title()}</p>
+                                <p><b>👤 Role:</b> Teacher</p>
                                 <p><b>🔑 Username:</b> <code style="font-size:1.2rem;background:#f0f0f0;padding:4px 12px;border-radius:4px;">{username}</code></p>
                                 <p><b>🔐 Password:</b> <code style="font-size:1.2rem;background:#FCE8E6;padding:4px 12px;border-radius:4px;color:#EA4335;font-weight:700;">{password}</code></p>
                             </div>
@@ -4084,8 +4077,6 @@ def show_admin_panel():
             for teacher in st.session_state.teachers:
                 assignments = json.loads(teacher.get("assignments", "[]"))
                 assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
-                admin_subjects = json.loads(teacher.get("admin_subjects", "[]"))
-                admin_str = ", ".join(admin_subjects) if admin_subjects else "None"
                 teacher_password = teacher.get('password', 'N/A')
                 
                 st.markdown(f"""
@@ -4095,12 +4086,11 @@ def show_admin_panel():
                             <h4>👨‍🏫 {teacher['name']}</h4>
                             <p><b>📚 Subject:</b> {teacher['subject']}</p>
                             <p><b>📌 Assignments:</b> {assign_str}</p>
-                            <p><b>🔐 Admin Subjects:</b> {admin_str}</p>
                             <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
                         </div>
                         <div style="text-align:right;">
                             <span style="background:#E8F0FE;padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
-                                {'Subject Admin' if admin_subjects else 'Teacher'}
+                                Teacher
                             </span>
                         </div>
                     </div>
@@ -4631,132 +4621,6 @@ def show_admin_panel():
     # Tab 14: Student Cards
     with tab15:
         show_student_card_panel()
-
-    # Tab 15: Subject Admins
-    with tab16:
-        st.markdown("### 📚 Subject Admin Assignments")
-        st.markdown("Assign teachers as subject admins for specific subjects and grade ranges.")
-        st.info("Subject admins review and approve teacher-submitted batches before they go to the school admin for final approval.")
-        
-        # Display current subject admin assignments
-        if st.session_state.get('subject_admin_assignments'):
-            st.markdown("#### Current Subject Admin Assignments")
-            for assign in st.session_state.subject_admin_assignments:
-                teacher_name = get_teacher_name(assign.get('teacher_id', ''))
-                grade_range = assign.get('grade_range', [])
-                grade_str = ", ".join(grade_range) if grade_range else "All Grades"
-                st.markdown(f"""
-                <div style="background:#F8F9FA;padding:0.8rem 1rem;border-radius:10px;margin-bottom:0.5rem;
-                            border-left:4px solid #1A73E8;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-                    <div>
-                        <b>📚 {assign.get('subject', '')}</b>
-                        <span style="color:#5F6368;margin-left:10px;">👨‍🏫 {teacher_name}</span>
-                        <span style="color:#5F6368;margin-left:10px;font-size:0.85rem;">Grades: {grade_str}</span>
-                    </div>
-                    <div>
-                        <span style="background:#E8F0FE;padding:2px 12px;border-radius:12px;font-size:0.8rem;">Subject Admin</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Add new subject admin assignment
-        with st.expander("➕ Assign Subject Admin", expanded=False):
-            with st.form("add_subject_admin"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    # Get all teachers who are subject admins or can be assigned
-                    teacher_options = [f"{t['name']} ({t.get('username', '')})" for t in st.session_state.teachers]
-                    if not teacher_options:
-                        teacher_options = ["No teachers available"]
-                    selected_teacher = st.selectbox("Select Teacher *", teacher_options)
-                    
-                    subject_options = ALL_SUBJECTS
-                    selected_subject = st.selectbox("Subject to Administer *", subject_options)
-                
-                with col2:
-                    # Grade range selection
-                    grade_range_options = ["All Grades"] + [f"Grade {i}" for i in range(1, 13)]
-                    selected_grades = st.multiselect(
-                        "Grade Range (select specific grades or leave empty for all)",
-                        options=grade_range_options,
-                        default=["All Grades"]
-                    )
-                
-                if st.form_submit_button("Assign Subject Admin", width='stretch'):
-                    if selected_teacher and selected_teacher != "No teachers available":
-                        teacher_name = selected_teacher.split(" (")[0]
-                        teacher_id = None
-                        for t in st.session_state.teachers:
-                            if t['name'] == teacher_name:
-                                teacher_id = t['id']
-                                break
-                        
-                        if teacher_id:
-                            # Determine grade range
-                            if "All Grades" in selected_grades or not selected_grades:
-                                grade_range = []
-                            else:
-                                grade_range = [g for g in selected_grades if g != "All Grades"]
-                            
-                            supabase_admin = get_supabase_admin()
-                            
-                            # Check if assignment already exists
-                            existing = None
-                            for a in st.session_state.get('subject_admin_assignments', []):
-                                if a.get('subject') == selected_subject and a.get('teacher_id') == teacher_id:
-                                    existing = a
-                                    break
-                            
-                            if existing:
-                                supabase_admin.table("subject_admin_assignments").update({
-                                    "grade_range": json.dumps(grade_range)
-                                }).eq("id", existing["id"]).execute()
-                            else:
-                                supabase_admin.table("subject_admin_assignments").insert({
-                                    "teacher_id": teacher_id,
-                                    "teacher_name": teacher_name,
-                                    "subject": selected_subject,
-                                    "grade_range": json.dumps(grade_range)
-                                }).execute()
-                            
-                            # Also update teacher's admin_subjects field
-                            for t in st.session_state.teachers:
-                                if t['id'] == teacher_id:
-                                    admin_subjects = json.loads(t.get('admin_subjects', '[]'))
-                                    if selected_subject not in admin_subjects:
-                                        admin_subjects.append(selected_subject)
-                                        supabase_admin.table("teachers").update({
-                                            "admin_subjects": json.dumps(admin_subjects)
-                                        }).eq("id", teacher_id).execute()
-                                    break
-                            
-                            load_all_data()
-                            add_notification(f"Subject admin assigned: {teacher_name} → {selected_subject}", "success")
-                            st.success(f"✅ Subject admin assigned for {selected_subject}!")
-                            st.rerun()
-                        else:
-                            st.error("Teacher not found.")
-                    else:
-                        st.warning("Please select a valid teacher.")
-        
-        # Remove subject admin assignment
-        if st.session_state.get('subject_admin_assignments'):
-            st.markdown("---")
-            st.markdown("#### 🗑️ Remove Subject Admin Assignment")
-            remove_options = [f"{a.get('subject', '')} - {a.get('teacher_name', '')}" for a in st.session_state.subject_admin_assignments]
-            if remove_options:
-                to_remove = st.selectbox("Select assignment to remove", remove_options)
-                if st.button("Remove Assignment", width='stretch'):
-                    subject = to_remove.split(" - ")[0]
-                    teacher_name = to_remove.split(" - ")[1] if " - " in to_remove else ""
-                    for a in st.session_state.subject_admin_assignments:
-                        if a.get('subject') == subject and a.get('teacher_name') == teacher_name:
-                            supabase_admin = get_supabase_admin()
-                            supabase_admin.table("subject_admin_assignments").delete().eq("id", a.get("id")).execute()
-                            load_all_data()
-                            st.success(f"✅ Removed subject admin assignment for {subject}")
-                            st.rerun()
-                            break
 
 # ---- MAIN ----
 def main():
