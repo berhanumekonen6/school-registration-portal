@@ -1213,7 +1213,7 @@ def generate_deep_statistics():
     
     return stats
 
-# ---- CREATE STATISTICS CHARTS (Fixed) ----
+# ---- CREATE STATISTICS CHARTS ----
 def create_statistics_charts(stats):
     """Create interactive Plotly charts for statistics."""
     if not PLOTLY_AVAILABLE:
@@ -2470,7 +2470,7 @@ def generate_deep_summary():
 - አጠቃላይ የማለፊያ መቶኛ: {pass_rate}%
 - {passed} ተማሪዎች አልፈዋል፣ {failed} ተማሪዎች ወድቀዋል
 - ከፍተኛ ውጤት ያለው ትምህርት: {best_subject[0]} ({best_subject[1]}%)
-- መሻሻል የሚፈልግ ትምህርት: {worst_subject[0]} ({worst_subject[1]}%)
+- መሻሻል የሚፍልግ ትምህርት: {worst_subject[0]} ({worst_subject[1]}%)
 - ከፍተኛ ውጤት ያለው ክፍል: {best_grade[0]} ({best_grade[1]}%)
 
 **ዋና ዋና ጥንካሬዎች:**
@@ -2479,7 +2479,7 @@ def generate_deep_summary():
 3. ሚዛናዊ የፆታ ስርጭት
 4. ውጤታማ የመምህራን የስራ ጫና ስርጭት
 
-**መሻሻል የሚፈልጉ ቦታዎች:**
+**መሻሻል የሚፍልጉ ቦታዎች:**
 1. በትምህርት ዓይነቶች መካከል ያለው የአፈጻጸም ልዩነት
 2. በክፍሎች መካከል ያለው የአፈጻጸም ልዩነት
 3. በክፍሎች መካከል ሽግግር ላይ ድጋፍ የሚያስፈልግባቸው ቦታዎች
@@ -4456,42 +4456,263 @@ def show_admin_panel():
                         else:
                             st.error("Failed to reset password")
 
-    # Tab 9: Import/Export
+    # Tab 9: Import/Export - ENHANCED WITH EXCEL IMPORT
     with tab10:
         st.markdown("### 📥 Import / Export Data")
-        uploaded_file = st.file_uploader("Upload Excel file (.xlsx)", type=["xlsx"])
+        
+        st.markdown("#### 📤 Import Students from Excel")
+        st.info("""
+        **Excel File Format Requirements:**
+        - Columns: Full Name, Age, Grade, Gender, Parent/Guardian, Parent/Guardian Contact Number, Section
+        - Grade should be in format: "Grade 1", "Grade 2", ..., "Grade 12"
+        - Gender: "M" or "F"
+        - Parent/Guardian Contact Number is required
+        - Section: "A", "B", "C", etc.
+        """)
+        
+        # Show template download
+        if st.button("📄 Download Excel Template", width='stretch'):
+            # Create template DataFrame
+            template_data = {
+                "Full Name": ["Sample Student 1", "Sample Student 2"],
+                "Age": [10, 12],
+                "Grade": ["Grade 1", "Grade 5"],
+                "Gender": ["M", "F"],
+                "Parent/Guardian": ["Parent Name 1", "Parent Name 2"],
+                "Parent/Guardian Contact Number": ["0912345678", "0923456789"],
+                "Section": ["A", "B"]
+            }
+            template_df = pd.DataFrame(template_data)
+            
+            # Create Excel file in memory
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                template_df.to_excel(writer, index=False, sheet_name='Students')
+            output.seek(0)
+            
+            st.download_button(
+                label="📥 Download Template",
+                data=output.getvalue(),
+                file_name="student_import_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width='stretch'
+            )
+        
+        uploaded_file = st.file_uploader(
+            "Upload Excel file (.xlsx) with student data",
+            type=["xlsx"],
+            key="import_excel"
+        )
+        
         if uploaded_file:
             try:
+                # Read the Excel file
                 df = pd.read_excel(uploaded_file)
+                
+                st.markdown("#### 📋 Preview Import Data")
                 st.dataframe(df, use_container_width=True)
-                if st.button("Import Students", width='stretch'):
-                    supabase = get_supabase_admin()
-                    count = 0
-                    for _, row in df.iterrows():
-                        if pd.notna(row.get("Name")):
-                            existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
-                            next_num = max(existing_ids) + 1 if existing_ids else 1
-                            student_id = f"S{next_num:04d}"
-                            student = {
-                                "id": student_id,
-                                "name": str(row.get("Name", "")),
-                                "grade": str(row.get("Grade", "Grade 1")),
-                                "section": str(row.get("Section", "A")),
-                                "gender": str(row.get("Gender", "")),
-                                "parent_name": str(row.get("Parent", "")),
-                                "parent_contact": str(row.get("Parent Contact", "")),
-                                "profile_photo": "",
-                                "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                "subjects": GRADE_SUBJECTS.get(str(row.get("Grade", "Grade 1")), [])
-                            }
-                            supabase.table("students").insert(student).execute()
-                            create_student_user(student_id, student['name'])
-                            count += 1
-                    load_all_data()
-                    st.success(f"✅ Imported {count} students with accounts!")
-                    st.rerun()
+                st.info(f"📊 Found {len(df)} student records to import")
+                
+                # Column mapping configuration
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Expected Columns:**")
+                    st.markdown("""
+                    - Full Name *
+                    - Age
+                    - Grade *
+                    - Gender
+                    - Parent/Guardian
+                    - Parent/Guardian Contact Number *
+                    - Section
+                    """)
+                with col2:
+                    st.markdown("**Current Columns in File:**")
+                    for col in df.columns:
+                        st.markdown(f"- {col}")
+                
+                # Check required columns
+                required_cols = ["Full Name", "Grade", "Parent/Guardian Contact Number"]
+                missing_cols = [col for col in required_cols if col not in df.columns]
+                
+                if missing_cols:
+                    st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+                    st.info("Please ensure your Excel file has the required columns. Download the template above for guidance.")
+                else:
+                    # Column mapping for flexibility
+                    st.markdown("#### 🔄 Column Mapping (if needed)")
+                    st.caption("If your column names are different, map them to the required fields below:")
+                    
+                    col_mapping = {}
+                    for required in ["Full Name", "Age", "Grade", "Gender", "Parent/Guardian", "Parent/Guardian Contact Number", "Section"]:
+                        if required in df.columns:
+                            col_mapping[required] = required
+                        else:
+                            # Suggest mapping
+                            options = ["(Skip)"] + list(df.columns)
+                            col_mapping[required] = st.selectbox(
+                                f"Map '{required}' to:",
+                                options,
+                                index=0 if required not in df.columns else 0,
+                                key=f"map_{required}"
+                            )
+                    
+                    if st.button("🚀 Import Students", width='stretch'):
+                        with st.spinner("Importing students... This may take a moment."):
+                            supabase_admin = get_supabase_admin()
+                            success_count = 0
+                            error_count = 0
+                            errors = []
+                            
+                            for idx, row in df.iterrows():
+                                try:
+                                    # Get mapped values
+                                    name = str(row.get(col_mapping.get("Full Name", "Full Name"), "")).strip()
+                                    if not name or name == "nan":
+                                        continue
+                                    
+                                    # Get age
+                                    age_val = row.get(col_mapping.get("Age", "Age"), 0)
+                                    try:
+                                        age = int(float(age_val)) if pd.notna(age_val) else 10
+                                    except:
+                                        age = 10
+                                    
+                                    # Get grade
+                                    grade = str(row.get(col_mapping.get("Grade", "Grade"), "Grade 1")).strip()
+                                    if grade == "nan":
+                                        grade = "Grade 1"
+                                    # Ensure grade is valid
+                                    if "Grade" not in grade:
+                                        # Try to convert number to grade
+                                        try:
+                                            grade_num = int(grade)
+                                            grade = f"Grade {grade_num}"
+                                        except:
+                                            grade = "Grade 1"
+                                    
+                                    # Validate grade range
+                                    grade_num = int(grade.replace("Grade ", "")) if "Grade " in grade else 1
+                                    if grade_num < 1 or grade_num > 12:
+                                        grade = "Grade 1"
+                                    
+                                    # Get gender
+                                    gender = str(row.get(col_mapping.get("Gender", "Gender"), "M")).strip()
+                                    if gender == "nan":
+                                        gender = "M"
+                                    gender = "M" if gender.upper() in ["M", "MALE"] else "F" if gender.upper() in ["F", "FEMALE"] else "M"
+                                    
+                                    # Get parent name
+                                    parent = str(row.get(col_mapping.get("Parent/Guardian", "Parent/Guardian"), "")).strip()
+                                    if parent == "nan":
+                                        parent = ""
+                                    
+                                    # Get parent contact (required)
+                                    parent_contact = str(row.get(col_mapping.get("Parent/Guardian Contact Number", "Parent/Guardian Contact Number"), "")).strip()
+                                    if parent_contact == "nan":
+                                        parent_contact = ""
+                                    
+                                    # Get section
+                                    section = str(row.get(col_mapping.get("Section", "Section"), "A")).strip()
+                                    if section == "nan":
+                                        section = "A"
+                                    
+                                    # Generate student ID
+                                    existing_ids = [int(s['id'][1:]) for s in st.session_state.students if s['id'].startswith('S')]
+                                    next_num = max(existing_ids) + 1 if existing_ids else 1
+                                    student_id = f"S{next_num:04d}"
+                                    
+                                    # Create student record
+                                    new_student = {
+                                        "id": student_id,
+                                        "name": name,
+                                        "age": age,
+                                        "gender": gender,
+                                        "grade": grade,
+                                        "section": section,
+                                        "subjects": GRADE_SUBJECTS.get(grade, []),
+                                        "parent_name": parent,
+                                        "parent_contact": parent_contact,
+                                        "profile_photo": "",
+                                        "registered_at": datetime.now().strftime("%Y-%m-%d %H:%M")
+                                    }
+                                    
+                                    # Insert into database
+                                    supabase_admin.table("students").insert(new_student).execute()
+                                    
+                                    # Create user account
+                                    student_pw, msg = create_student_user(student_id, name)
+                                    if student_pw:
+                                        success_count += 1
+                                    else:
+                                        # If user creation fails, still count as success but log error
+                                        success_count += 1
+                                        
+                                except Exception as e:
+                                    error_count += 1
+                                    errors.append(f"Row {idx+1}: {str(e)}")
+                            
+                            # Reload data
+                            load_all_data()
+                            
+                            # Show results
+                            if success_count > 0:
+                                st.balloons()
+                                st.success(f"✅ Successfully imported {success_count} students!")
+                                if error_count > 0:
+                                    st.warning(f"⚠️ {error_count} records had errors:")
+                                    for err in errors[:10]:  # Show first 10 errors
+                                        st.write(f"- {err}")
+                                    if len(errors) > 10:
+                                        st.write(f"... and {len(errors)-10} more errors")
+                            else:
+                                st.error("❌ No students were imported. Please check your file format.")
+                            
+                            st.rerun()
+            
             except Exception as e:
-                st.error(f"Error reading file: {e}")
+                st.error(f"Error reading Excel file: {e}")
+                st.info("Please make sure the file is a valid .xlsx file with the correct format.")
+        
+        st.markdown("---")
+        st.markdown("#### 📤 Export Data")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📥 Export Students to Excel", width='stretch'):
+                if st.session_state.students:
+                    df = pd.DataFrame(st.session_state.students)
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Students')
+                    output.seek(0)
+                    st.download_button(
+                        label="Download Students Excel",
+                        data=output.getvalue(),
+                        file_name=f"students_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        width='stretch'
+                    )
+                else:
+                    st.warning("No students to export")
+        
+        with col2:
+            if st.button("📥 Export Teachers to Excel", width='stretch'):
+                if st.session_state.teachers:
+                    df = pd.DataFrame(st.session_state.teachers)
+                    output = io.BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Teachers')
+                    output.seek(0)
+                    st.download_button(
+                        label="Download Teachers Excel",
+                        data=output.getvalue(),
+                        file_name=f"teachers_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        width='stretch'
+                    )
+                else:
+                    st.warning("No teachers to export")
 
     # Tab 10: Reports
     with tab11:
