@@ -1213,636 +1213,6 @@ def generate_deep_statistics():
     
     return stats
 
-# ---- PAGE CONFIG ----
-st.set_page_config(
-    page_title="School Registration Portal",
-    page_icon="SRP🏫@ET",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ---- CSS ----
-st.markdown("""
-<style>
-    :root {
-        --primary: #1B5E20;
-        --primary-light: #2E7D32;
-        --primary-dark: #0D3B0D;
-        --accent: #1A73E8;
-        --accent-hover: #1557B0;
-        --gold: #FFD700;
-        --dark: #0a1a0a;
-        --dark-card: #0f2a0f;
-    }
-
-    html, body, .stApp {
-        font-size: 18px !important;
-        line-height: 1.8 !important;
-        background: #FFFFFF !important;
-    }
-
-    .stApp, .main, .block-container {
-        background: #FFFFFF !important;
-        color: #202124 !important;
-    }
-
-    h1 {
-        font-size: 3.5rem !important;
-        font-weight: 800 !important;
-        background: linear-gradient(135deg, #1A73E8, #4285F4, #34A853);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    h2 {
-        font-size: 2.8rem !important;
-        font-weight: 700 !important;
-        color: #1A73E8 !important;
-        border-bottom: 3px solid #E8F0FE;
-        padding-bottom: 0.5rem;
-    }
-    h3 {
-        font-size: 2.2rem !important;
-        font-weight: 600 !important;
-        color: #1A73E8 !important;
-    }
-    h4 {
-        font-size: 1.8rem !important;
-        font-weight: 600 !important;
-        color: #202124 !important;
-    }
-
-    p, li, .stMarkdown {
-        font-size: 1.2rem !important;
-        font-weight: 400 !important;
-        line-height: 2 !important;
-        color: #202124 !important;
-    }
-
-    .main-header {
-        background: linear-gradient(rgba(27, 94, 32, 0.65), rgba(13, 59, 13, 0.75)),
-                    url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=400&fit=crop') !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        padding: 1.5rem 2rem !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 215, 0, 0.3) !important;
-        margin-bottom: 1rem !important;
-        box-shadow: 0 4px 30px rgba(0,0,0,0.1) !important;
-        position: relative !important;
-        overflow: hidden !important;
-    }
-
-    .main-header .header-content {
-        position: relative !important;
-        z-index: 1 !important;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 15px;
-    }
-
-    .main-header .logo-section {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .main-header .logo-icon {
-        width: 60px;
-        height: 60px;
-        background: rgba(255, 215, 0, 0.2) !important;
-        border: 2px solid #FFD700 !important;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2.2rem;
-        color: #FFFFFF;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-        animation: pulse 3s infinite;
-        flex-shrink: 0;
-    }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-    }
-
-    .main-header .logo-text h1 {
-        font-size: 2.2rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        background: none !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        margin: 0;
-        text-shadow: 0 2px 30px rgba(0,0,0,0.3);
-        white-space: nowrap;
-    }
-
-    .main-header .logo-text .subtitle {
-        color: rgba(255, 255, 255, 0.9) !important;
-        font-size: 0.9rem !important;
-        font-weight: 400 !important;
-        margin: 2px 0 0 0;
-        text-shadow: 0 1px 15px rgba(0,0,0,0.2);
-    }
-
-    .main-header .logo-text .subtitle .highlight {
-        color: #FFD700 !important;
-        font-weight: 600 !important;
-    }
-
-    .main-header .header-right {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        flex-wrap: wrap;
-    }
-
-    .main-header .header-stats {
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-        align-items: center;
-    }
-
-    .main-header .stat-item {
-        background: rgba(255, 255, 255, 0.12) !important;
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        padding: 8px 16px;
-        border-radius: 12px;
-        text-align: center;
-        min-width: 80px;
-        transition: all 0.3s;
-    }
-
-    .main-header .stat-item:hover {
-        border-color: #FFD700;
-        transform: translateY(-2px);
-        background: rgba(255, 255, 255, 0.2) !important;
-    }
-
-    .main-header .stat-item .number {
-        font-size: 1.8rem !important;
-        font-weight: 800 !important;
-        color: #FFD700 !important;
-        display: block;
-        line-height: 1.2;
-    }
-
-    .main-header .stat-item .label {
-        font-size: 0.75rem !important;
-        font-weight: 500 !important;
-        color: rgba(255, 255, 255, 0.8) !important;
-        display: block;
-        margin-top: 2px;
-    }
-
-    .status-bar {
-        background: #F8F9FA !important;
-        border: 1px solid #E8EAED;
-        border-radius: 16px;
-        padding: 0.8rem 1.5rem;
-        margin-bottom: 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-
-    .status-bar .status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        display: inline-block;
-        animation: blink 2s infinite;
-    }
-
-    .status-bar .status-dot.online {
-        background: #34A853;
-        box-shadow: 0 0 20px rgba(52,168,83,0.3);
-    }
-
-    .status-bar .status-dot.offline {
-        background: #EA4335;
-        box-shadow: 0 0 20px rgba(234,67,53,0.3);
-    }
-
-    @keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    .status-bar .status-text {
-        color: #202124 !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-    }
-
-    .stButton > button {
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-        padding: 0.7rem 1.8rem !important;
-        background: linear-gradient(135deg, #1A73E8, #4285F4) !important;
-        color: white !important;
-        border-radius: 30px !important;
-        border: none !important;
-        width: 100%;
-        transition: all 0.3s !important;
-        box-shadow: 0 2px 8px rgba(26,115,232,0.25) !important;
-        min-height: 48px !important;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-3px) !important;
-        box-shadow: 0 4px 16px rgba(26,115,232,0.35) !important;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: #F8F9FA !important;
-        border-radius: 16px;
-        padding: 6px;
-        border: 1px solid #E8EAED;
-        flex-wrap: wrap;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 12px;
-        padding: 10px 20px;
-        color: #5F6368 !important;
-        font-weight: 500 !important;
-        font-size: 0.95rem !important;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: #FFFFFF !important;
-        color: #1A73E8 !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
-        border: 1px solid #E8EAED;
-    }
-
-    .stTextInput > div > div > input,
-    .stTextArea > div > div > textarea,
-    .stSelectbox > div > div > input {
-        background: #FFFFFF !important;
-        border: 1px solid #DADCE0 !important;
-        border-radius: 12px !important;
-        color: #202124 !important;
-        padding: 12px 18px !important;
-        font-size: 1.05rem !important;
-        font-weight: 400 !important;
-        min-height: 48px !important;
-        transition: all 0.3s !important;
-    }
-
-    .stTextInput > div > div > input:focus,
-    .stTextArea > div > div > textarea:focus {
-        border-color: #1A73E8 !important;
-        box-shadow: 0 0 0 3px rgba(26,115,232,0.15) !important;
-    }
-
-    .css-1d391kg, .css-12w0qpk, [data-testid="stSidebar"] {
-        background: #F8F9FA !important;
-        border-right: 1px solid #E8EAED !important;
-    }
-
-    .student-card, .teacher-card, .eval-card {
-        background: #FFFFFF !important;
-        border: 1px solid #E8EAED !important;
-        border-radius: 16px;
-        padding: 1.2rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-
-    .student-card:hover, .teacher-card:hover, .eval-card:hover {
-        transform: translateY(-4px);
-        border-color: #1A73E8 !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-    }
-
-    .notification-item {
-        padding: 0.75rem;
-        border-radius: 8px;
-        margin-bottom: 0.5rem;
-        border-left: 4px solid #1A73E8;
-        background: #F8F9FA;
-    }
-
-    .notification-item.unread {
-        background: #E8F0FE;
-        border-left-color: #EA4335;
-    }
-
-    .notification-item .notification-time {
-        color: #5F6368 !important;
-        font-size: 0.8rem !important;
-    }
-
-    .notification-item.warning {
-        border-left-color: #EA4335;
-        background: #FCE8E6;
-    }
-
-    .notification-item.success {
-        border-left-color: #34A853;
-        background: #E6F4EA;
-    }
-
-    .login-container {
-        max-width: 500px;
-        margin: 3rem auto;
-        padding: 2.5rem;
-        background: #FFFFFF !important;
-        border: 1px solid #E8EAED;
-        border-radius: 16px;
-        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-    }
-
-    .admin-card {
-        background: #FFFFFF !important;
-        border: 1px solid #E8EAED;
-        border-radius: 16px;
-        padding: 2rem;
-        margin: 1.5rem 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.04);
-    }
-
-    .amharic-grade {
-        font-family: 'Noto Sans Ethiopic', 'Segoe UI', sans-serif;
-        font-size: 1.3rem !important;
-        font-weight: 600 !important;
-        color: #1A73E8 !important;
-    }
-
-    .english-grade {
-        font-size: 1.3rem !important;
-        font-weight: 600 !important;
-        color: #1A73E8 !important;
-    }
-
-    .approval-card {
-        background: #FFFFFF !important;
-        border: 2px solid #E8EAED;
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        transition: all 0.3s;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-
-    .approval-card.pending {
-        border-left: 6px solid #FBBC04;
-    }
-
-    .approval-card.subject-approved {
-        border-left: 6px solid #FFC107;
-    }
-
-    .approval-card.approved {
-        border-left: 6px solid #34A853;
-    }
-
-    .approval-card.rejected {
-        border-left: 6px solid #EA4335;
-    }
-
-    .credential-box {
-        background: #F8F9FA;
-        border: 1px solid #E8EAED;
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin: 5px 0;
-        font-family: 'Courier New', monospace;
-    }
-    .credential-box .label {
-        font-weight: 600;
-        color: #5F6368;
-        font-size: 0.85rem;
-    }
-    .credential-box .value {
-        font-weight: 700;
-        color: #1A73E8;
-        font-size: 1rem;
-    }
-    .credential-box .value.password {
-        color: #EA4335;
-        background: #FCE8E6;
-        padding: 2px 8px;
-        border-radius: 4px;
-    }
-
-    .student-row {
-        display: grid;
-        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
-        gap: 10px;
-        align-items: center;
-        padding: 10px;
-        border-bottom: 1px solid #E8EAED;
-        background: white;
-        border-radius: 8px;
-        margin-bottom: 5px;
-    }
-    .student-row:hover {
-        background: #F8F9FA;
-    }
-    .student-row .photo { text-align: center; }
-    .student-row .name { font-weight: 600; }
-    .student-row .id { font-family: monospace; }
-    .student-row .password { 
-        font-family: monospace;
-        background: #FCE8E6;
-        padding: 2px 10px;
-        border-radius: 4px;
-        color: #EA4335;
-        font-weight: 700;
-    }
-
-    .student-header {
-        display: grid;
-        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
-        gap: 10px;
-        padding: 10px;
-        background: #F1F3F4;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: #5F6368;
-        margin-bottom: 8px;
-    }
-
-    .rank-card {
-        background: #FFFFFF;
-        border: 1px solid #E8EAED;
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 0.8rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    .rank-card .rank-number {
-        font-size: 2rem;
-        font-weight: 800;
-        color: #1A73E8;
-        min-width: 60px;
-    }
-    .rank-card .student-name {
-        font-weight: 600;
-        font-size: 1.1rem;
-        flex: 1;
-        padding: 0 15px;
-    }
-    .rank-card .student-score {
-        font-weight: 700;
-        font-size: 1.2rem;
-        color: #34A853;
-    }
-
-    @media (max-width: 768px) {
-        .student-row {
-            grid-template-columns: 50px 1fr 1fr;
-            grid-template-rows: auto auto;
-        }
-        .student-row .photo { grid-row: span 2; }
-        .student-row .reset-btn { grid-column: span 2; }
-        .student-header {
-            grid-template-columns: 50px 1fr 1fr;
-            grid-template-rows: auto auto;
-        }
-        .block-container { padding: 0.5rem 0.75rem !important; }
-        .main-header .logo-text h1 { font-size: 1.4rem !important; white-space: normal !important; }
-        .main-header .logo-text .subtitle { font-size: 0.8rem !important; }
-        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 6px 10px !important; }
-        .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
-        .main-header .header-stats .stat-item .label { font-size: 0.65rem !important; }
-        .main-header .logo-icon { width: 45px !important; height: 45px !important; font-size: 1.6rem !important; }
-        .main-header { padding: 1rem !important; }
-        .rank-card .rank-number { font-size: 1.5rem; min-width: 40px; }
-        .rank-card .student-name { font-size: 0.95rem; }
-        .rank-card .student-score { font-size: 1rem; }
-    }
-
-    @media (max-width: 480px) {
-        .student-row {
-            grid-template-columns: 1fr;
-            grid-template-rows: auto;
-            text-align: center;
-        }
-        .student-row .photo { grid-row: auto; }
-        .student-row .reset-btn { grid-column: auto; }
-        .student-header { display: none; }
-        .block-container { padding: 0.25rem 0.5rem !important; }
-        .main-header .logo-text h1 { font-size: 1.2rem !important; }
-        .main-header .header-content { flex-direction: column !important; align-items: flex-start !important; }
-        .main-header .header-right { width: 100% !important; flex-direction: column !important; align-items: stretch !important; }
-        .main-header .header-stats { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 6px !important; }
-        .main-header .stat-item { min-width: auto !important; padding: 4px 8px !important; }
-        .main-header .stat-item .number { font-size: 1rem !important; }
-        .main-header .stat-item .label { font-size: 0.55rem !important; }
-        .main-header .logo-icon { width: 35px !important; height: 35px !important; font-size: 1.2rem !important; }
-        .login-container { padding: 1.5rem !important; margin: 1rem !important; }
-        .rank-card { flex-direction: column; text-align: center; gap: 5px; }
-        .rank-card .student-name { padding: 5px 0; }
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ---- Helper functions continued ----
-def get_grade_class(grade):
-    grade_num = grade.replace("Grade ", "")
-    try:
-        num = int(grade_num)
-        return "amharic-grade" if num <= 8 else "english-grade"
-    except:
-        return "english-grade"
-
-def get_student_rank(student_id, grade, section):
-    """Get student rank within their grade and section."""
-    students_in_class = [s for s in st.session_state.students 
-                         if s.get("grade") == grade and s.get("section") == section]
-    if not students_in_class:
-        return "1/1", 1, 1
-    student_scores = []
-    for s in students_in_class:
-        evals = get_approved_evaluations_for_student(s["id"])
-        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
-        student_scores.append({"id": s["id"], "avg": avg_score})
-    sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
-    total = len(sorted_students)
-    rank = 1
-    for i, s in enumerate(sorted_students):
-        if s["id"] == student_id:
-            rank = i + 1
-            break
-    return f"{rank}/{total}", rank, total
-
-def get_rankings_by_grade_section(grade, section):
-    """Get rankings for students in a specific grade and section."""
-    students_in_class = [s for s in st.session_state.students 
-                         if s.get("grade") == grade and s.get("section") == section]
-    if not students_in_class:
-        return []
-    
-    student_scores = []
-    for s in students_in_class:
-        evals = get_approved_evaluations_for_student(s["id"])
-        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
-        student_scores.append({
-            "id": s["id"],
-            "name": s["name"],
-            "avg": avg_score,
-            "gender": s.get("gender", "N/A"),
-            "evaluations": len(evals)
-        })
-    sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
-    for i, s in enumerate(sorted_students):
-        s["rank"] = i + 1
-    return sorted_students
-
-def get_homeroom_comment(avg_score):
-    if avg_score >= 90:
-        amh = "እጅግ በጣም ጥሩ ከዚህ የተሻለ ለመስራት የተማሪዉና የወላጅ ጥረት ይታከልበት፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
-        eng = "Excellent. To achieve even better, the student and parents should intensify their effort. «Education is the key to your future life; open every door with hard work!»"
-    elif avg_score >= 80:
-        amh = "በጣም ጥሩ ከዚህ የተሻለ ለመስራት ትንሽ ተጨማሪ ጥረት ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
-        eng = "Very good. A little more effort will lead to excellent results. «Education is the key to your future life; open every door with hard work!»"
-    elif avg_score >= 60:
-        amh = "በቂ ነው፤ የበለጠ ለማድረግ መማርን መለማመድ ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
-        eng = "Satisfactory. More practice and study are needed to improve. «Education is the key to your future life; open every door with hard work!»"
-    elif avg_score >= 50:
-        amh = "መጠነኛ ነው፤ ከወላጆች እና ከመምህራን ተጨማሪ ክትትል ይጠበቃል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
-        eng = "Fair. More attention from parents and teachers is needed. «Education is the key to your future life; open every door with hard work!»"
-    else:
-        amh = "ዝቅተኛ ነው፤ ወላጆችና መምህራን በጋራ ለማሻሻል ጥረት ማድረግ አለባቸው፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
-        eng = "Poor. Parents and teachers must work together to help the student improve. «Education is the key to your future life; open every door with hard work!»"
-    return amh, eng
-
-def get_student_subject_scores(student_id, semester=None):
-    evals = [e for e in st.session_state.evaluations if e.get("student_id") == student_id and e.get("status") == "approved"]
-    if semester:
-        evals = [e for e in evals if e.get("semester") == semester]
-    subject_scores = {}
-    for e in evals:
-        subject = e.get("subject")
-        score = e.get("overall_score", 0)
-        if subject not in subject_scores:
-            subject_scores[subject] = []
-        subject_scores[subject].append(score)
-    avg_scores = {}
-    for subj, scores in subject_scores.items():
-        avg_scores[subj] = round(sum(scores) / len(scores), 2)
-    return avg_scores
-
 # ---- CREATE STATISTICS CHARTS (Fixed) ----
 def create_statistics_charts(stats):
     """Create interactive Plotly charts for statistics."""
@@ -2385,6 +1755,747 @@ def generate_deep_report_html(stats, charts):
     </html>
     """
     return html
+
+# ---- PAGE CONFIG ----
+st.set_page_config(
+    page_title="School Registration Portal",
+    page_icon="SRP🏫@ET",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ---- CSS ----
+st.markdown("""
+<style>
+    :root {
+        --primary: #1B5E20;
+        --primary-light: #2E7D32;
+        --primary-dark: #0D3B0D;
+        --accent: #1A73E8;
+        --accent-hover: #1557B0;
+        --gold: #FFD700;
+        --dark: #0a1a0a;
+        --dark-card: #0f2a0f;
+    }
+
+    html, body, .stApp {
+        font-size: 18px !important;
+        line-height: 1.8 !important;
+        background: #FFFFFF !important;
+    }
+
+    .stApp, .main, .block-container {
+        background: #FFFFFF !important;
+        color: #202124 !important;
+    }
+
+    h1 {
+        font-size: 3.5rem !important;
+        font-weight: 800 !important;
+        background: linear-gradient(135deg, #1A73E8, #4285F4, #34A853);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    h2 {
+        font-size: 2.8rem !important;
+        font-weight: 700 !important;
+        color: #1A73E8 !important;
+        border-bottom: 3px solid #E8F0FE;
+        padding-bottom: 0.5rem;
+    }
+    h3 {
+        font-size: 2.2rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+    h4 {
+        font-size: 1.8rem !important;
+        font-weight: 600 !important;
+        color: #202124 !important;
+    }
+
+    p, li, .stMarkdown {
+        font-size: 1.2rem !important;
+        font-weight: 400 !important;
+        line-height: 2 !important;
+        color: #202124 !important;
+    }
+
+    .main-header {
+        background: linear-gradient(rgba(27, 94, 32, 0.65), rgba(13, 59, 13, 0.75)),
+                    url('https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=400&fit=crop') !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        padding: 1.5rem 2rem !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(255, 215, 0, 0.3) !important;
+        margin-bottom: 1rem !important;
+        box-shadow: 0 4px 30px rgba(0,0,0,0.1) !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .main-header .header-content {
+        position: relative !important;
+        z-index: 1 !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+
+    .main-header .logo-section {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .main-header .logo-icon {
+        width: 60px;
+        height: 60px;
+        background: rgba(255, 215, 0, 0.2) !important;
+        border: 2px solid #FFD700 !important;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.2rem;
+        color: #FFFFFF;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        animation: pulse 3s infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    .main-header .logo-text h1 {
+        font-size: 2.2rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        background: none !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        margin: 0;
+        text-shadow: 0 2px 30px rgba(0,0,0,0.3);
+        white-space: nowrap;
+    }
+
+    .main-header .logo-text .subtitle {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 0.9rem !important;
+        font-weight: 400 !important;
+        margin: 2px 0 0 0;
+        text-shadow: 0 1px 15px rgba(0,0,0,0.2);
+    }
+
+    .main-header .logo-text .subtitle .highlight {
+        color: #FFD700 !important;
+        font-weight: 600 !important;
+    }
+
+    .main-header .header-right {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+
+    .main-header .header-stats {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .main-header .stat-item {
+        background: rgba(255, 255, 255, 0.12) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        padding: 8px 16px;
+        border-radius: 12px;
+        text-align: center;
+        min-width: 80px;
+        transition: all 0.3s;
+    }
+
+    .main-header .stat-item:hover {
+        border-color: #FFD700;
+        transform: translateY(-2px);
+        background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .main-header .stat-item .number {
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        color: #FFD700 !important;
+        display: block;
+        line-height: 1.2;
+    }
+
+    .main-header .stat-item .label {
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+        display: block;
+        margin-top: 2px;
+    }
+
+    .status-bar {
+        background: #F8F9FA !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        padding: 0.8rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .status-bar .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: blink 2s infinite;
+    }
+
+    .status-bar .status-dot.online {
+        background: #34A853;
+        box-shadow: 0 0 20px rgba(52,168,83,0.3);
+    }
+
+    .status-bar .status-dot.offline {
+        background: #EA4335;
+        box-shadow: 0 0 20px rgba(234,67,53,0.3);
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .status-bar .status-text {
+        color: #202124 !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+    }
+
+    .stButton > button {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        padding: 0.7rem 1.8rem !important;
+        background: linear-gradient(135deg, #1A73E8, #4285F4) !important;
+        color: white !important;
+        border-radius: 30px !important;
+        border: none !important;
+        width: 100%;
+        transition: all 0.3s !important;
+        box-shadow: 0 2px 8px rgba(26,115,232,0.25) !important;
+        min-height: 48px !important;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 4px 16px rgba(26,115,232,0.35) !important;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #F8F9FA !important;
+        border-radius: 16px;
+        padding: 6px;
+        border: 1px solid #E8EAED;
+        flex-wrap: wrap;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px;
+        padding: 10px 20px;
+        color: #5F6368 !important;
+        font-weight: 500 !important;
+        font-size: 0.95rem !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: #FFFFFF !important;
+        color: #1A73E8 !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+        border: 1px solid #E8EAED;
+    }
+
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > input {
+        background: #FFFFFF !important;
+        border: 1px solid #DADCE0 !important;
+        border-radius: 12px !important;
+        color: #202124 !important;
+        padding: 12px 18px !important;
+        font-size: 1.05rem !important;
+        font-weight: 400 !important;
+        min-height: 48px !important;
+        transition: all 0.3s !important;
+    }
+
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus {
+        border-color: #1A73E8 !important;
+        box-shadow: 0 0 0 3px rgba(26,115,232,0.15) !important;
+    }
+
+    .css-1d391kg, .css-12w0qpk, [data-testid="stSidebar"] {
+        background: #F8F9FA !important;
+        border-right: 1px solid #E8EAED !important;
+    }
+
+    .student-card, .teacher-card, .eval-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED !important;
+        border-radius: 16px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .student-card:hover, .teacher-card:hover, .eval-card:hover {
+        transform: translateY(-4px);
+        border-color: #1A73E8 !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    }
+
+    .notification-item {
+        padding: 0.75rem;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid #1A73E8;
+        background: #F8F9FA;
+    }
+
+    .notification-item.unread {
+        background: #E8F0FE;
+        border-left-color: #EA4335;
+    }
+
+    .notification-item .notification-time {
+        color: #5F6368 !important;
+        font-size: 0.8rem !important;
+    }
+
+    .notification-item.warning {
+        border-left-color: #EA4335;
+        background: #FCE8E6;
+    }
+
+    .notification-item.success {
+        border-left-color: #34A853;
+        background: #E6F4EA;
+    }
+
+    .login-container {
+        max-width: 500px;
+        margin: 3rem auto;
+        padding: 2.5rem;
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+
+    .admin-card {
+        background: #FFFFFF !important;
+        border: 1px solid #E8EAED;
+        border-radius: 16px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.04);
+    }
+
+    .amharic-grade {
+        font-family: 'Noto Sans Ethiopic', 'Segoe UI', sans-serif;
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+
+    .english-grade {
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+        color: #1A73E8 !important;
+    }
+
+    .approval-card {
+        background: #FFFFFF !important;
+        border: 2px solid #E8EAED;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .approval-card.pending {
+        border-left: 6px solid #FBBC04;
+    }
+
+    .approval-card.subject-approved {
+        border-left: 6px solid #FFC107;
+    }
+
+    .approval-card.approved {
+        border-left: 6px solid #34A853;
+    }
+
+    .approval-card.rejected {
+        border-left: 6px solid #EA4335;
+    }
+
+    .credential-box {
+        background: #F8F9FA;
+        border: 1px solid #E8EAED;
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 5px 0;
+        font-family: 'Courier New', monospace;
+    }
+    .credential-box .label {
+        font-weight: 600;
+        color: #5F6368;
+        font-size: 0.85rem;
+    }
+    .credential-box .value {
+        font-weight: 700;
+        color: #1A73E8;
+        font-size: 1rem;
+    }
+    .credential-box .value.password {
+        color: #EA4335;
+        background: #FCE8E6;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .student-row {
+        display: grid;
+        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
+        gap: 10px;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #E8EAED;
+        background: white;
+        border-radius: 8px;
+        margin-bottom: 5px;
+    }
+    .student-row:hover {
+        background: #F8F9FA;
+    }
+    .student-row .photo { text-align: center; }
+    .student-row .name { font-weight: 600; }
+    .student-row .id { font-family: monospace; }
+    .student-row .password { 
+        font-family: monospace;
+        background: #FCE8E6;
+        padding: 2px 10px;
+        border-radius: 4px;
+        color: #EA4335;
+        font-weight: 700;
+    }
+
+    .student-header {
+        display: grid;
+        grid-template-columns: 60px 2fr 2fr 1.5fr 1fr;
+        gap: 10px;
+        padding: 10px;
+        background: #F1F3F4;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #5F6368;
+        margin-bottom: 8px;
+    }
+
+    .rank-card {
+        background: #FFFFFF;
+        border: 1px solid #E8EAED;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.8rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .rank-card .rank-number {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1A73E8;
+        min-width: 60px;
+    }
+    .rank-card .student-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+        flex: 1;
+        padding: 0 15px;
+    }
+    .rank-card .student-score {
+        font-weight: 700;
+        font-size: 1.2rem;
+        color: #34A853;
+    }
+
+    .edit-delete-btn {
+        display: inline-flex;
+        gap: 5px;
+    }
+    .edit-delete-btn .stButton button {
+        padding: 0.3rem 0.8rem !important;
+        font-size: 0.8rem !important;
+        min-height: 30px !important;
+        width: auto !important;
+    }
+    .edit-delete-btn .edit-btn button {
+        background: linear-gradient(135deg, #FBBC04, #F9AB00) !important;
+    }
+    .edit-delete-btn .delete-btn button {
+        background: linear-gradient(135deg, #EA4335, #D33426) !important;
+    }
+
+    @media (max-width: 768px) {
+        .student-row {
+            grid-template-columns: 50px 1fr 1fr;
+            grid-template-rows: auto auto;
+        }
+        .student-row .photo { grid-row: span 2; }
+        .student-row .reset-btn { grid-column: span 2; }
+        .student-header {
+            grid-template-columns: 50px 1fr 1fr;
+            grid-template-rows: auto auto;
+        }
+        .block-container { padding: 0.5rem 0.75rem !important; }
+        .main-header .logo-text h1 { font-size: 1.4rem !important; white-space: normal !important; }
+        .main-header .logo-text .subtitle { font-size: 0.8rem !important; }
+        .main-header .header-stats .stat-item { min-width: 60px !important; padding: 6px 10px !important; }
+        .main-header .header-stats .stat-item .number { font-size: 1.2rem !important; }
+        .main-header .header-stats .stat-item .label { font-size: 0.65rem !important; }
+        .main-header .logo-icon { width: 45px !important; height: 45px !important; font-size: 1.6rem !important; }
+        .main-header { padding: 1rem !important; }
+        .rank-card .rank-number { font-size: 1.5rem; min-width: 40px; }
+        .rank-card .student-name { font-size: 0.95rem; }
+        .rank-card .student-score { font-size: 1rem; }
+    }
+
+    @media (max-width: 480px) {
+        .student-row {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto;
+            text-align: center;
+        }
+        .student-row .photo { grid-row: auto; }
+        .student-row .reset-btn { grid-column: auto; }
+        .student-header { display: none; }
+        .block-container { padding: 0.25rem 0.5rem !important; }
+        .main-header .logo-text h1 { font-size: 1.2rem !important; }
+        .main-header .header-content { flex-direction: column !important; align-items: flex-start !important; }
+        .main-header .header-right { width: 100% !important; flex-direction: column !important; align-items: stretch !important; }
+        .main-header .header-stats { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 6px !important; }
+        .main-header .stat-item { min-width: auto !important; padding: 4px 8px !important; }
+        .main-header .stat-item .number { font-size: 1rem !important; }
+        .main-header .stat-item .label { font-size: 0.55rem !important; }
+        .main-header .logo-icon { width: 35px !important; height: 35px !important; font-size: 1.2rem !important; }
+        .login-container { padding: 1.5rem !important; margin: 1rem !important; }
+        .rank-card { flex-direction: column; text-align: center; gap: 5px; }
+        .rank-card .student-name { padding: 5px 0; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ---- Helper functions continued ----
+def get_grade_class(grade):
+    grade_num = grade.replace("Grade ", "")
+    try:
+        num = int(grade_num)
+        return "amharic-grade" if num <= 8 else "english-grade"
+    except:
+        return "english-grade"
+
+def get_student_rank(student_id, grade, section):
+    """Get student rank within their grade and section."""
+    students_in_class = [s for s in st.session_state.students 
+                         if s.get("grade") == grade and s.get("section") == section]
+    if not students_in_class:
+        return "1/1", 1, 1
+    student_scores = []
+    for s in students_in_class:
+        evals = get_approved_evaluations_for_student(s["id"])
+        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
+        student_scores.append({"id": s["id"], "avg": avg_score})
+    sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
+    total = len(sorted_students)
+    rank = 1
+    for i, s in enumerate(sorted_students):
+        if s["id"] == student_id:
+            rank = i + 1
+            break
+    return f"{rank}/{total}", rank, total
+
+def get_rankings_by_grade_section(grade, section):
+    """Get rankings for students in a specific grade and section."""
+    students_in_class = [s for s in st.session_state.students 
+                         if s.get("grade") == grade and s.get("section") == section]
+    if not students_in_class:
+        return []
+    
+    student_scores = []
+    for s in students_in_class:
+        evals = get_approved_evaluations_for_student(s["id"])
+        avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2) if evals else 0
+        student_scores.append({
+            "id": s["id"],
+            "name": s["name"],
+            "avg": avg_score,
+            "gender": s.get("gender", "N/A"),
+            "evaluations": len(evals)
+        })
+    sorted_students = sorted(student_scores, key=lambda x: x["avg"], reverse=True)
+    for i, s in enumerate(sorted_students):
+        s["rank"] = i + 1
+    return sorted_students
+
+def get_homeroom_comment(avg_score):
+    if avg_score >= 90:
+        amh = "እጅግ በጣም ጥሩ ከዚህ የተሻለ ለመስራት የተማሪዉና የወላጅ ጥረት ይታከልበት፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Excellent. To achieve even better, the student and parents should intensify their effort. «Education is the key to your future life; open every door with hard work!»"
+    elif avg_score >= 80:
+        amh = "በጣም ጥሩ ከዚህ የተሻለ ለመስራት ትንሽ ተጨማሪ ጥረት ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Very good. A little more effort will lead to excellent results. «Education is the key to your future life; open every door with hard work!»"
+    elif avg_score >= 60:
+        amh = "በቂ ነው፤ የበለጠ ለማድረግ መማርን መለማመድ ያስፈልጋል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Satisfactory. More practice and study are needed to improve. «Education is the key to your future life; open every door with hard work!»"
+    elif avg_score >= 50:
+        amh = "መጠነኛ ነው፤ ከወላጆች እና ከመምህራን ተጨማሪ ክትትል ይጠበቃል፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Fair. More attention from parents and teachers is needed. «Education is the key to your future life; open every door with hard work!»"
+    else:
+        amh = "ዝቅተኛ ነው፤ ወላጆችና መምህራን በጋራ ለማሻሻል ጥረት ማድረግ አለባቸው፡፡ «ትምህርት የወደፊት ሕይወትህ መክፈቻ ቁልፍ ነው፤ በጠንካራ ሥራ እያንዳንዱን በር ክፈት!»"
+        eng = "Poor. Parents and teachers must work together to help the student improve. «Education is the key to your future life; open every door with hard work!»"
+    return amh, eng
+
+def get_student_subject_scores(student_id, semester=None):
+    evals = [e for e in st.session_state.evaluations if e.get("student_id") == student_id and e.get("status") == "approved"]
+    if semester:
+        evals = [e for e in evals if e.get("semester") == semester]
+    subject_scores = {}
+    for e in evals:
+        subject = e.get("subject")
+        score = e.get("overall_score", 0)
+        if subject not in subject_scores:
+            subject_scores[subject] = []
+        subject_scores[subject].append(score)
+    avg_scores = {}
+    for subj, scores in subject_scores.items():
+        avg_scores[subj] = round(sum(scores) / len(scores), 2)
+    return avg_scores
+
+# ---- DEEP STATISTICS SUMMARY ----
+def generate_deep_summary():
+    """Generate a comprehensive summary of the deep statistics in English and Amharic."""
+    stats = generate_deep_statistics()
+    
+    # Calculate key metrics
+    total_students = stats['summary']['total_students']
+    pass_rate = stats['summary']['pass_rate']
+    passed = stats['summary']['passed']
+    failed = stats['summary']['failed']
+    
+    # Find best and worst subjects
+    subject_avgs = stats['subject_analysis']['averages']
+    best_subject = max(subject_avgs.items(), key=lambda x: x[1]) if subject_avgs else ("N/A", 0)
+    worst_subject = min(subject_avgs.items(), key=lambda x: x[1]) if subject_avgs else ("N/A", 0)
+    
+    # Grade with best performance
+    grade_avgs = stats['grade_analysis']['averages']
+    best_grade = max(grade_avgs.items(), key=lambda x: x[1]) if grade_avgs else ("N/A", 0)
+    
+    # Gender distribution
+    gender_data = stats['demographics']['gender']
+    male = gender_data.get('Male', 0)
+    female = gender_data.get('Female', 0)
+    
+    summary = {
+        'en': f"""
+### 📊 School Performance Overview
+
+**Student Population:** The school serves {total_students} students across all grade levels (1-12), with a gender distribution of {male} male and {female} female students.
+
+**Academic Performance:** 
+- Overall Pass Rate: {pass_rate}%
+- {passed} students passed, {failed} students failed
+- Best Performing Subject: {best_subject[0]} ({best_subject[1]}%)
+- Area for Improvement: {worst_subject[0]} ({worst_subject[1]}%)
+- Best Performing Grade: {best_grade[0]} ({best_grade[1]}%)
+
+**Key Strengths:**
+1. Strong performance in core subjects
+2. Consistent pass rates across grade levels
+3. Balanced gender distribution
+4. Effective teacher workload distribution
+
+**Areas for Improvement:**
+1. Subject-specific performance gaps
+2. Section-wise achievement variations
+3. Grade-level transition support needs
+
+**Strategic Recommendations:**
+1. Implement targeted support programs for subjects with lower average scores
+2. Share successful teaching strategies from high-performing grades
+3. Address workload imbalances among teachers
+4. Develop intervention programs for sections with lower performance
+5. Monitor grade-level transitions to ensure continuity of student progress
+
+**Conclusion:** The school demonstrates strong overall academic performance with a {pass_rate}% pass rate. Continued focus on subject-specific improvements and targeted interventions will further enhance student achievement.
+""",
+        'am': f"""
+### 📊 የትምህርት ቤቱ አጠቃላይ የአፈጻጸም ትንተና
+
+**የተማሪዎች ብዛት:** ትምህርት ቤቱ {total_students} ተማሪዎችን ከ1ኛ እስከ 12ኛ ክፍል ያስተምራል። የፆታ ስርጭት {male} ወንድ እና {female} ሴት ተማሪዎች አሉ።
+
+**አካዳሚክ አፈጻጸም:**
+- አጠቃላይ የማለፊያ መቶኛ: {pass_rate}%
+- {passed} ተማሪዎች አልፈዋል፣ {failed} ተማሪዎች ወድቀዋል
+- ከፍተኛ ውጤት ያለው ትምህርት: {best_subject[0]} ({best_subject[1]}%)
+- መሻሻል የሚፈልግ ትምህርት: {worst_subject[0]} ({worst_subject[1]}%)
+- ከፍተኛ ውጤት ያለው ክፍል: {best_grade[0]} ({best_grade[1]}%)
+
+**ዋና ዋና ጥንካሬዎች:**
+1. በዋና ዋና ትምህርቶች ላይ ጠንካራ አፈጻጸም
+2. በክፍሎች መካከል ወጥነት ያለው የማለፊያ መቶኛ
+3. ሚዛናዊ የፆታ ስርጭት
+4. ውጤታማ የመምህራን የስራ ጫና ስርጭት
+
+**መሻሻል የሚፈልጉ ቦታዎች:**
+1. በትምህርት ዓይነቶች መካከል ያለው የአፈጻጸም ልዩነት
+2. በክፍሎች መካከል ያለው የአፈጻጸም ልዩነት
+3. በክፍሎች መካከል ሽግግር ላይ ድጋፍ የሚያስፈልግባቸው ቦታዎች
+
+**ስልታዊ ምክሮች:**
+1. ዝቅተኛ ውጤት ላላቸው ትምህርቶች የድጋፍ ፕሮግራሞችን መተግበር
+2. ከፍተኛ ውጤት ካላቸው ክፍሎች የተሻሉ የማስተማር ዘዴዎችን መጋራት
+3. በመምህራን መካከል ያለውን የስራ ጫና ልዩነት መቅረፍ
+4. ዝቅተኛ ውጤት ላላቸው ክፍሎች የጣልቃ ገብነት ፕሮግራሞችን ማዘጋጀት
+5. የተማሪዎችን እድገት ለመከታተል በክፍሎች መካከል ያለውን ሽግግር መከታተል
+
+**ማጠቃለያ:** ትምህርት ቤቱ {pass_rate}% የማለፊያ መቶኛ ያሳያል። በትምህርት ዓይነቶች ላይ የተደረጉ መሻሻሎች እና የታለሙ ጣልቃ ገብነቶች የተማሪዎችን አፈጻጸም የበለጠ ያሻሽላሉ።
+"""
+    }
+    
+    return summary
 
 # ---- PROFILE UPDATE ----
 def show_profile_update():
@@ -3642,6 +3753,15 @@ def show_deep_statistics():
         stats = generate_deep_statistics()
         charts = create_statistics_charts(stats) if PLOTLY_AVAILABLE else {}
     
+    # Display Summary
+    summary = generate_deep_summary()
+    with st.expander("📋 Executive Summary - English", expanded=True):
+        st.markdown(summary['en'])
+    with st.expander("📋 ማጠቃለያ - አማርኛ", expanded=True):
+        st.markdown(summary['am'])
+    
+    st.markdown("---")
+    
     # Summary Cards
     st.markdown("### 📈 Key Metrics")
     col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
@@ -4288,6 +4408,32 @@ def show_admin_panel():
                     st.markdown(display_student_photo(student_id, 50), unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"**{student.get('name', 'Unknown')}**")
+                    # Edit and Delete buttons for student
+                    col2a, col2b = st.columns([1, 1])
+                    with col2a:
+                        if st.button(f"✏️ Edit", key=f"edit_student_{student_id}", width='stretch'):
+                            st.session_state.editing_student = student_id
+                            st.rerun()
+                    with col2b:
+                        if st.button(f"🗑️ Delete", key=f"delete_student_{student_id}", width='stretch'):
+                            if st.session_state.get('confirm_delete_student') == student_id:
+                                # Actually delete
+                                supabase_admin = get_supabase_admin()
+                                try:
+                                    supabase_admin.table("students").delete().eq("id", student_id).execute()
+                                    # Also delete user account
+                                    supabase_admin.table("users").delete().eq("username", student_id).execute()
+                                    load_all_data()
+                                    add_notification(f"Student {student.get('name', '')} deleted", "warning")
+                                    st.session_state.confirm_delete_student = None
+                                    st.success("✅ Student deleted successfully!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error deleting student: {e}")
+                            else:
+                                st.session_state.confirm_delete_student = student_id
+                                st.warning(f"⚠️ Click Delete again to confirm deletion of {student.get('name', '')}")
+                                st.rerun()
                 with col3:
                     st.markdown(f"{student.get('grade', 'N/A')} · {student.get('section', 'N/A')}")
                 with col4:
