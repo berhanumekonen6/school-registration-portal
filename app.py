@@ -3877,7 +3877,7 @@ def show_deep_statistics():
         else:
             st.info("No teacher workload data available.")
 
-# ---- ADMIN PANEL (UPDATED: Removed "📚 Subject Admins" tab) ----
+# ---- ADMIN PANEL ----
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
@@ -4002,6 +4002,23 @@ def show_admin_panel():
             teacher_name = st.text_input("Teacher Full Name *", placeholder="e.g., Abebe Kebede")
             teacher_subject = st.selectbox("Subject Taught *", ALL_SUBJECTS)
             teacher_email = st.text_input("Email Address", placeholder="teacher@school.edu")
+            
+            # --- NEW: Subject Admin Assignment ---
+            st.markdown("---")
+            st.markdown("##### 📚 Subject Admin Assignment (Optional)")
+            st.caption("If assigned as a Subject Admin, this teacher will approve batches for the selected subject(s) across all grades.")
+            is_subject_admin = st.checkbox("Assign this teacher as a Subject Admin", value=False, key="is_subject_admin_check")
+            
+            subject_admin_subjects = []
+            if is_subject_admin:
+                subject_admin_subjects = st.multiselect(
+                    "Select subjects this teacher will administer (all grades):",
+                    options=ALL_SUBJECTS,
+                    default=[],
+                    key="subject_admin_subjects"
+                )
+                if subject_admin_subjects:
+                    st.info(f"📌 This teacher will be a Subject Admin for: {', '.join(subject_admin_subjects)}")
 
             if st.form_submit_button("➕ Add Teacher", width='stretch'):
                 if teacher_name:
@@ -4022,13 +4039,19 @@ def show_admin_panel():
 
                     supabase_admin = get_supabase_admin()
                     try:
+                        # Determine role
+                        user_role = "subject_admin" if is_subject_admin and subject_admin_subjects else "teacher"
+                        
+                        # Create user account
                         supabase_admin.table("users").insert({
                             "username": username,
                             "password": hashed_pw,
-                            "role": "teacher",
+                            "role": user_role,
                             "name": teacher_name,
                             "profile_photo": ""
                         }).execute()
+                        
+                        # Create teacher record
                         supabase_admin.table("teachers").insert({
                             "id": teacher_id,
                             "name": teacher_name,
@@ -4038,10 +4061,34 @@ def show_admin_panel():
                             "password": password,
                             "added": added_time,
                             "assignments": json.dumps(st.session_state.assignments_list),
-                            "admin_subjects": json.dumps([])
+                            "admin_subjects": json.dumps(subject_admin_subjects)
                         }).execute()
+                        
+                        # If subject admin, create subject_admin_assignments entries
+                        if is_subject_admin and subject_admin_subjects:
+                            for subject in subject_admin_subjects:
+                                # Check if assignment already exists
+                                existing_assignment = None
+                                for sa in st.session_state.subject_admin_assignments:
+                                    if sa.get('teacher_id') == teacher_id and sa.get('subject') == subject:
+                                        existing_assignment = sa
+                                        break
+                                
+                                assignment_data = {
+                                    "teacher_id": teacher_id,
+                                    "teacher_name": teacher_name,
+                                    "subject": subject,
+                                    "grade_range": []  # Empty means all grades
+                                }
+                                
+                                if existing_assignment:
+                                    supabase_admin.table("subject_admin_assignments").update(assignment_data).eq("id", existing_assignment.get("id")).execute()
+                                else:
+                                    assignment_data["id"] = str(uuid.uuid4())[:8]
+                                    supabase_admin.table("subject_admin_assignments").insert(assignment_data).execute()
+                        
                         load_all_data()
-                        add_notification(f"👨‍🏫 New teacher added: {teacher_name}", "success")
+                        add_notification(f"👨‍🏫 New {'Subject Admin' if is_subject_admin else 'Teacher'} added: {teacher_name}", "success")
                         
                         st.balloons()
                         st.markdown(f"""
@@ -4050,16 +4097,17 @@ def show_admin_panel():
                                     border-radius: 16px;
                                     border: 3px solid #1A73E8;
                                     margin: 1rem 0;">
-                            <h3 style="color: #1A73E8; margin: 0 0 0.5rem 0;">✅ Teacher Added Successfully!</h3>
+                            <h3 style="color: #1A73E8; margin: 0 0 0.5rem 0;">✅ {'Subject Admin' if is_subject_admin else 'Teacher'} Added Successfully!</h3>
                             <div style="background: white; padding: 1rem; border-radius: 10px; margin: 0.5rem 0;">
                                 <p><b>👤 Name:</b> {teacher_name}</p>
                                 <p><b>📚 Subject:</b> {teacher_subject}</p>
-                                <p><b>👤 Role:</b> Teacher</p>
+                                <p><b>👤 Role:</b> {'Subject Admin' if is_subject_admin else 'Teacher'}</p>
                                 <p><b>🔑 Username:</b> <code style="font-size:1.2rem;background:#f0f0f0;padding:4px 12px;border-radius:4px;">{username}</code></p>
                                 <p><b>🔐 Password:</b> <code style="font-size:1.2rem;background:#FCE8E6;padding:4px 12px;border-radius:4px;color:#EA4335;font-weight:700;">{password}</code></p>
+                                {f'<p><b>📌 Admin Subjects:</b> {", ".join(subject_admin_subjects)}</p>' if is_subject_admin and subject_admin_subjects else ''}
                             </div>
                             <p style="color: #5F6368; margin-top: 0.5rem; font-size:0.9rem;">
-                                ⚠️ Please share these credentials with the teacher.
+                                ⚠️ Please share these credentials with the {'subject admin' if is_subject_admin else 'teacher'}.
                                 They can change their password after logging in.
                             </p>
                         </div>
@@ -4078,6 +4126,8 @@ def show_admin_panel():
                 assignments = json.loads(teacher.get("assignments", "[]"))
                 assign_str = ", ".join([f"{a['grade']} ({a['section']}) - {a.get('semester', '')}" for a in assignments]) if assignments else "None"
                 teacher_password = teacher.get('password', 'N/A')
+                admin_subjects = json.loads(teacher.get("admin_subjects", "[]"))
+                is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
                 
                 st.markdown(f"""
                 <div class="teacher-card">
@@ -4089,8 +4139,8 @@ def show_admin_panel():
                             <p><b>✉️ Email:</b> {teacher.get('email', 'N/A')}</p>
                         </div>
                         <div style="text-align:right;">
-                            <span style="background:#E8F0FE;padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
-                                Teacher
+                            <span style="background:{'#E8F0FE' if is_admin else '#E6F4EA'};padding:4px 12px;border-radius:20px;font-size:0.8rem;font-weight:600;">
+                                {'📋 Subject Admin' if is_admin else '👨‍🏫 Teacher'}
                             </span>
                         </div>
                     </div>
@@ -4098,6 +4148,7 @@ def show_admin_panel():
                         <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
                         <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
                     </div>
+                    {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
                     <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
                         <b>📅 Added:</b> {teacher.get('added', 'N/A')}
                     </div>
