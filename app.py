@@ -19,8 +19,14 @@ import time
 import base64
 from supabase import create_client, Client
 from PIL import Image
-import plotly.graph_objects as go
-import plotly.express as px
+
+# Try to import plotly, fallback if not installed
+try:
+    import plotly.graph_objects as go
+    import plotly.express as px
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
 
 # ===================================================================
 # DEFAULT REMARKS TEXT
@@ -253,37 +259,100 @@ def get_supabase_admin():
         st.session_state.supabase_admin = init_supabase_admin()
     return st.session_state.supabase_admin
 
-# ---- Data Load ----
+# ---- Data Load with Error Handling ----
 def load_all_data():
     supabase = get_supabase()
-    res = supabase.table("students").select("*").execute()
-    st.session_state.students = res.data if res.data else []
-    res = supabase.table("teachers").select("*").execute()
-    st.session_state.teachers = res.data if res.data else []
-    res = supabase.table("evaluations").select("*").execute()
-    st.session_state.evaluations = res.data if res.data else []
-    res = supabase.table("batches").select("*").execute()
-    st.session_state.batches = res.data if res.data else []
-    res = supabase.table("users").select("*").execute()
-    user_db = {}
-    if res.data:
-        for u in res.data:
-            user_db[u["username"]] = {
-                "password": u["password"],
-                "role": u["role"],
-                "name": u["name"],
-                "profile_photo": u.get("profile_photo", "")
-            }
-    st.session_state.user_db = user_db
-    res = supabase.table("notifications").select("*").order("id", desc=True).execute()
-    st.session_state.notifications = res.data if res.data else []
-    res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
-    st.session_state.penalty_log = res.data if res.data else []
-    res = supabase.table("homeroom_assignments").select("*").execute()
-    st.session_state.homeroom_assignments = res.data if res.data else []
-    # Load subject admin assignments
-    res = supabase.table("subject_admin_assignments").select("*").execute()
-    st.session_state.subject_admin_assignments = res.data if res.data else []
+    
+    # Load students
+    try:
+        res = supabase.table("students").select("*").execute()
+        st.session_state.students = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load students: {e}")
+        st.session_state.students = []
+    
+    # Load teachers
+    try:
+        res = supabase.table("teachers").select("*").execute()
+        st.session_state.teachers = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load teachers: {e}")
+        st.session_state.teachers = []
+    
+    # Load evaluations
+    try:
+        res = supabase.table("evaluations").select("*").execute()
+        st.session_state.evaluations = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load evaluations: {e}")
+        st.session_state.evaluations = []
+    
+    # Load batches
+    try:
+        res = supabase.table("batches").select("*").execute()
+        st.session_state.batches = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load batches: {e}")
+        st.session_state.batches = []
+    
+    # Load users
+    try:
+        res = supabase.table("users").select("*").execute()
+        user_db = {}
+        if res.data:
+            for u in res.data:
+                user_db[u["username"]] = {
+                    "password": u["password"],
+                    "role": u["role"],
+                    "name": u["name"],
+                    "profile_photo": u.get("profile_photo", "")
+                }
+        st.session_state.user_db = user_db
+    except Exception as e:
+        st.warning(f"Could not load users: {e}")
+        st.session_state.user_db = {}
+    
+    # Load notifications
+    try:
+        res = supabase.table("notifications").select("*").order("id", desc=True).execute()
+        st.session_state.notifications = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load notifications: {e}")
+        st.session_state.notifications = []
+    
+    # Load penalty_log
+    try:
+        res = supabase.table("penalty_log").select("*").order("id", desc=True).execute()
+        st.session_state.penalty_log = res.data if res.data else []
+    except Exception as e:
+        st.warning(f"Could not load penalty_log: {e}")
+        st.session_state.penalty_log = []
+    
+    # Load homeroom_assignments (with error handling for missing table)
+    try:
+        res = supabase.table("homeroom_assignments").select("*").execute()
+        st.session_state.homeroom_assignments = res.data if res.data else []
+    except Exception as e:
+        error_msg = str(e)
+        if "PGRST205" in error_msg or "Could not find the table" in error_msg:
+            st.warning("⚠️ Homeroom Assignments table not found. Please create it in Supabase.")
+            st.session_state.homeroom_assignments = []
+        else:
+            st.warning(f"Could not load homeroom_assignments: {e}")
+            st.session_state.homeroom_assignments = []
+    
+    # Load subject_admin_assignments (with error handling for missing table)
+    try:
+        res = supabase.table("subject_admin_assignments").select("*").execute()
+        st.session_state.subject_admin_assignments = res.data if res.data else []
+    except Exception as e:
+        error_msg = str(e)
+        if "PGRST205" in error_msg or "Could not find the table" in error_msg:
+            st.warning("⚠️ Subject Admin Assignments table not found. Please create it in Supabase.")
+            st.session_state.subject_admin_assignments = []
+        else:
+            st.warning(f"Could not load subject_admin_assignments: {e}")
+            st.session_state.subject_admin_assignments = []
 
 # ---- Assessment Helper Functions ----
 def get_assessment_config(grade):
@@ -1492,7 +1561,7 @@ def get_student_subject_scores(student_id, semester=None):
         avg_scores[subj] = round(sum(scores) / len(scores), 2)
     return avg_scores
 
-# ---- DEEP STATISTICAL ANALYSIS FUNCTIONS ----
+# ---- DEEP STATISTICAL ANALYSIS FUNCTIONS (Conditional) ----
 def generate_deep_statistics():
     """Generate comprehensive deep statistics with all metrics."""
     
@@ -1650,6 +1719,9 @@ def generate_deep_statistics():
 
 def create_statistics_charts(stats):
     """Create interactive Plotly charts for statistics."""
+    if not PLOTLY_AVAILABLE:
+        return {}
+    
     charts = {}
     
     # 1. Gender Distribution Pie Chart
@@ -3426,9 +3498,13 @@ def show_deep_statistics():
     st.markdown("## 📊 Deep Statistical Analysis")
     st.markdown("Comprehensive analysis with interactive charts and visualizations for office reporting.")
     
+    if not PLOTLY_AVAILABLE:
+        st.warning("⚠️ Plotly is not installed. Please add 'plotly' to your requirements.txt to enable charts.")
+        st.info("You can still view the data tables and download the report.")
+    
     with st.spinner("Generating statistics and charts..."):
         stats = generate_deep_statistics()
-        charts = create_statistics_charts(stats)
+        charts = create_statistics_charts(stats) if PLOTLY_AVAILABLE else {}
     
     # Summary Cards
     st.markdown("### 📈 Key Metrics")
@@ -3452,31 +3528,34 @@ def show_deep_statistics():
     st.markdown("---")
     
     # Charts in two columns
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(charts['gender_pie'], use_container_width=True)
-    with col2:
-        st.plotly_chart(charts['pass_rate_gauge'], use_container_width=True)
-    
-    st.plotly_chart(charts['grade_distribution'], use_container_width=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(charts['subject_performance'], use_container_width=True)
-    with col2:
-        st.plotly_chart(charts['grade_performance'], use_container_width=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(charts['pass_fail'], use_container_width=True)
-    with col2:
-        if charts['section_performance']:
-            st.plotly_chart(charts['section_performance'], use_container_width=True)
-        else:
-            st.info("No section performance data available.")
-    
-    if charts['teacher_workload']:
-        st.plotly_chart(charts['teacher_workload'], use_container_width=True)
+    if PLOTLY_AVAILABLE and charts:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(charts['gender_pie'], use_container_width=True)
+        with col2:
+            st.plotly_chart(charts['pass_rate_gauge'], use_container_width=True)
+        
+        st.plotly_chart(charts['grade_distribution'], use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(charts['subject_performance'], use_container_width=True)
+        with col2:
+            st.plotly_chart(charts['grade_performance'], use_container_width=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(charts['pass_fail'], use_container_width=True)
+        with col2:
+            if charts['section_performance']:
+                st.plotly_chart(charts['section_performance'], use_container_width=True)
+            else:
+                st.info("No section performance data available.")
+        
+        if charts['teacher_workload']:
+            st.plotly_chart(charts['teacher_workload'], use_container_width=True)
+    else:
+        st.info("📊 Charts unavailable. Please install plotly to see visualizations.")
     
     st.markdown("---")
     
@@ -3496,33 +3575,45 @@ def show_deep_statistics():
     # Detailed Data Tables
     with st.expander("📋 View Detailed Data Tables"):
         st.markdown("#### Subject Performance Details")
-        subject_df = pd.DataFrame([
-            {"Subject": s, "Average": stats['subject_analysis']['averages'].get(s, 0)}
-            for s in sorted(stats['subject_analysis']['averages'].keys(), key=lambda x: stats['subject_analysis']['averages'].get(x, 0), reverse=True)
-        ])
-        st.dataframe(subject_df, use_container_width=True, hide_index=True)
+        if stats["subject_analysis"]["averages"]:
+            subject_df = pd.DataFrame([
+                {"Subject": s, "Average": stats['subject_analysis']['averages'].get(s, 0)}
+                for s in sorted(stats['subject_analysis']['averages'].keys(), key=lambda x: stats['subject_analysis']['averages'].get(x, 0), reverse=True)
+            ])
+            st.dataframe(subject_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No subject performance data available.")
         
         st.markdown("#### Grade Performance Details")
-        grade_df = pd.DataFrame([
-            {"Grade": g, "Average": stats['grade_analysis']['averages'].get(g, 0)}
-            for g in sorted(stats['grade_analysis']['averages'].keys())
-        ])
-        st.dataframe(grade_df, use_container_width=True, hide_index=True)
+        if stats["grade_analysis"]["averages"]:
+            grade_df = pd.DataFrame([
+                {"Grade": g, "Average": stats['grade_analysis']['averages'].get(g, 0)}
+                for g in sorted(stats['grade_analysis']['averages'].keys())
+            ])
+            st.dataframe(grade_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No grade performance data available.")
         
         st.markdown("#### Section Performance Details")
-        section_df = pd.DataFrame([
-            {"Section": s, "Average": stats['grade_analysis']['section_performance'].get(s, 0)}
-            for s in sorted(stats['grade_analysis']['section_performance'].keys(), key=lambda x: stats['grade_analysis']['section_performance'].get(x, 0), reverse=True)
-        ])
-        st.dataframe(section_df, use_container_width=True, hide_index=True)
+        if stats["grade_analysis"]["section_performance"]:
+            section_df = pd.DataFrame([
+                {"Section": s, "Average": stats['grade_analysis']['section_performance'].get(s, 0)}
+                for s in sorted(stats['grade_analysis']['section_performance'].keys(), key=lambda x: stats['grade_analysis']['section_performance'].get(x, 0), reverse=True)
+            ])
+            st.dataframe(section_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No section performance data available.")
         
         st.markdown("#### Teacher Workload Details")
-        teacher_df = pd.DataFrame([
-            {"Teacher": t, "Batches": stats['teacher_analysis']['workload'][t]['batches'], 
-             "Evaluations": stats['teacher_analysis']['workload'][t]['evaluations']}
-            for t in stats['teacher_analysis']['workload'].keys()
-        ])
-        st.dataframe(teacher_df, use_container_width=True, hide_index=True)
+        if stats["teacher_analysis"]["workload"]:
+            teacher_df = pd.DataFrame([
+                {"Teacher": t, "Batches": stats['teacher_analysis']['workload'][t]['batches'], 
+                 "Evaluations": stats['teacher_analysis']['workload'][t]['evaluations']}
+                for t in stats['teacher_analysis']['workload'].keys()
+            ])
+            st.dataframe(teacher_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No teacher workload data available.")
 
 # ---- ADMIN PANEL ----
 def show_admin_panel():
