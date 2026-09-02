@@ -1227,7 +1227,7 @@ def generate_deep_statistics():
     
     return stats
 
-# ---- CREATE STATISTICS CHARTS (Fixed) ----
+# ---- CREATE STATISTICS CHARTS ----
 def create_statistics_charts(stats):
     """Create interactive Plotly charts for statistics."""
     if not PLOTLY_AVAILABLE:
@@ -1304,7 +1304,7 @@ def create_statistics_charts(stats):
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(size=14),
             showlegend=False,
-            yaxis=dict(range=[0, 105])
+            yaxis_range=[0, 105]
         )
         charts["subject_performance"] = fig3
     else:
@@ -1344,7 +1344,7 @@ def create_statistics_charts(stats):
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(size=14),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            yaxis=dict(range=[0, 105])
+            yaxis_range=[0, 105]
         )
         charts["grade_performance"] = fig4
     else:
@@ -1400,7 +1400,7 @@ def create_statistics_charts(stats):
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(size=14),
             showlegend=False,
-            yaxis=dict(range=[0, 105])
+            yaxis_range=[0, 105]
         )
         charts["section_performance"] = fig6
     else:
@@ -4128,7 +4128,7 @@ def show_admin_panel():
                 else:
                     st.error("❌ Please enter teacher name.")
 
-                st.markdown("---")
+        st.markdown("---")
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
             for teacher in st.session_state.teachers:
