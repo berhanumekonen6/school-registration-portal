@@ -1682,6 +1682,793 @@ def generate_deep_report_html(stats, charts):
     """
     return html
 
+# ===================================================================
+# NEW: ENHANCED RANKINGS WITH SUBJECT SCORES & MEDALISTS
+# ===================================================================
+
+def get_student_subject_scores_for_ranking(student_id, semester=None):
+    """Get all subject scores for a student, normalized to 100"""
+    evals = [e for e in st.session_state.evaluations 
+             if e.get("student_id") == student_id and e.get("status") == "approved"]
+    if semester:
+        evals = [e for e in evals if e.get("semester") == semester]
+    
+    subject_scores = {}
+    for e in evals:
+        subject = e.get("subject")
+        score = e.get("overall_score", 0)
+        if subject not in subject_scores:
+            subject_scores[subject] = []
+        subject_scores[subject].append(score)
+    
+    # Get average per subject (already normalized to 100)
+    avg_scores = {}
+    for subj, scores in subject_scores.items():
+        avg_scores[subj] = round(sum(scores) / len(scores), 2) if scores else 0
+    
+    return avg_scores
+
+def get_all_subjects_in_grade(grade):
+    """Get all subjects for a grade from the curriculum"""
+    return GRADE_SUBJECTS.get(grade, [])
+
+def get_student_overall_avg(student_id):
+    """Calculate overall average across all subjects for a student"""
+    evals = get_approved_evaluations_for_student(student_id)
+    if not evals:
+        return 0
+    return round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+
+def get_enhanced_rankings(grade, section=None, semester=None):
+    """
+    Get enhanced rankings with subject scores per 100, section rank, and overall rank
+    """
+    # Get students in this grade
+    students_in_grade = [s for s in st.session_state.students if s.get("grade") == grade]
+    
+    if section:
+        students_in_grade = [s for s in students_in_grade if s.get("section") == section]
+    
+    if not students_in_grade:
+        return [], []
+    
+    # Get all subjects for this grade
+    all_subjects = get_all_subjects_in_grade(grade)
+    
+    # Build ranking data
+    ranking_data = []
+    for student in students_in_grade:
+        student_id = student.get("id")
+        student_name = student.get("name", "Unknown")
+        student_section = student.get("section", "A")
+        
+        # Get subject scores
+        subject_scores = get_student_subject_scores_for_ranking(student_id, semester)
+        
+        # Calculate overall average
+        overall_avg = get_student_overall_avg(student_id)
+        
+        # Build row
+        row = {
+            "Student ID": student_id,
+            "Student Name": student_name,
+            "Section": student_section,
+            "Overall %": overall_avg
+        }
+        
+        # Add each subject score (normalized to 100)
+        for subject in all_subjects:
+            row[f"{subject} (%)"] = subject_scores.get(subject, 0)
+        
+        ranking_data.append(row)
+    
+    # Sort by overall average descending
+    ranking_data.sort(key=lambda x: x["Overall %"], reverse=True)
+    
+    # Assign ranks
+    for i, row in enumerate(ranking_data):
+        row["Section Rank"] = i + 1
+    
+    # Get medalists (top 3)
+    medalists = ranking_data[:3] if ranking_data else []
+    
+    # Add medal icons
+    medals = ["🥇", "🥈", "🥉"]
+    for i, medalist in enumerate(medalists):
+        if i < len(medals):
+            medalist["Medal"] = medals[i]
+    
+    return ranking_data, medalists
+
+def show_enhanced_rankings_panel():
+    """Display enhanced rankings with subject scores per 100 and medalists"""
+    st.markdown("### 🏆 Enhanced Student Rankings")
+    st.markdown("View each student's subject scores (per 100), section rank, and overall rank with medalists.")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        grade_options = [f"Grade {i}" for i in range(1, 13)]
+        selected_grade = st.selectbox("Select Grade", grade_options, key="enhanced_rank_grade")
+    with col2:
+        if selected_grade:
+            sections = sorted(set([s.get("section", "A") for s in st.session_state.students 
+                                  if s.get("grade") == selected_grade]))
+            section_options = ["All Sections"] + sections
+        else:
+            section_options = ["All Sections"]
+        selected_section = st.selectbox("Select Section", section_options, key="enhanced_rank_section")
+    with col3:
+        semester_options = ["All Semesters", "Semester I", "Semester II"]
+        selected_semester = st.selectbox("Select Semester", semester_options, key="enhanced_rank_semester")
+        if selected_semester == "All Semesters":
+            semester_filter = None
+        else:
+            semester_filter = selected_semester
+    
+    if not selected_grade:
+        st.info("Please select a grade.")
+        return
+    
+    # Generate ranking data
+    section_filter = None if selected_section == "All Sections" else selected_section
+    ranking_data, medalists = get_enhanced_rankings(
+        selected_grade, 
+        section_filter, 
+        semester_filter
+    )
+    
+    if not ranking_data:
+        st.info(f"No students found in {selected_grade}{' - ' + selected_section if section_filter else ''}")
+        return
+    
+    # Display medalists
+    if medalists:
+        st.markdown("### 🏅 Top 3 Students (Medalists)")
+        cols = st.columns(3)
+        for i, medalist in enumerate(medalists):
+            with cols[i]:
+                medal_emoji = medalist.get("Medal", "🏅")
+                st.markdown(f"""
+                <div style="background: {'#FFF8E1' if i == 0 else '#F5F5F5' if i == 1 else '#F5F0E8'}; 
+                            border: 2px solid {'#FFD700' if i == 0 else '#C0C0C0' if i == 1 else '#CD7F32'};
+                            border-radius: 16px;
+                            padding: 1.5rem;
+                            text-align: center;
+                            margin: 0.5rem 0;">
+                    <div style="font-size: 3rem;">{medal_emoji}</div>
+                    <h3 style="margin: 0.5rem 0; color: #1A73E8;">{medalist.get('Student Name', '')}</h3>
+                    <p style="margin: 0.2rem 0; font-weight: 600;">Section: {medalist.get('Section', '')}</p>
+                    <p style="font-size: 1.5rem; font-weight: 700; color: #34A853;">
+                        {medalist.get('Overall %', 0)}%
+                    </p>
+                    <p style="color: #5F6368; font-size: 0.9rem;">
+                        Rank: #{medalist.get('Section Rank', '')}
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+    
+    # Display full ranking table
+    st.markdown(f"### 📊 Full Rankings for {selected_grade}{' - Section ' + selected_section if section_filter else ' (All Sections)'}")
+    st.markdown(f"**Total Students:** {len(ranking_data)} | **Semester:** {selected_semester}")
+    
+    # Create DataFrame for display
+    df_ranking = pd.DataFrame(ranking_data)
+    
+    # Reorder columns to put key info first
+    cols = ['Student ID', 'Student Name', 'Section', 'Overall %', 'Section Rank']
+    subject_cols = [c for c in df_ranking.columns if c not in cols and c != 'Medal']
+    display_cols = cols + subject_cols
+    
+    # Add Medal column if exists
+    if 'Medal' in df_ranking.columns:
+        display_cols = ['Medal'] + display_cols
+    
+    # Filter to available columns
+    display_cols = [c for c in display_cols if c in df_ranking.columns]
+    
+    st.dataframe(
+        df_ranking[display_cols],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Medal": st.column_config.TextColumn("🏅", width="small"),
+            "Student ID": st.column_config.TextColumn("ID", width="small"),
+            "Student Name": st.column_config.TextColumn("Name", width="medium"),
+            "Section": st.column_config.TextColumn("Section", width="small"),
+            "Overall %": st.column_config.NumberColumn("Overall %", format="%.1f%%"),
+            "Section Rank": st.column_config.NumberColumn("Rank", width="small")
+        }
+    )
+    
+    # Download buttons
+    col_dl1, col_dl2, col_dl3 = st.columns(3)
+    
+    with col_dl1:
+        # Download as CSV
+        csv_data = df_ranking.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name=f"Rankings_{selected_grade}_{selected_section}_{selected_semester}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            width='stretch'
+        )
+    
+    with col_dl2:
+        # Download as Excel
+        try:
+            import openpyxl
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                df_ranking.to_excel(writer, index=False, sheet_name="Rankings")
+                # Add medalists sheet if available
+                if medalists:
+                    df_medalists = pd.DataFrame(medalists)
+                    df_medalists.to_excel(writer, index=False, sheet_name="Medalists")
+            excel_data = excel_buffer.getvalue()
+            st.download_button(
+                label="📥 Download Excel",
+                data=excel_data,
+                file_name=f"Rankings_{selected_grade}_{selected_section}_{selected_semester}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width='stretch'
+            )
+        except ImportError:
+            st.info("⚠️ Install openpyxl for Excel export: `pip install openpyxl`")
+    
+    with col_dl3:
+        # Download as HTML Report
+        html_report = generate_ranking_html_report(ranking_data, medalists, selected_grade, selected_section, selected_semester)
+        st.download_button(
+            label="📥 Download HTML Report",
+            data=html_report.encode('utf-8'),
+            file_name=f"Rankings_Report_{selected_grade}_{selected_section}_{selected_semester}_{datetime.now().strftime('%Y%m%d')}.html",
+            mime="text/html",
+            width='stretch'
+        )
+
+def generate_ranking_html_report(ranking_data, medalists, grade, section, semester):
+    """Generate HTML report for rankings"""
+    section_display = section if section else "All Sections"
+    semester_display = semester if semester else "All Semesters"
+    
+    # Build medalist section
+    medalist_html = ""
+    if medalists:
+        medalist_html = """
+        <h2>🏅 Top 3 Students (Medalists)</h2>
+        <div class="medalist-grid">
+        """
+        medals = ["🥇", "🥈", "🥉"]
+        colors = ["#FFF8E1", "#F5F5F5", "#F5F0E8"]
+        borders = ["#FFD700", "#C0C0C0", "#CD7F32"]
+        for i, medalist in enumerate(medalists):
+            medalist_html += f"""
+            <div class="medalist-card" style="background:{colors[i]};border-color:{borders[i]};">
+                <div class="medal">{medals[i]}</div>
+                <div class="medalist-name">{medalist.get('Student Name', '')}</div>
+                <div class="medalist-section">Section: {medalist.get('Section', '')}</div>
+                <div class="medalist-score">{medalist.get('Overall %', 0)}%</div>
+                <div class="medalist-rank">Rank: #{medalist.get('Section Rank', '')}</div>
+            </div>
+            """
+        medalist_html += "</div>"
+    
+    # Build table rows
+    table_rows = ""
+    for row in ranking_data:
+        table_rows += f"""
+        <tr>
+            <td>{row.get('Student ID', '')}</td>
+            <td><strong>{row.get('Student Name', '')}</strong></td>
+            <td>{row.get('Section', '')}</td>
+            <td><strong>{row.get('Overall %', 0)}%</strong></td>
+            <td><strong>#{row.get('Section Rank', '')}</strong></td>
+        """
+        # Add subject scores
+        for col in row.keys():
+            if col not in ['Student ID', 'Student Name', 'Section', 'Overall %', 'Section Rank', 'Medal']:
+                score = row.get(col, 0)
+                table_rows += f"<td>{score}%</td>"
+        table_rows += "</tr>"
+    
+    # Get subject columns
+    subject_cols = [c for c in ranking_data[0].keys() if c not in ['Student ID', 'Student Name', 'Section', 'Overall %', 'Section Rank', 'Medal']]
+    subject_headers = "".join([f"<th>{s}</th>" for s in subject_cols])
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Student Rankings Report - {grade}</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: 'Segoe UI', Arial, sans-serif;
+                background: #f0f2f5;
+                padding: 30px;
+            }}
+            .container {{
+                max-width: 1400px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+            }}
+            .header {{
+                text-align: center;
+                padding-bottom: 30px;
+                border-bottom: 3px solid #1A73E8;
+                margin-bottom: 30px;
+            }}
+            .header h1 {{
+                font-size: 2.5rem;
+                color: #1A73E8;
+            }}
+            .header .subtitle {{
+                color: #5F6368;
+                font-size: 1.1rem;
+                margin-top: 5px;
+            }}
+            .medalist-grid {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+                margin: 20px 0 30px 0;
+            }}
+            .medalist-card {{
+                border: 3px solid;
+                border-radius: 16px;
+                padding: 25px;
+                text-align: center;
+            }}
+            .medal {{
+                font-size: 3rem;
+            }}
+            .medalist-name {{
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: #1A73E8;
+                margin: 10px 0 5px 0;
+            }}
+            .medalist-score {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #34A853;
+            }}
+            .medalist-rank {{
+                color: #5F6368;
+                font-size: 0.9rem;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+                font-size: 0.85rem;
+            }}
+            th {{
+                background: #1A73E8;
+                color: white;
+                padding: 10px 12px;
+                text-align: left;
+                position: sticky;
+                top: 0;
+                white-space: nowrap;
+            }}
+            td {{
+                padding: 8px 12px;
+                border-bottom: 1px solid #E8EAED;
+            }}
+            tr:nth-child(even) {{ background: #F8F9FA; }}
+            tr:hover {{ background: #E8F0FE; }}
+            .footer {{
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 2px solid #E8EAED;
+                text-align: center;
+                color: #5F6368;
+                font-size: 0.9rem;
+            }}
+            @media print {{
+                body {{ background: white; padding: 15px; }}
+                .container {{ box-shadow: none; border: 1px solid #ddd; }}
+            }}
+            @media (max-width: 768px) {{
+                .medalist-grid {{ grid-template-columns: 1fr; }}
+                table {{ font-size: 0.7rem; }}
+                th, td {{ padding: 5px 8px; }}
+            }}
+        </style>
+    </head>
+    <body>
+    <div class="container">
+        <div class="header">
+            <h1>🏆 Student Rankings Report</h1>
+            <div class="subtitle">{st.session_state.school_name}</div>
+            <div class="subtitle">Grade: {grade} · Section: {section_display} · Semester: {semester_display}</div>
+            <div class="subtitle">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+        </div>
+        
+        {medalist_html}
+        
+        <h2>📊 Full Rankings</h2>
+        <p><strong>Total Students:</strong> {len(ranking_data)}</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Section</th>
+                    <th>Overall %</th>
+                    <th>Rank</th>
+                    {subject_headers}
+                </tr>
+            </thead>
+            <tbody>
+                {table_rows}
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Report generated by School Registration Portal</p>
+            <p>© {datetime.now().year} {st.session_state.school_name} - All Rights Reserved</p>
+        </div>
+    </div>
+    </body>
+    </html>
+    """
+    return html
+
+# ===================================================================
+# NEW: ENHANCED SCHOOL REPORTS WITH SEMESTER SELECTION
+# ===================================================================
+
+def generate_semester_report(semester=None):
+    """Generate school report with semester filtering"""
+    stats = generate_school_statistics()
+    
+    # Filter evaluations by semester if specified
+    if semester and semester != "Both Semesters":
+        approved_evals = [e for e in st.session_state.evaluations 
+                         if e.get("status") == "approved" and e.get("semester") == semester]
+    else:
+        approved_evals = [e for e in st.session_state.evaluations if e.get("status") == "approved"]
+    
+    # Recalculate subject averages for the semester
+    subject_scores = {}
+    for e in approved_evals:
+        subject = e.get("subject", "Unknown")
+        score = e.get("overall_score", 0)
+        if subject not in subject_scores:
+            subject_scores[subject] = []
+        subject_scores[subject].append(score)
+    
+    subject_avgs = {}
+    for subject, scores in subject_scores.items():
+        subject_avgs[subject] = round(sum(scores) / len(scores), 2) if scores else 0
+    
+    # Recalculate grade performance
+    grade_perf = {}
+    for s in st.session_state.students:
+        grade = s.get("grade", "Unknown")
+        evals = [e for e in approved_evals if e.get("student_id") == s["id"]]
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if grade not in grade_perf:
+                grade_perf[grade] = []
+            grade_perf[grade].append(avg_score)
+    
+    grade_avgs = {}
+    for grade, scores in grade_perf.items():
+        grade_avgs[grade] = round(sum(scores) / len(scores), 2) if scores else 0
+    
+    # Recalculate pass/fail
+    passed = 0
+    failed = 0
+    for s in st.session_state.students:
+        evals = [e for e in approved_evals if e.get("student_id") == s["id"]]
+        if evals:
+            avg_score = round(sum(e.get("overall_score", 0) for e in evals) / len(evals), 2)
+            if avg_score >= 50:
+                passed += 1
+            else:
+                failed += 1
+    
+    # Create report
+    report = {
+        "school_name": st.session_state.school_name,
+        "school_city": st.session_state.school_city,
+        "semester": semester if semester else "Both Semesters",
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "total_students": len(st.session_state.students),
+        "total_teachers": len(st.session_state.teachers),
+        "total_evaluations": len(approved_evals),
+        "total_batches": len(st.session_state.batches),
+        "pending_batches": len(get_batches_awaiting_final_approval()),
+        "male_students": len([s for s in st.session_state.students if s.get("gender") == "M"]),
+        "female_students": len([s for s in st.session_state.students if s.get("gender") == "F"]),
+        "grade_distribution": {g: len([s for s in st.session_state.students if s.get("grade") == g]) 
+                              for g in sorted(set([s.get("grade") for s in st.session_state.students]))},
+        "subject_averages": subject_avgs,
+        "grade_averages": grade_avgs,
+        "passed": passed,
+        "failed": failed,
+        "pass_rate": round((passed / (passed + failed)) * 100, 1) if (passed + failed) > 0 else 0,
+        "teacher_workload": stats["teacher_workload"],
+        "section_distribution": stats["section_distribution"]
+    }
+    
+    return report
+
+def generate_semester_report_html(report):
+    """Generate HTML report for a specific semester"""
+    semester = report["semester"]
+    
+    # Build grade distribution table
+    grade_rows = ""
+    total = report["total_students"]
+    for grade, count in sorted(report["grade_distribution"].items()):
+        pct = round((count / total) * 100, 1) if total > 0 else 0
+        grade_rows += f"<tr><td>{grade}</td><td>{count}</td><td>{pct}%</td></tr>"
+    
+    # Build subject performance table
+    subject_rows = ""
+    for subject, avg in sorted(report["subject_averages"].items(), key=lambda x: x[1], reverse=True):
+        badge = "badge-green" if avg >= 70 else "badge-yellow" if avg >= 50 else "badge-red"
+        label = "Excellent" if avg >= 70 else "Good" if avg >= 50 else "Needs Improvement"
+        subject_rows += f"<tr><td>{subject}</td><td>{avg}%</td><td><span class='badge {badge}'>{label}</span></td></tr>"
+    
+    # Build grade performance table
+    grade_rows_perf = ""
+    for grade, avg in sorted(report["grade_averages"].items()):
+        grade_rows_perf += f"<tr><td>{grade}</td><td>{avg}%</td></tr>"
+    
+    # Build teacher workload table
+    teacher_rows = ""
+    for teacher, workload in sorted(report["teacher_workload"].items()):
+        teacher_rows += f"<tr><td>{teacher}</td><td>{workload['batches']}</td><td>{workload['evaluations']}</td></tr>"
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>School Report - {semester}</title>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{
+                font-family: 'Segoe UI', 'Noto Sans Ethiopic', Arial, sans-serif;
+                background: #f0f2f5;
+                padding: 30px;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                box-shadow: 0 4px 30px rgba(0,0,0,0.08);
+            }}
+            .header {{
+                text-align: center;
+                padding-bottom: 30px;
+                border-bottom: 3px solid #1A73E8;
+                margin-bottom: 30px;
+            }}
+            .header h1 {{
+                font-size: 2.5rem;
+                color: #1A73E8;
+            }}
+            .header .subtitle {{
+                color: #5F6368;
+                font-size: 1.1rem;
+                margin-top: 5px;
+            }}
+            .header .semester-badge {{
+                display: inline-block;
+                background: #1A73E8;
+                color: white;
+                padding: 5px 20px;
+                border-radius: 30px;
+                margin-top: 10px;
+                font-weight: 600;
+            }}
+            .summary-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }}
+            .summary-card {{
+                background: #F8F9FA;
+                border-radius: 12px;
+                padding: 20px;
+                text-align: center;
+                border: 1px solid #E8EAED;
+            }}
+            .summary-card .number {{
+                font-size: 2.2rem;
+                font-weight: 700;
+                color: #1A73E8;
+                display: block;
+            }}
+            .summary-card .label {{
+                font-size: 0.85rem;
+                color: #5F6368;
+                margin-top: 5px;
+                display: block;
+            }}
+            .summary-card.pass .number {{ color: #34A853; }}
+            .summary-card.fail .number {{ color: #EA4335; }}
+            .summary-card.rate .number {{ 
+                color: {'#34A853' if report['pass_rate'] >= 70 else '#FBBC04' if report['pass_rate'] >= 50 else '#EA4335'};
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+            }}
+            th, td {{
+                padding: 10px 12px;
+                border: 1px solid #E8EAED;
+                text-align: left;
+            }}
+            th {{
+                background: #F1F3F4;
+                font-weight: 600;
+            }}
+            tr:nth-child(even) {{ background: #F8F9FA; }}
+            .badge {{
+                display: inline-block;
+                padding: 2px 12px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 600;
+            }}
+            .badge-green {{ background: #E6F4EA; color: #34A853; }}
+            .badge-yellow {{ background: #FEF7E0; color: #F9AB00; }}
+            .badge-red {{ background: #FCE8E6; color: #EA4335; }}
+            .footer {{
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 2px solid #E8EAED;
+                text-align: center;
+                color: #5F6368;
+                font-size: 0.9rem;
+            }}
+            @media print {{
+                body {{ background: white; padding: 15px; }}
+                .container {{ box-shadow: none; border: 1px solid #ddd; }}
+            }}
+        </style>
+    </head>
+    <body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 School Academic Report</h1>
+            <div class="subtitle">{report['school_name']}</div>
+            <div class="subtitle">City: {report['school_city']}</div>
+            <div class="semester-badge">{report['semester']}</div>
+            <div class="subtitle">Generated: {report['generated_at']}</div>
+        </div>
+        
+        <div class="summary-grid">
+            <div class="summary-card"><span class="number">{report['total_students']}</span><span class="label">👨‍🎓 Students</span></div>
+            <div class="summary-card"><span class="number">{report['total_teachers']}</span><span class="label">👨‍🏫 Teachers</span></div>
+            <div class="summary-card"><span class="number">{report['total_evaluations']}</span><span class="label">📝 Evaluations</span></div>
+            <div class="summary-card"><span class="number">{report['pending_batches']}</span><span class="label">⏳ Pending</span></div>
+            <div class="summary-card pass"><span class="number">{report['passed']}</span><span class="label">✅ Passed</span></div>
+            <div class="summary-card fail"><span class="number">{report['failed']}</span><span class="label">❌ Failed</span></div>
+            <div class="summary-card rate"><span class="number">{report['pass_rate']}%</span><span class="label">📈 Pass Rate</span></div>
+        </div>
+        
+        <h2>📚 Grade Distribution</h2>
+        <table>
+            <thead><tr><th>Grade</th><th>Students</th><th>% of Total</th></tr></thead>
+            <tbody>{grade_rows}</tbody>
+        </table>
+        
+        <h2>📖 Subject Performance Averages</h2>
+        <table>
+            <thead><tr><th>Subject</th><th>Average Score (%)</th><th>Performance</th></tr></thead>
+            <tbody>{subject_rows}</tbody>
+        </table>
+        
+        <h2>🎓 Grade-wise Performance</h2>
+        <table>
+            <thead><tr><th>Grade</th><th>Average Score (%)</th></tr></thead>
+            <tbody>{grade_rows_perf}</tbody>
+        </table>
+        
+        <h2>👨‍🏫 Teacher Workload</h2>
+        <table>
+            <thead><tr><th>Teacher</th><th>Batches</th><th>Evaluations</th></tr></thead>
+            <tbody>{teacher_rows}</tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Report generated by School Registration Portal</p>
+            <p>© {datetime.now().year} {report['school_name']} - All Rights Reserved</p>
+        </div>
+    </div>
+    </body>
+    </html>
+    """
+    return html
+
+def show_enhanced_school_reports():
+    """Display enhanced school reports with semester selection"""
+    st.markdown("### 📄 School Academic Reports")
+    st.markdown("Generate reports for Semester I, Semester II, or Both with detailed statistics.")
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        semester_choice = st.selectbox(
+            "Select Semester",
+            ["Semester I", "Semester II", "Both Semesters"],
+            index=2,
+            key="report_semester_choice"
+        )
+    
+    with col2:
+        st.markdown("""
+        <div style="background:#E8F0FE;padding:1rem;border-radius:12px;margin-top:0.5rem;">
+            <p style="margin:0;color:#1A73E8;font-weight:500;">📌 Reports include:</p>
+            <ul style="margin:0.5rem 0 0 0;color:#5F6368;">
+                <li>Grade Distribution</li>
+                <li>Subject Performance Averages</li>
+                <li>Grade-wise Performance</li>
+                <li>Teacher Workload</li>
+                <li>Pass/Fail Statistics</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    if st.button("📊 Generate Report", width='stretch'):
+        with st.spinner("Generating report..."):
+            report = generate_semester_report(semester_choice)
+            html_report = generate_semester_report_html(report)
+            
+            # Display preview
+            st.markdown("### 📋 Report Preview")
+            st.components.v1.html(html_report, height=500, scrolling=True)
+            
+            # Download button
+            st.download_button(
+                label="📥 Download Report (HTML)",
+                data=html_report.encode('utf-8'),
+                file_name=f"School_Report_{semester_choice}_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                mime="text/html",
+                width='stretch'
+            )
+            
+            # Also provide CSV download for data
+            try:
+                # Create data summary for download
+                data_summary = {
+                    "Metric": ["Total Students", "Total Teachers", "Total Evaluations", "Pending Batches", 
+                               "Passed", "Failed", "Pass Rate"],
+                    "Value": [report["total_students"], report["total_teachers"], report["total_evaluations"],
+                             report["pending_batches"], report["passed"], report["failed"], f"{report['pass_rate']}%"]
+                }
+                df_summary = pd.DataFrame(data_summary)
+                csv_data = df_summary.to_csv(index=False).encode('utf-8')
+                
+                st.download_button(
+                    label="📥 Download Summary CSV",
+                    data=csv_data,
+                    file_name=f"School_Report_Summary_{semester_choice}_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    width='stretch'
+                )
+            except:
+                pass
+
 # ---- PAGE CONFIG ----
 st.set_page_config(
     page_title="School Registration Portal",
@@ -1690,7 +2477,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS ----
+# ---- CSS (same as original, keeping it concise) ----
 st.markdown("""
 <style>
     :root {
@@ -3477,7 +4264,7 @@ def show_teacher_panel():
         key="batch_editor"
     )
     
-    # Calculate overall scores - FIXED INDENTATION
+    # Calculate overall scores
     for idx, row in edited_df.iterrows():
         total_weighted = 0
         total_weight = 0
@@ -3787,11 +4574,57 @@ def show_deep_statistics():
         else:
             st.info("No teacher workload data available.")
 
+# ===================================================================
+# NEW: DOWNLOAD ALL DATA FUNCTION
+# ===================================================================
+
+def download_all_data():
+    """Download all data as Excel with multiple sheets"""
+    try:
+        import openpyxl
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            # Students
+            if st.session_state.students:
+                df_students = pd.DataFrame(st.session_state.students)
+                df_students.to_excel(writer, index=False, sheet_name="Students")
+            
+            # Teachers
+            if st.session_state.teachers:
+                df_teachers = pd.DataFrame(st.session_state.teachers)
+                df_teachers.to_excel(writer, index=False, sheet_name="Teachers")
+            
+            # Evaluations
+            if st.session_state.evaluations:
+                df_evals = pd.DataFrame(st.session_state.evaluations)
+                df_evals.to_excel(writer, index=False, sheet_name="Evaluations")
+            
+            # Batches
+            if st.session_state.batches:
+                df_batches = pd.DataFrame(st.session_state.batches)
+                df_batches.to_excel(writer, index=False, sheet_name="Batches")
+            
+            # Users
+            if st.session_state.user_db:
+                users_data = []
+                for username, data in st.session_state.user_db.items():
+                    users_data.append({
+                        "Username": username,
+                        "Role": data.get("role", ""),
+                        "Name": data.get("name", "")
+                    })
+                df_users = pd.DataFrame(users_data)
+                df_users.to_excel(writer, index=False, sheet_name="Users")
+        
+        return excel_buffer.getvalue()
+    except ImportError:
+        return None
+
 # ---- ADMIN PANEL ----
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15, tab16 = st.tabs([
         "👤 My Profile",
         "📊 Overview",
         "⏰ Registration",
@@ -3806,7 +4639,8 @@ def show_admin_panel():
         "⚠️ Penalty Log",
         "🏫 Settings",
         "👨‍🏫 Homeroom",
-        "🎓 Student Cards"
+        "🎓 Student Cards",
+        "🏆 Enhanced Rankings"
     ])
 
     # Tab 0: My Profile
@@ -3870,7 +4704,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # Tab 3: Teachers
+    # Tab 3: Teachers (same as original, keeping concise)
     with tab4:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         st.markdown("##### 📌 Assignments (Grade, Section & Semester)")
@@ -4018,7 +4852,7 @@ def show_admin_panel():
                 else:
                     st.error("❌ Please enter teacher name.")
 
-        # Teacher display section - FIXED INDENTATION
+        # Teacher display section
         st.markdown("---")
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
@@ -4082,16 +4916,69 @@ def show_admin_panel():
                 elif new_subject:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    # Tab 5: All Data
+    # Tab 5: All Data - with DOWNLOAD ALL DATA
     with tab6:
         st.markdown("#### 📋 All Data")
-        if st.session_state.students:
+        
+        # Download all data button
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.markdown("##### 📥 Download All Data")
+            excel_data = download_all_data()
+            if excel_data:
+                st.download_button(
+                    label="📥 Download All Data (Excel)",
+                    data=excel_data,
+                    file_name=f"All_School_Data_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    width='stretch'
+                )
+            else:
+                st.info("⚠️ Install openpyxl for Excel export: `pip install openpyxl`")
+                # Fallback CSV
+                if st.session_state.students:
+                    csv_data = pd.DataFrame(st.session_state.students).to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download Students CSV",
+                        data=csv_data,
+                        file_name=f"Students_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        width='stretch'
+                    )
+        
+        with col2:
+            st.markdown("##### 📋 View Data")
+            data_choice = st.selectbox(
+                "Select data to view",
+                ["Students", "Teachers", "Evaluations", "Batches", "Users"]
+            )
+        
+        if data_choice == "Students" and st.session_state.students:
             df = pd.DataFrame(st.session_state.students)
             st.dataframe(df, use_container_width=True)
+        elif data_choice == "Teachers" and st.session_state.teachers:
+            df = pd.DataFrame(st.session_state.teachers)
+            st.dataframe(df, use_container_width=True)
+        elif data_choice == "Evaluations" and st.session_state.evaluations:
+            df = pd.DataFrame(st.session_state.evaluations)
+            st.dataframe(df, use_container_width=True)
+        elif data_choice == "Batches" and st.session_state.batches:
+            df = pd.DataFrame(st.session_state.batches)
+            st.dataframe(df, use_container_width=True)
+        elif data_choice == "Users" and st.session_state.user_db:
+            users_data = []
+            for username, data in st.session_state.user_db.items():
+                users_data.append({
+                    "Username": username,
+                    "Role": data.get("role", ""),
+                    "Name": data.get("name", "")
+                })
+            df = pd.DataFrame(users_data)
+            st.dataframe(df, use_container_width=True)
         else:
-            st.info("No students registered yet.")
+            st.info("No data available for the selected category.")
 
-    # Tab 6: Approvals - ENHANCED with detailed student score view
+    # Tab 6: Approvals (same as original, keeping concise)
     with tab7:
         st.markdown("#### ✅ Pending Batches for Final Approval")
         pending_batches = get_batches_awaiting_final_approval()
@@ -4110,35 +4997,27 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # ENHANCED: Show detailed student scores with all components
                 if batch.get('students'):
                     with st.expander("📊 View Student Scores (Full Assessment Details)"):
-                        # Get the components and weights from the batch
                         weights = batch.get('weights', {})
                         components = list(weights.keys()) if weights else []
                         
                         if components:
-                            # Build a detailed table with all component scores
                             detailed_data = []
                             for s in batch['students']:
                                 row = {
                                     "👤 Student": s.get('student_name', 'Unknown'),
                                     "📊 Overall": f"{s.get('overall', 0)}%"
                                 }
-                                # Add each component score
                                 for comp in components:
                                     score = s.get(comp, 0)
                                     max_score = batch.get('max_scores', {}).get(comp, 100)
                                     row[comp] = f"{score}/{max_score}"
                                 detailed_data.append(row)
                             
-                            # Create DataFrame for display
                             df_detailed = pd.DataFrame(detailed_data)
-                            
-                            # Display as interactive table
                             st.dataframe(df_detailed, use_container_width=True, hide_index=True)
                             
-                            # Show summary statistics
                             st.markdown("#### 📊 Score Summary")
                             overall_scores = [s.get('overall', 0) for s in batch['students']]
                             if overall_scores:
@@ -4153,20 +5032,10 @@ def show_admin_panel():
                                     passed = len([s for s in overall_scores if s >= 50])
                                     st.metric("✅ Passed", f"{passed}/{len(overall_scores)}")
                             
-                            # Show component weights for transparency
-                            st.markdown("#### 📋 Assessment Components & Weights")
-                            weights_df = pd.DataFrame([
-                                {"Component": name, "Weight": f"{weight}%"} 
-                                for name, weight in weights.items()
-                            ])
-                            st.dataframe(weights_df, use_container_width=True, hide_index=True)
-                            
-                            # Show teacher remarks
                             if batch.get('remarks'):
                                 st.markdown("#### 💬 Teacher Remarks")
                                 st.info(batch.get('remarks'))
                         else:
-                            # Fallback: simple view if no components
                             preview_data = []
                             for s in batch['students']:
                                 preview_data.append({
@@ -4217,7 +5086,7 @@ def show_admin_panel():
                         st.warning("❌ Batch rejected!")
                         st.rerun()
 
-    # Tab 7: Rankings
+    # Tab 7: Rankings (original)
     with tab8:
         st.markdown("#### 📊 Grade and Section Rankings")
         
@@ -4275,7 +5144,7 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-    # Tab 8: Students
+    # Tab 8: Students (original, keeping concise)
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
@@ -4482,9 +5351,17 @@ def show_admin_panel():
             except Exception as e:
                 st.error(f"Error reading file: {e}")
 
-    # Tab 10: Reports
+    # Tab 10: Reports - ENHANCED with Semester Selection
     with tab11:
         st.markdown("### 📄 School Reports")
+        
+        # New: Semester-based reports
+        show_enhanced_school_reports()
+        
+        st.markdown("---")
+        st.markdown("### 📊 Full Statistics Report")
+        
+        # Original stats
         stats = generate_school_statistics()
         
         col1, col2, col3 = st.columns(3)
@@ -4616,6 +5493,10 @@ def show_admin_panel():
     # Tab 14: Student Cards
     with tab15:
         show_student_card_panel()
+
+    # Tab 15: Enhanced Rankings (NEW)
+    with tab16:
+        show_enhanced_rankings_panel()
 
 # ---- MAIN ----
 def main():
