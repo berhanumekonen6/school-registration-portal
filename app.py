@@ -4704,7 +4704,9 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # Tab 3: Teachers (same as original, keeping concise)
+    # ================================================================
+    # Tab 3: TEACHERS - WITH DELETE BUTTON ADDED
+    # ================================================================
     with tab4:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         st.markdown("##### 📌 Assignments (Grade, Section & Semester)")
@@ -4852,7 +4854,7 @@ def show_admin_panel():
                 else:
                     st.error("❌ Please enter teacher name.")
 
-        # Teacher display section
+        # Teacher display section - WITH DELETE BUTTON
         st.markdown("---")
         if st.session_state.teachers:
             st.markdown("#### 📋 All Teachers")
@@ -4863,6 +4865,8 @@ def show_admin_panel():
                 admin_subjects = safe_json_loads(teacher.get("admin_subjects", "[]"))
                 is_admin = "subject_admin" in st.session_state.user_db.get(teacher.get("username", ""), {}).get("role", "")
                 added_date = teacher.get('added', 'N/A')
+                teacher_id = teacher.get("id", "")
+                teacher_username = teacher.get("username", "")
                 
                 html_card = f"""
                 <div class="teacher-card">
@@ -4880,12 +4884,19 @@ def show_admin_panel():
                         </div>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;background:#F8F9FA;padding:10px;border-radius:8px;">
-                        <div><b>👤 Username:</b> <code>{teacher.get('username', 'N/A')}</code></div>
+                        <div><b>👤 Username:</b> <code>{teacher_username}</code></div>
                         <div><b>🔑 Password:</b> <code style="background:#FCE8E6;padding:2px 10px;border-radius:4px;color:#EA4335;font-weight:700;">{teacher_password}</code></div>
                     </div>
                     {f'<div style="margin-top:6px;font-size:0.85rem;color:#1A73E8;"><b>📌 Admin Subjects:</b> {", ".join(admin_subjects)}</div>' if admin_subjects else ''}
                     <div style="margin-top:8px;font-size:0.85rem;color:#5F6368;">
                         <b>📅 Added:</b> {added_date}
+                    </div>
+                    <div style="margin-top:8px;">
+                        <button onclick="document.getElementById('delete_teacher_{teacher_id}').click()" 
+                                style="background:#EA4335;color:white;border:none;padding:6px 16px;border-radius:8px;cursor:pointer;font-weight:600;">
+                            🗑️ Delete Teacher
+                        </button>
+                        <button id="delete_teacher_{teacher_id}" style="display:none;"></button>
                     </div>
                 </div>
                 """
@@ -4894,6 +4905,51 @@ def show_admin_panel():
                     st.html(html_card)
                 except AttributeError:
                     st.markdown(html_card, unsafe_allow_html=True)
+                
+                # DELETE TEACHER BUTTON (works with streamlit)
+                col_del1, col_del2, col_del3 = st.columns([1, 1, 2])
+                with col_del1:
+                    if st.button(f"🗑️ Delete {teacher['name']}", key=f"del_teacher_{teacher_id}", width='stretch'):
+                        # Check if it's the admin user
+                        if teacher_username == "admin":
+                            st.error("❌ Cannot delete the main admin account!")
+                        else:
+                            # Confirm deletion
+                            if st.session_state.get(f'confirm_del_teacher_{teacher_id}', False):
+                                try:
+                                    supabase_admin = get_supabase_admin()
+                                    
+                                    # 1. Delete from users table
+                                    supabase_admin.table("users").delete().eq("username", teacher_username).execute()
+                                    
+                                    # 2. Delete from teachers table
+                                    supabase_admin.table("teachers").delete().eq("id", teacher_id).execute()
+                                    
+                                    # 3. Delete from subject_admin_assignments
+                                    try:
+                                        supabase_admin.table("subject_admin_assignments").delete().eq("teacher_id", teacher_id).execute()
+                                    except:
+                                        pass
+                                    
+                                    # 4. Remove from homeroom assignments
+                                    try:
+                                        supabase_admin.table("homeroom_assignments").delete().eq("teacher_id", teacher_id).execute()
+                                    except:
+                                        pass
+                                    
+                                    # 5. Remove from session state
+                                    load_all_data()
+                                    
+                                    add_notification(f"👨‍🏫 Teacher {teacher['name']} deleted successfully", "warning")
+                                    st.success(f"✅ Teacher {teacher['name']} deleted successfully!")
+                                    st.rerun()
+                                    
+                                except Exception as e:
+                                    st.error(f"❌ Failed to delete teacher: {e}")
+                            else:
+                                st.session_state[f'confirm_del_teacher_{teacher_id}'] = True
+                                st.warning(f"⚠️ Click Delete again to confirm deletion of {teacher['name']}")
+                                st.rerun()
 
     # Tab 4: Subjects
     with tab5:
