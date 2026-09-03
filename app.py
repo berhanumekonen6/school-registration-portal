@@ -1683,7 +1683,7 @@ def generate_deep_report_html(stats, charts):
     return html
 
 # ===================================================================
-# NEW: ENHANCED RANKINGS WITH SUBJECT SCORES & MEDALISTS
+# ENHANCED RANKINGS WITH SUBJECT SCORES & MEDALISTS
 # ===================================================================
 
 def get_student_subject_scores_for_ranking(student_id, semester=None):
@@ -2125,7 +2125,7 @@ def generate_ranking_html_report(ranking_data, medalists, grade, section, semest
     return html
 
 # ===================================================================
-# NEW: ENHANCED SCHOOL REPORTS WITH SEMESTER SELECTION
+# ENHANCED SCHOOL REPORTS WITH SEMESTER SELECTION
 # ===================================================================
 
 def generate_semester_report(semester=None):
@@ -2477,7 +2477,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ---- CSS (same as original, keeping it concise) ----
+# ---- CSS ----
 st.markdown("""
 <style>
     :root {
@@ -4574,10 +4574,7 @@ def show_deep_statistics():
         else:
             st.info("No teacher workload data available.")
 
-# ===================================================================
-# NEW: DOWNLOAD ALL DATA FUNCTION
-# ===================================================================
-
+# ---- DOWNLOAD ALL DATA FUNCTION ----
 def download_all_data():
     """Download all data as Excel with multiple sheets"""
     try:
@@ -4620,7 +4617,10 @@ def download_all_data():
     except ImportError:
         return None
 
-# ---- ADMIN PANEL ----
+# ===================================================================
+# ADMIN PANEL - FIXED Arrow Conversion Error
+# ===================================================================
+
 def show_admin_panel():
     st.markdown("### 👨‍💼 Admin Dashboard")
 
@@ -4704,9 +4704,7 @@ def show_admin_panel():
                 st.success("✅ Registration period updated successfully!")
                 st.rerun()
 
-    # ================================================================
-    # Tab 3: TEACHERS - WITH DELETE BUTTON ADDED
-    # ================================================================
+    # Tab 3: TEACHERS - WITH DELETE BUTTON
     with tab4:
         st.markdown("#### 👨‍🏫 Manage Teachers")
         st.markdown("##### 📌 Assignments (Grade, Section & Semester)")
@@ -4906,38 +4904,30 @@ def show_admin_panel():
                 except AttributeError:
                     st.markdown(html_card, unsafe_allow_html=True)
                 
-                # DELETE TEACHER BUTTON (works with streamlit)
+                # DELETE TEACHER BUTTON
                 col_del1, col_del2, col_del3 = st.columns([1, 1, 2])
                 with col_del1:
                     if st.button(f"🗑️ Delete {teacher['name']}", key=f"del_teacher_{teacher_id}", width='stretch'):
-                        # Check if it's the admin user
                         if teacher_username == "admin":
                             st.error("❌ Cannot delete the main admin account!")
                         else:
-                            # Confirm deletion
                             if st.session_state.get(f'confirm_del_teacher_{teacher_id}', False):
                                 try:
                                     supabase_admin = get_supabase_admin()
                                     
-                                    # 1. Delete from users table
                                     supabase_admin.table("users").delete().eq("username", teacher_username).execute()
-                                    
-                                    # 2. Delete from teachers table
                                     supabase_admin.table("teachers").delete().eq("id", teacher_id).execute()
                                     
-                                    # 3. Delete from subject_admin_assignments
                                     try:
                                         supabase_admin.table("subject_admin_assignments").delete().eq("teacher_id", teacher_id).execute()
                                     except:
                                         pass
                                     
-                                    # 4. Remove from homeroom assignments
                                     try:
                                         supabase_admin.table("homeroom_assignments").delete().eq("teacher_id", teacher_id).execute()
                                     except:
                                         pass
                                     
-                                    # 5. Remove from session state
                                     load_all_data()
                                     
                                     add_notification(f"👨‍🏫 Teacher {teacher['name']} deleted successfully", "warning")
@@ -4972,7 +4962,7 @@ def show_admin_panel():
                 elif new_subject:
                     st.warning(f"⚠️ Subject '{new_subject}' already exists.")
 
-    # Tab 5: All Data - with DOWNLOAD ALL DATA
+    # Tab 5: All Data - FIXED Arrow Conversion Error
     with tab6:
         st.markdown("#### 📋 All Data")
         
@@ -4991,7 +4981,6 @@ def show_admin_panel():
                 )
             else:
                 st.info("⚠️ Install openpyxl for Excel export: `pip install openpyxl`")
-                # Fallback CSV
                 if st.session_state.students:
                     csv_data = pd.DataFrame(st.session_state.students).to_csv(index=False).encode('utf-8')
                     st.download_button(
@@ -5012,15 +5001,36 @@ def show_admin_panel():
         if data_choice == "Students" and st.session_state.students:
             df = pd.DataFrame(st.session_state.students)
             st.dataframe(df, use_container_width=True)
+        
         elif data_choice == "Teachers" and st.session_state.teachers:
-            df = pd.DataFrame(st.session_state.teachers)
+            # FIX: Convert admin_subjects to string for display
+            teachers_data = []
+            for t in st.session_state.teachers:
+                teacher_row = t.copy()
+                # Safely parse admin_subjects
+                admin_subjects = teacher_row.get('admin_subjects', '[]')
+                if isinstance(admin_subjects, str):
+                    try:
+                        admin_subjects = json.loads(admin_subjects)
+                    except:
+                        admin_subjects = []
+                elif not isinstance(admin_subjects, list):
+                    admin_subjects = []
+                # Convert to comma-separated string for display
+                teacher_row['admin_subjects'] = ', '.join(admin_subjects) if admin_subjects else 'None'
+                teachers_data.append(teacher_row)
+            
+            df = pd.DataFrame(teachers_data)
             st.dataframe(df, use_container_width=True)
+        
         elif data_choice == "Evaluations" and st.session_state.evaluations:
             df = pd.DataFrame(st.session_state.evaluations)
             st.dataframe(df, use_container_width=True)
+        
         elif data_choice == "Batches" and st.session_state.batches:
             df = pd.DataFrame(st.session_state.batches)
             st.dataframe(df, use_container_width=True)
+        
         elif data_choice == "Users" and st.session_state.user_db:
             users_data = []
             for username, data in st.session_state.user_db.items():
@@ -5031,10 +5041,11 @@ def show_admin_panel():
                 })
             df = pd.DataFrame(users_data)
             st.dataframe(df, use_container_width=True)
+        
         else:
             st.info("No data available for the selected category.")
 
-    # Tab 6: Approvals (same as original, keeping concise)
+    # Tab 6: Approvals
     with tab7:
         st.markdown("#### ✅ Pending Batches for Final Approval")
         pending_batches = get_batches_awaiting_final_approval()
@@ -5200,7 +5211,7 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
 
-    # Tab 8: Students (original, keeping concise)
+    # Tab 8: Students
     with tab9:
         st.markdown("#### 👨‍🎓 Student Management")
         
@@ -5411,13 +5422,11 @@ def show_admin_panel():
     with tab11:
         st.markdown("### 📄 School Reports")
         
-        # New: Semester-based reports
         show_enhanced_school_reports()
         
         st.markdown("---")
         st.markdown("### 📊 Full Statistics Report")
         
-        # Original stats
         stats = generate_school_statistics()
         
         col1, col2, col3 = st.columns(3)
@@ -5550,7 +5559,7 @@ def show_admin_panel():
     with tab15:
         show_student_card_panel()
 
-    # Tab 15: Enhanced Rankings (NEW)
+    # Tab 15: Enhanced Rankings
     with tab16:
         show_enhanced_rankings_panel()
 
