@@ -4091,7 +4091,7 @@ def show_admin_panel():
         else:
             st.info("No students registered yet.")
 
-    # Tab 6: Approvals
+    # Tab 6: Approvals - ENHANCED with detailed student score view
     with tab7:
         st.markdown("#### ✅ Pending Batches for Final Approval")
         pending_batches = get_batches_awaiting_final_approval()
@@ -4110,15 +4110,70 @@ def show_admin_panel():
                 </div>
                 """, unsafe_allow_html=True)
                 
+                # ENHANCED: Show detailed student scores with all components
                 if batch.get('students'):
-                    with st.expander("📊 View Student Scores"):
-                        preview_data = []
-                        for s in batch['students']:
-                            preview_data.append({
-                                "Name": s.get('student_name', 'Unknown'),
-                                "Overall": s.get('overall', 0)
-                            })
-                        st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
+                    with st.expander("📊 View Student Scores (Full Assessment Details)"):
+                        # Get the components and weights from the batch
+                        weights = batch.get('weights', {})
+                        components = list(weights.keys()) if weights else []
+                        
+                        if components:
+                            # Build a detailed table with all component scores
+                            detailed_data = []
+                            for s in batch['students']:
+                                row = {
+                                    "👤 Student": s.get('student_name', 'Unknown'),
+                                    "📊 Overall": f"{s.get('overall', 0)}%"
+                                }
+                                # Add each component score
+                                for comp in components:
+                                    score = s.get(comp, 0)
+                                    max_score = batch.get('max_scores', {}).get(comp, 100)
+                                    row[comp] = f"{score}/{max_score}"
+                                detailed_data.append(row)
+                            
+                            # Create DataFrame for display
+                            df_detailed = pd.DataFrame(detailed_data)
+                            
+                            # Display as interactive table
+                            st.dataframe(df_detailed, use_container_width=True, hide_index=True)
+                            
+                            # Show summary statistics
+                            st.markdown("#### 📊 Score Summary")
+                            overall_scores = [s.get('overall', 0) for s in batch['students']]
+                            if overall_scores:
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("📈 Average", f"{round(sum(overall_scores)/len(overall_scores), 1)}%")
+                                with col2:
+                                    st.metric("⬆️ Highest", f"{max(overall_scores)}%")
+                                with col3:
+                                    st.metric("⬇️ Lowest", f"{min(overall_scores)}%")
+                                with col4:
+                                    passed = len([s for s in overall_scores if s >= 50])
+                                    st.metric("✅ Passed", f"{passed}/{len(overall_scores)}")
+                            
+                            # Show component weights for transparency
+                            st.markdown("#### 📋 Assessment Components & Weights")
+                            weights_df = pd.DataFrame([
+                                {"Component": name, "Weight": f"{weight}%"} 
+                                for name, weight in weights.items()
+                            ])
+                            st.dataframe(weights_df, use_container_width=True, hide_index=True)
+                            
+                            # Show teacher remarks
+                            if batch.get('remarks'):
+                                st.markdown("#### 💬 Teacher Remarks")
+                                st.info(batch.get('remarks'))
+                        else:
+                            # Fallback: simple view if no components
+                            preview_data = []
+                            for s in batch['students']:
+                                preview_data.append({
+                                    "Name": s.get('student_name', 'Unknown'),
+                                    "Overall": f"{s.get('overall', 0)}%"
+                                })
+                            st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
                 
                 col1, col2 = st.columns(2)
                 with col1:
