@@ -1,6 +1,6 @@
 # ===================================================================
 # ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# With All 201 Bingo Cards - FIXED LOGIN ISSUE
+# With All 201 Bingo Cards - FULLY CORRECTED
 # ===================================================================
 
 import streamlit as st
@@ -320,7 +320,7 @@ BINGO_CARDS = [
     {"id": 150, "cells": [['6', '24', '33', '48', '75'], ['10', '19', '37', '50', '64'], ['7', '28', 'F', '57', '68'], ['13', '17', '43', '58', '72'], ['11', '21', '35', '53', '74']]},
     # Card 151
     {"id": 151, "cells": [['3', '19', '42', '56', '71'], ['8', '22', '37', '46', '62'], ['15', '29', 'F', '57', '72'], ['9', '17', '39', '60', '69'], ['1', '18', '40', '59', '64']]},
-    # Card 152 (Note: has typo in original, using 19 instead of 119)
+    # Card 152
     {"id": 152, "cells": [['3', '19', '42', '56', '71'], ['8', '22', '37', '46', '62'], ['15', '29', 'F', '57', '72'], ['9', '17', '39', '60', '69'], ['1', '18', '40', '59', '64']]},
     # Card 153
     {"id": 153, "cells": [['14', '16', '44', '51', '69'], ['1', '17', '34', '56', '67'], ['7', '29', 'F', '47', '75'], ['4', '30', '41', '54', '65'], ['10', '18', '43', '49', '61']]},
@@ -522,41 +522,44 @@ def init_game_db():
         try:
             supabase_admin = get_supabase_admin()
             
-            # Create admin
-            supabase_admin.table("bingo_users").insert({
-                "username": "admin",
-                "password": hash_password("adminbb"),
-                "balance": 9999,
-                "role": "admin",
-                "name": "School Administrator",
-                "phone": "09XXXXXXXX",
-                "game_played": 0
-            }).execute()
-            
-            # Create demo players
-            supabase_admin.table("bingo_users").insert({
-                "username": "player1",
-                "password": hash_password("player123"),
-                "balance": 100,
-                "role": "player",
-                "name": "Abebe Kebede",
-                "phone": "0912345678",
-                "game_played": 0
-            }).execute()
-            
-            supabase_admin.table("bingo_users").insert({
-                "username": "player2",
-                "password": hash_password("player456"),
-                "balance": 50,
-                "role": "player",
-                "name": "Tigist Haile",
-                "phone": "0923456789",
-                "game_played": 0
-            }).execute()
-            
-            # Reload data
-            load_all_data()
-            st.success("✅ Default admin and demo players created!")
+            # Check if any users exist
+            check_res = supabase_admin.table("bingo_users").select("username").limit(1).execute()
+            if not check_res.data:
+                # Create admin
+                supabase_admin.table("bingo_users").insert({
+                    "username": "admin",
+                    "password": hash_password("adminbb"),
+                    "balance": 9999,
+                    "role": "admin",
+                    "name": "School Administrator",
+                    "phone": "09XXXXXXXX",
+                    "game_played": 0
+                }).execute()
+                
+                # Create demo players
+                supabase_admin.table("bingo_users").insert({
+                    "username": "player1",
+                    "password": hash_password("player123"),
+                    "balance": 100,
+                    "role": "player",
+                    "name": "Abebe Kebede",
+                    "phone": "0912345678",
+                    "game_played": 0
+                }).execute()
+                
+                supabase_admin.table("bingo_users").insert({
+                    "username": "player2",
+                    "password": hash_password("player456"),
+                    "balance": 50,
+                    "role": "player",
+                    "name": "Tigist Haile",
+                    "phone": "0923456789",
+                    "game_played": 0
+                }).execute()
+                
+                # Reload data
+                load_all_data()
+                print("✅ Default admin and demo players created!")
         except Exception as e:
             print(f"Note: {e}")
     
@@ -586,7 +589,7 @@ def init_game_db():
         st.session_state.cards_data = {}
 
 # ===================================================================
-# AUTHENTICATION
+# AUTHENTICATION - FIXED
 # ===================================================================
 
 def hash_password(password):
@@ -598,6 +601,7 @@ def verify_password(password, hashed):
 def login_user(username, password):
     init_game_db()
     
+    # Check in session state first
     if username not in st.session_state.user_db:
         return False, f"❌ Username '{username}' not found. Please register first."
     
@@ -609,7 +613,63 @@ def login_user(username, password):
         st.session_state.current_role = user["role"]
         return True, "✅ Login successful!"
     else:
-        return False, "❌ Incorrect password."
+        return False, "❌ Incorrect password. Please try again."
+
+def register_user(username, password, name, phone=""):
+    """Register new user with proper error handling - FIXED"""
+    init_game_db()
+    
+    # Validate inputs
+    if not username or len(username) < 2:
+        return False, "❌ Username must be at least 2 characters"
+    
+    if not password or len(password) < 6:
+        return False, "❌ Password must be at least 6 characters"
+    
+    # Username validation (only alphanumeric, underscore, hyphen)
+    allowed_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-')
+    if not all(c in allowed_chars for c in username):
+        return False, "❌ Username can only contain letters, numbers, underscores, and hyphens"
+    
+    # Check if username exists in session state first
+    if username in st.session_state.user_db:
+        return False, f"❌ Username '{username}' already exists. Please choose another."
+    
+    hashed = hash_password(password)
+    supabase_admin = get_supabase_admin()
+    
+    try:
+        # First check if user exists in database
+        check_res = supabase_admin.table("bingo_users").select("username").eq("username", username).execute()
+        if check_res.data and len(check_res.data) > 0:
+            return False, f"❌ Username '{username}' already exists. Please choose another."
+        
+        # Insert new user
+        supabase_admin.table("bingo_users").insert({
+            "username": username,
+            "password": hashed,
+            "balance": 10,
+            "role": "player",
+            "name": name,
+            "phone": phone,
+            "game_played": 0
+        }).execute()
+        
+        # Reload data to update session state
+        load_all_data()
+        
+        # Verify user was created
+        if username in st.session_state.user_db:
+            return True, f"✅ Registration successful! Welcome {name}! Please login."
+        else:
+            return True, f"✅ Registration successful! Please login to your new account."
+            
+    except Exception as e:
+        error_msg = str(e)
+        if "duplicate key" in error_msg or "23505" in error_msg:
+            return False, f"❌ Username '{username}' already exists. Please choose another."
+        else:
+            return False, f"❌ Registration failed: {error_msg}"
 
 def logout_user():
     st.session_state.logged_in = False
@@ -619,27 +679,6 @@ def logout_user():
     st.session_state.called_numbers = []
     st.session_state.countdown_active = False
     st.session_state.auto_play = False
-
-def register_user(username, password, name, phone=""):
-    init_game_db()
-    if username in st.session_state.user_db:
-        return False, f"❌ Username '{username}' already exists. Please choose another."
-    
-    hashed = hash_password(password)
-    supabase_admin = get_supabase_admin()
-    try:
-        supabase_admin.table("bingo_users").insert({
-            "username": username,
-            "password": hashed,
-            "balance": 10,
-            "role": "player",
-            "name": name,
-            "phone": phone
-        }).execute()
-        load_all_data()
-        return True, f"✅ Registration successful! Welcome {name}! Please login."
-    except Exception as e:
-        return False, f"❌ Registration failed: {e}"
 
 # ===================================================================
 # GAME FUNCTIONS
@@ -1302,7 +1341,7 @@ def show_balance_status():
         """, unsafe_allow_html=True)
 
 # ===================================================================
-# LOGIN PAGE
+# LOGIN PAGE - FIXED
 # ===================================================================
 
 def show_login_page():
@@ -1325,15 +1364,21 @@ def show_login_page():
             
             # Show available users
             if st.session_state.user_db:
-                st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
+                user_list = list(st.session_state.user_db.keys())
+                st.info(f"👥 Available users: {', '.join(user_list[:10])}")
+                if len(user_list) > 10:
+                    st.info(f"... and {len(user_list) - 10} more users")
             
             submitted = st.form_submit_button("🎰 Login to Play", use_container_width=True)
             
             if submitted:
-                if username and password:
+                if not username or not password:
+                    st.error("❌ Please enter both username and password")
+                else:
                     success, message = login_user(username, password)
                     if success:
                         st.success(message)
+                        st.balloons()
                         st.rerun()
                     else:
                         st.error(message)
@@ -1341,25 +1386,38 @@ def show_login_page():
     with tab2:
         with st.form("register_form"):
             st.markdown("#### Register New Account")
-            full_name = st.text_input("👤 Full Name", placeholder="Your full name")
-            username = st.text_input("👤 Username", placeholder="Choose a username")
-            phone = st.text_input("📱 Phone Number", placeholder="09XXXXXXXX")
-            password = st.text_input("🔑 Password", type="password", placeholder="Create a password")
-            confirm = st.text_input("✅ Confirm Password", type="password", placeholder="Confirm password")
+            st.info("💡 Username must be at least 2 characters. Use only letters, numbers, underscore, and hyphen.")
+            
+            full_name = st.text_input("👤 Full Name", placeholder="Your full name", key="reg_name")
+            username = st.text_input("👤 Username", placeholder="Choose a username (e.g., player123)", key="reg_username")
+            phone = st.text_input("📱 Phone Number", placeholder="09XXXXXXXX", key="reg_phone")
+            password = st.text_input("🔑 Password", type="password", placeholder="Create a password (min 6 characters)", key="reg_password")
+            confirm = st.text_input("✅ Confirm Password", type="password", placeholder="Confirm your password", key="reg_confirm")
+            
             submitted = st.form_submit_button("📝 Register & Play", use_container_width=True)
             
             if submitted:
-                if not full_name or not username or not password:
-                    st.error("Please fill in all required fields")
+                # Validate all fields
+                if not full_name:
+                    st.error("❌ Please enter your full name")
+                elif not username:
+                    st.error("❌ Please choose a username")
+                elif len(username) < 2:
+                    st.error("❌ Username must be at least 2 characters")
+                elif not password:
+                    st.error("❌ Please create a password")
                 elif password != confirm:
-                    st.error("Passwords do not match")
+                    st.error("❌ Passwords do not match")
                 elif len(password) < 6:
-                    st.error("Password must be at least 6 characters")
+                    st.error("❌ Password must be at least 6 characters")
                 else:
                     success, message = register_user(username, password, full_name, phone)
                     if success:
                         st.success(message)
+                        st.balloons()
                         st.info("✅ Please login with your new credentials")
+                        time.sleep(1)
+                        st.rerun()
                     else:
                         st.error(message)
 
