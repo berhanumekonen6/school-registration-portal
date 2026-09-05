@@ -1,6 +1,6 @@
 # ===================================================================
 # ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# ALL 201 BINGO CARDS INCLUDED - LAYOUT FIXED
+# ALL 201 BINGO CARDS - DATABASE CONNECTION FIXED
 # ===================================================================
 
 import streamlit as st
@@ -254,7 +254,7 @@ def get_supabase_admin():
     return st.session_state.supabase_admin
 
 # ===================================================================
-# AUTHENTICATION
+# AUTHENTICATION - USING 'users' TABLE (School Portal)
 # ===================================================================
 
 def hash_password(password):
@@ -264,10 +264,12 @@ def verify_password(password, hashed):
     return hash_password(password) == hashed
 
 def load_all_data():
+    """Load users from the existing 'users' table"""
     supabase = get_supabase()
     
     try:
-        res = supabase.table("bingo_users").select("*").execute()
+        # Use the existing 'users' table from your school portal
+        res = supabase.table("users").select("*").execute()
         user_db = {}
         if res.data:
             for u in res.data:
@@ -282,23 +284,26 @@ def load_all_data():
                         "game_played": u.get("game_played", 0)
                     }
         st.session_state.user_db = user_db
-        print(f"✅ Loaded {len(user_db)} users")
+        print(f"✅ Loaded {len(user_db)} users from 'users' table")
     except Exception as e:
         print(f"Error loading users: {e}")
         st.session_state.user_db = {}
     
+    # Load games
     try:
         res = supabase.table("bingo_games").select("*").order("game_id", desc=True).execute()
         st.session_state.games = res.data if res.data else []
     except Exception as e:
         st.session_state.games = []
     
+    # Load selected cards
     try:
         res = supabase.table("bingo_selected_cards").select("*").execute()
         st.session_state.selected_cards = res.data if res.data else []
     except Exception as e:
         st.session_state.selected_cards = []
     
+    # Load winners
     try:
         res = supabase.table("bingo_winners").select("*").execute()
         st.session_state.winners = res.data if res.data else []
@@ -354,11 +359,11 @@ def register_user(username, password, name, phone=""):
     supabase_admin = get_supabase_admin()
     
     try:
-        check_res = supabase_admin.table("bingo_users").select("username").eq("username", username).execute()
+        check_res = supabase_admin.table("users").select("username").eq("username", username).execute()
         if check_res.data:
             return False, f"❌ Username '{username}' already exists"
         
-        supabase_admin.table("bingo_users").insert({
+        supabase_admin.table("users").insert({
             "username": username,
             "password": hash_password(password),
             "balance": 10,
@@ -518,7 +523,7 @@ def join_game(game_id, user_id, card_ids):
     
     try:
         new_balance = user.get("balance", 0) - total_cost
-        supabase_admin.table("bingo_users").update({"balance": new_balance}).eq("username", user_id).execute()
+        supabase_admin.table("users").update({"balance": new_balance}).eq("username", user_id).execute()
         
         for card_id in card_ids:
             supabase_admin.table("bingo_selected_cards").insert({
@@ -570,7 +575,7 @@ def declare_winner(game_id, winner_id, card_id, pattern):
         }).execute()
         
         new_balance = user.get("balance", 0) + prize
-        supabase_admin.table("bingo_users").update({
+        supabase_admin.table("users").update({
             "balance": new_balance,
             "game_played": user.get("game_played", 0) + 1
         }).eq("username", winner_id).execute()
@@ -660,11 +665,11 @@ def main():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            # Login form - NO buttons inside the form
             with st.form("login_form"):
                 username = st.text_input("👤 Username", placeholder="Enter username")
                 password = st.text_input("🔑 Password", type="password", placeholder="Enter password")
                 
+                # Show available users
                 if st.session_state.user_db:
                     st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
                 
@@ -679,7 +684,7 @@ def main():
                         else:
                             st.error(message)
             
-            # FORCE RELOAD BUTTON - OUTSIDE the form (fixes layout error)
+            # Force reload button - OUTSIDE the form
             st.markdown("---")
             st.markdown("### 🔧 Troubleshooting")
             
@@ -688,13 +693,17 @@ def main():
                 if st.button("🔄 Force Reload Users", use_container_width=True, key="force_reload"):
                     st.session_state.user_db = {}
                     load_all_data()
-                    st.success(f"✅ Reloaded {len(st.session_state.user_db)} users from database!")
+                    count = len(st.session_state.user_db)
+                    if count > 0:
+                        st.success(f"✅ Reloaded {count} users from database!")
+                    else:
+                        st.error("❌ No users found in database!")
                     st.rerun()
             with col2:
                 if st.button("👥 Show All Users", use_container_width=True, key="show_users"):
                     load_all_data()
                     if st.session_state.user_db:
-                        st.success(f"Users in database: {', '.join(st.session_state.user_db.keys())}")
+                        st.success(f"Users: {', '.join(st.session_state.user_db.keys())}")
                     else:
                         st.error("No users found in database!")
         
