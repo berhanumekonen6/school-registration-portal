@@ -5731,6 +5731,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-Thank you this code is pefect!
