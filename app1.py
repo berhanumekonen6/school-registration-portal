@@ -1,6 +1,6 @@
 # ===================================================================
 # ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# ALL 201 BINGO CARDS - DATABASE CONNECTION FIXED
+# ALL 201 BINGO CARDS - REGISTRATION FIXED
 # ===================================================================
 
 import streamlit as st
@@ -254,7 +254,7 @@ def get_supabase_admin():
     return st.session_state.supabase_admin
 
 # ===================================================================
-# AUTHENTICATION - USING 'users' TABLE (School Portal)
+# AUTHENTICATION - FIXED REGISTRATION
 # ===================================================================
 
 def hash_password(password):
@@ -264,11 +264,11 @@ def verify_password(password, hashed):
     return hash_password(password) == hashed
 
 def load_all_data():
-    """Load users from the existing 'users' table"""
+    """Load all data from Supabase"""
     supabase = get_supabase()
     
+    # Load users
     try:
-        # Use the existing 'users' table from your school portal
         res = supabase.table("users").select("*").execute()
         user_db = {}
         if res.data:
@@ -284,7 +284,7 @@ def load_all_data():
                         "game_played": u.get("game_played", 0)
                     }
         st.session_state.user_db = user_db
-        print(f"✅ Loaded {len(user_db)} users from 'users' table")
+        print(f"✅ Loaded {len(user_db)} users")
     except Exception as e:
         print(f"Error loading users: {e}")
         st.session_state.user_db = {}
@@ -349,6 +349,7 @@ def login_user(username, password):
         return False, "❌ Incorrect password."
 
 def register_user(username, password, name, phone=""):
+    """Register new user - FIXED: Handles missing columns"""
     init_game_db()
     
     if len(username) < 2:
@@ -359,24 +360,83 @@ def register_user(username, password, name, phone=""):
     supabase_admin = get_supabase_admin()
     
     try:
+        # Check if user exists in users table
         check_res = supabase_admin.table("users").select("username").eq("username", username).execute()
         if check_res.data:
             return False, f"❌ Username '{username}' already exists"
         
-        supabase_admin.table("users").insert({
+        # Prepare user data - only include columns that exist
+        user_data = {
             "username": username,
             "password": hash_password(password),
-            "balance": 10,
             "role": "player",
             "name": name,
-            "phone": phone,
-            "game_played": 0
-        }).execute()
+            "phone": phone
+        }
+        
+        # Try to add balance if column exists
+        try:
+            supabase_admin.table("users").select("balance").limit(1).execute()
+            user_data["balance"] = 10
+        except:
+            pass
+        
+        # Try to add game_played if column exists
+        try:
+            supabase_admin.table("users").select("game_played").limit(1).execute()
+            user_data["game_played"] = 0
+        except:
+            pass
+        
+        # Insert user
+        result = supabase_admin.table("users").insert(user_data).execute()
+        
+        # Also try to add to bingo_users if table exists
+        try:
+            bingo_data = {
+                "username": username,
+                "password": hash_password(password),
+                "role": "player",
+                "name": name,
+                "phone": phone
+            }
+            try:
+                supabase_admin.table("bingo_users").select("balance").limit(1).execute()
+                bingo_data["balance"] = 10
+            except:
+                pass
+            try:
+                supabase_admin.table("bingo_users").select("game_played").limit(1).execute()
+                bingo_data["game_played"] = 0
+            except:
+                pass
+            supabase_admin.table("bingo_users").insert(bingo_data).execute()
+        except:
+            pass
         
         load_all_data()
-        return True, f"✅ Registration successful! Welcome {name}!"
+        return True, f"✅ Registration successful! Welcome {name}! Please login."
     except Exception as e:
-        return False, f"❌ Registration failed: {e}"
+        error_msg = str(e)
+        if "duplicate key" in error_msg:
+            return False, f"❌ Username '{username}' already exists"
+        elif "balance" in error_msg:
+            # Try again without balance column
+            try:
+                user_data = {
+                    "username": username,
+                    "password": hash_password(password),
+                    "role": "player",
+                    "name": name,
+                    "phone": phone
+                }
+                supabase_admin.table("users").insert(user_data).execute()
+                load_all_data()
+                return True, f"✅ Registration successful! Welcome {name}! Please login."
+            except Exception as e2:
+                return False, f"❌ Registration failed: {e2}"
+        else:
+            return False, f"❌ Registration failed: {error_msg}"
 
 def logout_user():
     st.session_state.logged_in = False
@@ -669,7 +729,6 @@ def main():
                 username = st.text_input("👤 Username", placeholder="Enter username")
                 password = st.text_input("🔑 Password", type="password", placeholder="Enter password")
                 
-                # Show available users
                 if st.session_state.user_db:
                     st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
                 
@@ -684,7 +743,6 @@ def main():
                         else:
                             st.error(message)
             
-            # Force reload button - OUTSIDE the form
             st.markdown("---")
             st.markdown("### 🔧 Troubleshooting")
             
@@ -714,6 +772,7 @@ def main():
                 phone = st.text_input("📱 Phone Number", placeholder="09XXXXXXXX")
                 password = st.text_input("🔑 Password", type="password", placeholder="Create password (min 6 chars)")
                 confirm = st.text_input("✅ Confirm Password", type="password", placeholder="Confirm password")
+                
                 submitted = st.form_submit_button("📝 Register & Play")
                 if submitted:
                     if not full_name or not username or not password:
