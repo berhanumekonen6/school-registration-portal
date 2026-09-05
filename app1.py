@@ -1,6 +1,6 @@
 # ===================================================================
 # ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# ALL 201 BINGO CARDS INCLUDED + FORCE RELOAD BUTTON
+# ALL 201 BINGO CARDS INCLUDED - LAYOUT FIXED
 # ===================================================================
 
 import streamlit as st
@@ -660,15 +660,16 @@ def main():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
+            # Login form - NO buttons inside the form
             with st.form("login_form"):
                 username = st.text_input("👤 Username", placeholder="Enter username")
                 password = st.text_input("🔑 Password", type="password", placeholder="Enter password")
                 
-                # Show available users
                 if st.session_state.user_db:
                     st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
                 
-                if st.form_submit_button("🎰 Login to Play"):
+                submitted = st.form_submit_button("🎰 Login to Play")
+                if submitted:
                     if username and password:
                         success, message = login_user(username, password)
                         if success:
@@ -677,25 +678,25 @@ def main():
                             st.rerun()
                         else:
                             st.error(message)
-                
-                # ===== FORCE RELOAD BUTTON - FIXES LOGIN ISSUE =====
-                st.markdown("---")
-                st.markdown("### 🔧 Troubleshooting")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("🔄 Force Reload Users", use_container_width=True):
-                        st.session_state.user_db = {}
-                        load_all_data()
-                        st.success(f"✅ Reloaded {len(st.session_state.user_db)} users from database!")
-                        st.rerun()
-                with col2:
-                    if st.button("👥 Show All Users", use_container_width=True):
-                        load_all_data()
-                        if st.session_state.user_db:
-                            st.success(f"Users in database: {', '.join(st.session_state.user_db.keys())}")
-                        else:
-                            st.error("No users found in database!")
-                # ===== END FORCE RELOAD =====
+            
+            # FORCE RELOAD BUTTON - OUTSIDE the form (fixes layout error)
+            st.markdown("---")
+            st.markdown("### 🔧 Troubleshooting")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Force Reload Users", use_container_width=True, key="force_reload"):
+                    st.session_state.user_db = {}
+                    load_all_data()
+                    st.success(f"✅ Reloaded {len(st.session_state.user_db)} users from database!")
+                    st.rerun()
+            with col2:
+                if st.button("👥 Show All Users", use_container_width=True, key="show_users"):
+                    load_all_data()
+                    if st.session_state.user_db:
+                        st.success(f"Users in database: {', '.join(st.session_state.user_db.keys())}")
+                    else:
+                        st.error("No users found in database!")
         
         with tab2:
             with st.form("register_form"):
@@ -704,7 +705,8 @@ def main():
                 phone = st.text_input("📱 Phone Number", placeholder="09XXXXXXXX")
                 password = st.text_input("🔑 Password", type="password", placeholder="Create password (min 6 chars)")
                 confirm = st.text_input("✅ Confirm Password", type="password", placeholder="Confirm password")
-                if st.form_submit_button("📝 Register & Play"):
+                submitted = st.form_submit_button("📝 Register & Play")
+                if submitted:
                     if not full_name or not username or not password:
                         st.error("❌ Please fill all required fields")
                     elif password != confirm:
