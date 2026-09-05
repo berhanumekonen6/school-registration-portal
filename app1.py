@@ -1,10 +1,9 @@
 # ===================================================================
-# ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# ALL 201 BINGO CARDS - FULLY WORKING - DATABASE FIXED
+# ደራሽ ቢንጎ (Derash Bingo) - COMPLETE WORKING VERSION
+# ALL 201 BINGO CARDS - USES bingo_users TABLE
 # ===================================================================
 
 import streamlit as st
-import pandas as pd
 import hashlib
 import json
 import random
@@ -17,7 +16,6 @@ from supabase import create_client
 # ===================================================================
 
 BINGO_CARDS = [
-    # Card 1-20
     {"id": 1, "cells": [['15', '16', '39', '59', '66'], ['11', '28', '40', '51', '68'], ['12', '20', 'F', '56', '67'], ['3', '30', '35', '60', '72'], ['10', '24', '37', '53', '64']]},
     {"id": 2, "cells": [['5', '21', '35', '46', '69'], ['15', '20', '42', '51', '70'], ['10', '28', 'F', '47', '67'], ['2', '26', '31', '49', '64'], ['6', '27', '33', '52', '65']]},
     {"id": 3, "cells": [['14', '23', '40', '58', '62'], ['13', '25', '32', '46', '65'], ['3', '28', 'F', '50', '63'], ['6', '30', '44', '54', '66'], ['10', '16', '37', '53', '74']]},
@@ -255,7 +253,7 @@ def get_supabase_admin():
     return st.session_state.supabase_admin
 
 # ===================================================================
-# AUTHENTICATION - FIXED: Using bingo_users table
+# AUTHENTICATION - FIXED
 # ===================================================================
 
 def hash_password(password):
@@ -265,11 +263,11 @@ def verify_password(password, hashed):
     return hash_password(password) == hashed
 
 def load_all_data():
-    """Load users from bingo_users table"""
+    """Load users from bingo_users table only"""
     supabase = get_supabase()
     
     try:
-        # Use bingo_users table
+        # ONLY use bingo_users table
         res = supabase.table("bingo_users").select("*").execute()
         user_db = {}
         if res.data:
@@ -285,10 +283,13 @@ def load_all_data():
                         "game_played": u.get("game_played", 0)
                     }
         st.session_state.user_db = user_db
+        st.session_state.user_db_loaded = True
         print(f"✅ Loaded {len(user_db)} users from bingo_users")
+        print(f"Users: {list(user_db.keys())}")
     except Exception as e:
         print(f"Error loading users: {e}")
         st.session_state.user_db = {}
+        st.session_state.user_db_loaded = False
     
     # Load games
     try:
@@ -350,7 +351,6 @@ def login_user(username, password):
         return False, "❌ Incorrect password."
 
 def register_user(username, password, name, phone=""):
-    """Register new user in bingo_users table"""
     init_game_db()
     
     if len(username) < 2:
@@ -381,7 +381,27 @@ def register_user(username, password, name, phone=""):
         load_all_data()
         return True, f"✅ Registration successful! Welcome {name}!"
     except Exception as e:
-        return False, f"❌ Registration failed: {e}"
+        error_msg = str(e)
+        if "game_played" in error_msg:
+            # Try without game_played
+            try:
+                user_data = {
+                    "username": username,
+                    "password": hash_password(password),
+                    "role": "player",
+                    "name": name,
+                    "phone": phone,
+                    "balance": 10
+                }
+                supabase_admin.table("bingo_users").insert(user_data).execute()
+                load_all_data()
+                return True, f"✅ Registration successful! Welcome {name}!"
+            except Exception as e2:
+                return False, f"❌ Registration failed: {e2}"
+        elif "duplicate key" in error_msg:
+            return False, f"❌ Username '{username}' already exists"
+        else:
+            return False, f"❌ Registration failed: {error_msg}"
 
 def logout_user():
     st.session_state.logged_in = False
@@ -670,13 +690,14 @@ def main():
         tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
         
         with tab1:
-            # LOGIN FORM
             with st.form("login_form"):
                 username = st.text_input("👤 Username", placeholder="Enter username")
                 password = st.text_input("🔑 Password", type="password", placeholder="Enter password")
                 
                 if st.session_state.user_db:
-                    st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
+                    st.success(f"👥 Users found: {', '.join(list(st.session_state.user_db.keys()))}")
+                else:
+                    st.warning("⚠️ No users found. Click Force Reload or Register.")
                 
                 submitted = st.form_submit_button("🎰 Login to Play")
                 if submitted:
@@ -689,28 +710,34 @@ def main():
                         else:
                             st.error(message)
             
-            # DEBUG BUTTONS - OUTSIDE the form
             st.markdown("---")
             st.markdown("### 🔧 Troubleshooting")
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("🔄 Force Reload Users", use_container_width=True, key="force_reload"):
                     st.session_state.user_db = {}
                     load_all_data()
                     count = len(st.session_state.user_db)
                     if count > 0:
-                        st.success(f"✅ Reloaded {count} users from database!")
+                        st.success(f"✅ Reloaded {count} users!")
+                        st.write(f"Users: {', '.join(st.session_state.user_db.keys())}")
                     else:
-                        st.error("❌ No users found in database!")
+                        st.error("❌ No users found!")
                     st.rerun()
             with col2:
-                if st.button("👥 Show All Users", use_container_width=True, key="show_users"):
+                if st.button("👥 Show Users", use_container_width=True, key="show_users"):
                     load_all_data()
                     if st.session_state.user_db:
                         st.success(f"Users: {', '.join(st.session_state.user_db.keys())}")
                     else:
-                        st.error("No users found in database!")
+                        st.error("No users found!")
+            with col3:
+                if st.button("🧹 Clear Cache", use_container_width=True, key="clear_cache"):
+                    st.session_state.user_db = {}
+                    load_all_data()
+                    st.success("✅ Cache cleared!")
+                    st.rerun()
         
         with tab2:
             with st.form("register_form"):
