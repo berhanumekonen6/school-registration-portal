@@ -1,6 +1,6 @@
 # ===================================================================
 # ደራሽ ቢንጎ (Derash Bingo) - Complete Bingo Game
-# ALL 201 BINGO CARDS INCLUDED - FINAL WORKING VERSION
+# ALL 201 BINGO CARDS INCLUDED + FORCE RELOAD BUTTON
 # ===================================================================
 
 import streamlit as st
@@ -17,7 +17,6 @@ from supabase import create_client
 # ===================================================================
 
 BINGO_CARDS = [
-    # Card 1
     {"id": 1, "cells": [['15', '16', '39', '59', '66'], ['11', '28', '40', '51', '68'], ['12', '20', 'F', '56', '67'], ['3', '30', '35', '60', '72'], ['10', '24', '37', '53', '64']]},
     {"id": 2, "cells": [['5', '21', '35', '46', '69'], ['15', '20', '42', '51', '70'], ['10', '28', 'F', '47', '67'], ['2', '26', '31', '49', '64'], ['6', '27', '33', '52', '65']]},
     {"id": 3, "cells": [['14', '23', '40', '58', '62'], ['13', '25', '32', '46', '65'], ['3', '28', 'F', '50', '63'], ['6', '30', '44', '54', '66'], ['10', '16', '37', '53', '74']]},
@@ -584,6 +583,39 @@ def declare_winner(game_id, winner_id, card_id, pattern):
         st.error(f"Failed to declare winner: {e}")
         return False
 
+def display_bingo_card(card_data, called_numbers, card_id):
+    if not card_data:
+        return
+    
+    html = f"""
+    <div style="border:3px solid #8B0000;border-radius:10px;padding:15px;margin:10px 0;background:white;max-width:500px;">
+        <div style="text-align:center;font-weight:bold;font-size:18px;color:#8B0000;margin-bottom:10px;">🎯 Card #{card_id}</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px;">
+            <div style="text-align:center;font-weight:800;color:#FF6B6B;">B</div>
+            <div style="text-align:center;font-weight:800;color:#FFD93D;">I</div>
+            <div style="text-align:center;font-weight:800;color:#6BCB77;">N</div>
+            <div style="text-align:center;font-weight:800;color:#4D96FF;">G</div>
+            <div style="text-align:center;font-weight:800;color:#FF6B6B;">O</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">
+    """
+    
+    for row in range(5):
+        for col in range(5):
+            value = card_data[row][col]
+            is_free = value == 'F'
+            is_marked = not is_free and int(value) in called_numbers if called_numbers else False
+            
+            if is_free:
+                html += f'<div style="background:#FFD700;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #FFD700;">⭐</div>'
+            elif is_marked:
+                html += f'<div style="background:#4CAF50;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #4CAF50;color:white;">{value}</div>'
+            else:
+                html += f'<div style="background:#1a1a2e;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #1a1a2e;color:white;">{value}</div>'
+    
+    html += "</div></div>"
+    st.markdown(html, unsafe_allow_html=True)
+
 # ===================================================================
 # MAIN APP
 # ===================================================================
@@ -632,6 +664,7 @@ def main():
                 username = st.text_input("👤 Username", placeholder="Enter username")
                 password = st.text_input("🔑 Password", type="password", placeholder="Enter password")
                 
+                # Show available users
                 if st.session_state.user_db:
                     st.info(f"👥 Available users: {', '.join(list(st.session_state.user_db.keys()))}")
                 
@@ -644,6 +677,25 @@ def main():
                             st.rerun()
                         else:
                             st.error(message)
+                
+                # ===== FORCE RELOAD BUTTON - FIXES LOGIN ISSUE =====
+                st.markdown("---")
+                st.markdown("### 🔧 Troubleshooting")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔄 Force Reload Users", use_container_width=True):
+                        st.session_state.user_db = {}
+                        load_all_data()
+                        st.success(f"✅ Reloaded {len(st.session_state.user_db)} users from database!")
+                        st.rerun()
+                with col2:
+                    if st.button("👥 Show All Users", use_container_width=True):
+                        load_all_data()
+                        if st.session_state.user_db:
+                            st.success(f"Users in database: {', '.join(st.session_state.user_db.keys())}")
+                        else:
+                            st.error("No users found in database!")
+                # ===== END FORCE RELOAD =====
         
         with tab2:
             with st.form("register_form"):
@@ -670,6 +722,10 @@ def main():
                         else:
                             st.error(message)
         return
+    
+    # ===================================================================
+    # GAME LOBBY (Logged In)
+    # ===================================================================
     
     st.markdown("### 🎰 ደራሽ ቢንጎ")
     st.markdown("#### እንኳን ወደ ደራሽ ቢንጎ በደህና መጡ! 🎉")
@@ -734,31 +790,7 @@ def main():
             for card_id in user_cards:
                 card_data = get_card_data(card_id)
                 if card_data:
-                    html = f"""
-                    <div style="border:3px solid #8B0000;border-radius:10px;padding:15px;margin:10px 0;background:white;max-width:500px;margin:10px auto;">
-                        <div style="text-align:center;font-weight:bold;font-size:18px;color:#8B0000;margin-bottom:10px;">🎯 Card #{card_id}</div>
-                        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:4px;">
-                            <div style="text-align:center;font-weight:800;color:#FF6B6B;">B</div>
-                            <div style="text-align:center;font-weight:800;color:#FFD93D;">I</div>
-                            <div style="text-align:center;font-weight:800;color:#6BCB77;">N</div>
-                            <div style="text-align:center;font-weight:800;color:#4D96FF;">G</div>
-                            <div style="text-align:center;font-weight:800;color:#FF6B6B;">O</div>
-                        </div>
-                        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">
-                    """
-                    for row in range(5):
-                        for col in range(5):
-                            value = card_data[row][col]
-                            is_free = value == 'F'
-                            is_marked = not is_free and int(value) in called if called else False
-                            if is_free:
-                                html += f'<div style="background:#FFD700;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #FFD700;">⭐</div>'
-                            elif is_marked:
-                                html += f'<div style="background:#4CAF50;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #4CAF50;color:white;">{value}</div>'
-                            else:
-                                html += f'<div style="background:#1a1a2e;border-radius:6px;padding:8px 0;text-align:center;font-weight:700;border:2px solid #1a1a2e;color:white;">{value}</div>'
-                    html += "</div></div>"
-                    st.markdown(html, unsafe_allow_html=True)
+                    display_bingo_card(card_data, called, card_id)
         
         col1, col2 = st.columns(2)
         with col1:
